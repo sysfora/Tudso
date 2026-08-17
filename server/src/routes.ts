@@ -372,7 +372,7 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
   const [entitlement, historyRecords, profileContext] = await Promise.all([
     getEntitlementForUser(req.userId!),
     includeHistory && conversationId ? getMessages(req.userId!, conversationId) : Promise.resolve([]),
-    includeProfile ? getProfileContext(req.userId!) : Promise.resolve({}),
+    includeProfile ? getProfileContext(req.userId!) : Promise.resolve({ profile: undefined, resume: undefined, contextEntries: undefined }),
   ])
   if (!entitlement?.aiAccess) {
     res.status(403).json({ error: 'AI access not available on your plan' })
