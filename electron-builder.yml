@@ -1,0 +1,28 @@
+appId: com.sysfora.tudso
+productName: Tudso
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist
+  - dist-electron
+extraResources:
+  - from: public/icon.png
+    to: icon.png
+win:
+  icon: public/icon.png
+  target: nsis
+mac:
+  icon: public/icon.png
+  target: dmg
+  category: public.app-category.productivity
+linux:
+  icon: public/icon.png
+  target: AppImage
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+protocols:
+  - name: Tudso
+    schemes:
+      - tudso

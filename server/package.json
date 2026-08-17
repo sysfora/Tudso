@@ -1,0 +1,48 @@
+{
+  "name": "tudso-server",
+  "version": "1.0.0",
+  "description": "Tudso backend API",
+  "license": "UNLICENSED",
+  "author": "Sysfora",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "set POCKETBASE_URL=http://localhost:8090&& set POCKETBASE_ADMIN_EMAIL=admin@test.com&& set POCKETBASE_ADMIN_PASSWORD=test&& set AI_API_KEY=test&& set JWT_SECRET=0123456789abcdef0123456789abcdef&& set ENCRYPTION_KEY=0123456789abcdef0123456789abcdef&& set STRIPE_SECRET_KEY=sk_test_123&& set STRIPE_WEBHOOK_SECRET=whsec_test&& set STRIPE_PUBLISHABLE_KEY=pk_test_123&& set STRIPE_PRICE_PRO=price_pro_123&& set STRIPE_PRICE_PREMIUM=price_premium_123&& vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "eventsource": "^5.1.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.9.0",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^4.77.3",
+    "pdf-parse": "^2.4.5",
+    "pocketbase": "^0.25.1",
+    "stripe": "^17.5.0",
+    "ws": "^8.21.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.18.1",
+    "eslint": "^10.8.0",
+    "globals": "^17.7.0",
+    "tsx": "^4.19.2",
+    "typescript": "~5.7.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^2.1.8"
+  }
+}

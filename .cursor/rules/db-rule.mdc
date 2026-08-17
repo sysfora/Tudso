@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+Whenever you change something which can change pocketbase db structure. In this case, update the pb_scheme.json file and tell me that update the db.
