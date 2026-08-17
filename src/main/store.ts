@@ -109,7 +109,7 @@ export class AppStore {
       const parsed = JSON.parse(raw) as Partial<PersistedState>
       const parsedSettings = { ...DEFAULT_SETTINGS, ...parsed.settings }
       const savedRevision = parsed.settings?.defaultsRevision ?? 0
-      const needsDefaults = savedRevision < 8
+      const needsDefaults = savedRevision < 9
       if (savedRevision < 1) {
         parsedSettings.rememberPosition = true
         parsedSettings.rememberSize = true
@@ -132,6 +132,12 @@ export class AppStore {
           parsedSettings.model = DEFAULT_SETTINGS.model
         }
         parsedSettings.defaultsRevision = 8
+      }
+      if (savedRevision < 9) {
+        if (parsedSettings.model !== 'gpt-4.1' && parsedSettings.model !== 'gpt-4.1-nano') {
+          parsedSettings.model = DEFAULT_SETTINGS.model
+        }
+        parsedSettings.defaultsRevision = 9
       }
       const shortcuts =
         savedRevision < 3 ? { ...DEFAULT_SHORTCUTS } : normalizeShortcutMap(parsed.shortcuts)

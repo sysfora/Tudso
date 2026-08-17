@@ -1,5 +1,5 @@
 import { modifierCount } from '@shared/accelerator'
-import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap, REALTIME_ASK_PROMPT, REALTIME_SCREEN_ASK_PROMPT, SCREEN_ASK_PROMPT, SHORTCUT_LABELS } from '@shared/defaults'
+import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap, REALTIME_ASK_PROMPT, REALTIME_SCREEN_ASK_PROMPT, SCREEN_ASK_PROMPT, SHORTCUT_LABELS, resolveChatModel } from '@shared/defaults'
 import { isActionableTranscript } from '@shared/transcript'
 import type {
   Attachment,
@@ -415,9 +415,10 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     })
 
     try {
+      const model = resolveChatModel(get().settings.model)
       const stream = image
-        ? await api.ai.vision(image, apiMessage, next.id, abortController.signal)
-        : await api.ai.chat(apiMessage, next.id, abortController.signal)
+        ? await api.ai.vision(image, apiMessage, next.id, abortController.signal, model)
+        : await api.ai.chat(apiMessage, next.id, abortController.signal, model)
       if (!stream) throw new Error('No response stream')
       const reader = stream.getReader()
       const decoder = new TextDecoder()
@@ -502,7 +503,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       generatingId: assistantMessage.id,
     })
     try {
-      const stream = await api.ai.chat(lastUser.content, next.id, abortController.signal)
+      const stream = await api.ai.chat(lastUser.content, next.id, abortController.signal, resolveChatModel(get().settings.model))
       if (!stream) throw new Error('No response stream')
       const reader = stream.getReader()
       const decoder = new TextDecoder()

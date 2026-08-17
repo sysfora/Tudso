@@ -1,4 +1,4 @@
-import { FONT_SIZE_MAX, FONT_SIZE_MIN } from '@shared/defaults'
+import { FONT_SIZE_MAX, FONT_SIZE_MIN, chatModelLabel, toggleChatModel } from '@shared/defaults'
 import type { AppCommand } from '@shared/types'
 import { desktop } from '@/lib/desktop'
 import { useAppStore } from '@/store/app-store'
@@ -137,6 +137,12 @@ export function runAppCommand(command: AppCommand) {
     case 'toggle-hide-from-capture':
       void store.setSettings({ hideFromCapture: !store.settings.hideFromCapture })
       return
+    case 'toggle-model': {
+      const next = toggleChatModel(store.settings.model)
+      void store.setSettings({ model: next })
+      desktop.app.notify('Model', chatModelLabel(next))
+      return
+    }
     case 'open-command-palette':
       window.dispatchEvent(new Event('tudso:open-command-palette'))
       return

@@ -30,3 +30,6 @@ uploads
 server/uploads
 server/data
 data
+
+.env
+server/.env

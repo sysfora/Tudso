@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildElectron } from './build-electron.mjs'
+import { loadClientEnv } from './load-env.mjs'
 
 const require = createRequire(import.meta.url)
 const electronPath = require('electron')
@@ -24,6 +25,8 @@ async function waitForRenderer() {
 let child = null
 let restartTimer = null
 let restarting = false
+
+loadClientEnv()
 
 function startElectron() {
   child = spawn(electronPath, [root], {

@@ -23,6 +23,7 @@ const SHOW_FIRST = new Set<ShortcutId>([
   'focusComposer',
   'openSettings',
   'openCommandPalette',
+  'toggleModel',
   'togglePrivacy',
   'increaseFontSize',
   'decreaseFontSize',

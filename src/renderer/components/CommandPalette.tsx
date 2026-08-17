@@ -21,6 +21,7 @@ const COMMANDS: Command[] = [
   { id: 'next-conversation', label: 'Next session', shortcutId: 'nextConversation', section: 'Session' },
   { id: 'previous-conversation', label: 'Previous session', shortcutId: 'previousConversation', section: 'Session' },
   { id: 'focus-composer', label: 'Focus prompt', shortcutId: 'focusComposer', section: 'Chat' },
+  { id: 'toggle-model', label: 'Switch model', shortcutId: 'toggleModel', section: 'Chat' },
   { id: 'ask-screen', label: 'Answer from screen', shortcutId: 'askScreen', section: 'Copilot' },
   { id: 'live-copilot-screen', label: 'Live copilot with screen', shortcutId: 'liveCopilotScreen', section: 'Copilot' },
   { id: 'live-copilot-audio', label: 'Live copilot', shortcutId: 'liveCopilotAudio', section: 'Copilot' },

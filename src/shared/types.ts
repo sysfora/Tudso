@@ -124,6 +124,7 @@ export interface ShortcutMap {
   togglePrivacy: string
   toggleHideFromCapture: string
   openCommandPalette: string
+  toggleModel: string
   windowCompact: string
   windowNormal: string
   windowExpanded: string
@@ -210,6 +211,7 @@ export type AppCommand =
   | 'toggle-hide-from-capture'
   | 'toggle-collapsed'
   | 'open-command-palette'
+  | 'toggle-model'
   | 'next-conversation'
   | 'previous-conversation'
   | 'window-compact'

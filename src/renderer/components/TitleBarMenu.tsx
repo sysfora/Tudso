@@ -11,7 +11,7 @@ import {
   User,
 } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
-import { SHORTCUT_LABELS } from '@shared/defaults'
+import { MODEL_OPTIONS, SHORTCUT_LABELS, resolveChatModel } from '@shared/defaults'
 import type { ShortcutId, WindowMode } from '@shared/types'
 import {
   DropdownMenu,
@@ -84,6 +84,26 @@ export function TitleBarMenu() {
           </span>
           <span className="text-[11px] text-muted">{hint(shortcuts.toggleHideFromCapture)}</span>
         </DropdownMenuCheckboxItem>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Model</DropdownMenuLabel>
+        {MODEL_OPTIONS.map((option) => (
+          <DropdownMenuCheckboxItem
+            key={option.value}
+            className="justify-between gap-3"
+            checked={resolveChatModel(settings.model) === option.value}
+            onCheckedChange={(checked) => {
+              if (checked) void useAppStore.getState().setSettings({ model: option.value })
+            }}
+          >
+            <span>{option.label}</span>
+            <span className="text-[11px] text-muted">{option.detail}</span>
+          </DropdownMenuCheckboxItem>
+        ))}
+        <DropdownMenuItem onSelect={() => runAppCommand('toggle-model')}>
+          Switch model
+          <MenuHint>{hint(shortcuts.toggleModel)}</MenuHint>
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Session</DropdownMenuLabel>

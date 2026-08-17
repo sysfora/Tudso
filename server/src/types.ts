@@ -138,6 +138,7 @@ export interface AIRequest {
   stream?: boolean
   temperature?: number
   max_tokens?: number
+  model?: string
 }
 
 export interface AIResponse {

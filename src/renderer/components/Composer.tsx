@@ -1,6 +1,7 @@
 import { ArrowUp, AudioLines, Mic, MicOff, Monitor, Paperclip, Radio, ScanSearch, Square, User, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { formatAccelerator } from '@shared/accelerator'
+import { MODEL_OPTIONS, resolveChatModel } from '@shared/defaults'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -23,6 +24,8 @@ export function Composer() {
   const generatingId = useAppStore((state) => state.generatingId)
   const stopGeneration = useAppStore((state) => state.stopGeneration)
   const shortcuts = useAppStore((state) => state.shortcuts)
+  const settings = useAppStore((state) => state.settings)
+  const setSettings = useAppStore((state) => state.setSettings)
   const screenContext = useAppStore((state) => state.screenContext)
   const toggleScreenContext = useAppStore((state) => state.toggleScreenContext)
   const entitlement = useAuthStore((state) => state.entitlement)
@@ -59,6 +62,25 @@ export function Composer() {
   return (
     <div className="px-3 pb-3">
       <div className="mb-1.5 flex items-center gap-1 px-1">
+        <Select
+          value={resolveChatModel(settings.model)}
+          onValueChange={(value) => void setSettings({ model: value })}
+        >
+          <SelectTrigger
+            className="h-6 w-auto min-w-[108px] gap-1 rounded-full border-0 bg-transparent px-2 py-0 text-[11px] text-muted hover:bg-raised hover:text-fg"
+            aria-label="Model"
+            title={formatAccelerator(shortcuts.toggleModel, desktop.platform)}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MODEL_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value} className="text-[12px]">
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <button
           type="button"
           className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted hover:bg-raised hover:text-fg"
@@ -225,7 +247,7 @@ export function Composer() {
         </p>
       ) : null}
       <p className="mt-1.5 px-1 text-[11px] text-muted">
-        Enter to send · {formatAccelerator(shortcuts.askScreen, desktop.platform)} answer from screen · {formatAccelerator(shortcuts.liveCopilotScreen, desktop.platform)} copilot with screen · {formatAccelerator(shortcuts.liveCopilotAudio, desktop.platform)} copilot
+        Enter to send · {formatAccelerator(shortcuts.toggleModel, desktop.platform)} {resolveChatModel(settings.model) === 'gpt-4.1' ? 'Intelligent' : 'Fast'} · {formatAccelerator(shortcuts.askScreen, desktop.platform)} answer from screen · {formatAccelerator(shortcuts.liveCopilotScreen, desktop.platform)} copilot with screen · {formatAccelerator(shortcuts.liveCopilotAudio, desktop.platform)} copilot
         {listening ? ' · Voice input live' : null}
         {voiceError ? ` · ${voiceError}` : null}
         {realtimeListening

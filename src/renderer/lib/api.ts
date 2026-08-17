@@ -113,22 +113,22 @@ export const api = {
     delete: (id: string) => fetchJson<void>(`/conversations/${id}`, { method: 'DELETE' }),
   },
   ai: {
-    chat: async (message: string, conversationId?: string, signal?: AbortSignal) => {
+    chat: async (message: string, conversationId?: string, signal?: AbortSignal, model?: string) => {
       const response = await fetch(`${API_BASE}/ai/chat`, {
         method: 'POST',
         headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ message, conversationId, stream: true }),
+        body: JSON.stringify({ message, conversationId, stream: true, model }),
         signal,
         cache: 'no-store',
       })
       if (!response.ok) throw new Error(await response.text())
       return response.body as ReadableStream<Uint8Array> | null
     },
-    vision: async (image: string, message: string, conversationId?: string, signal?: AbortSignal) => {
+    vision: async (image: string, message: string, conversationId?: string, signal?: AbortSignal, model?: string) => {
       const response = await fetch(`${API_BASE}/ai/vision`, {
         method: 'POST',
         headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ image, message, conversationId }),
+        body: JSON.stringify({ image, message, conversationId, model }),
         signal,
         cache: 'no-store',
       })

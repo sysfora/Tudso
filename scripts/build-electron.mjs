@@ -1,10 +1,12 @@
 import * as esbuild from 'esbuild'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { electronDefines } from './load-env.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 export async function buildElectron() {
+  const define = electronDefines()
   await Promise.all([
     esbuild.build({
       absWorkingDir: root,
@@ -16,6 +18,7 @@ export async function buildElectron() {
       external: ['electron'],
       sourcemap: true,
       packages: 'bundle',
+      define,
       alias: {
         '@shared': path.join(root, 'src/shared'),
       },

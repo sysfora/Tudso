@@ -18,6 +18,7 @@ let quitting = false
 let collapsed = false
 let expandedHeight = DEFAULT_BOUNDS.height
 let skipTaskbar = false
+let floatingEnabled = false
 let alwaysOnTopTimer: ReturnType<typeof setInterval> | null = null
 
 export function getMainWindow() {
@@ -61,7 +62,7 @@ export function createMainWindow(store: AppStore) {
     maximizable: false,
     fullscreenable: false,
     autoHideMenuBar: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     skipTaskbar: false,
     icon: appIconPath() ?? undefined,
     webPreferences: {
@@ -137,15 +138,14 @@ export function createMainWindow(store: AppStore) {
 
   win.on('show', () => {
     applyFloatingChrome()
-    startAlwaysOnTopGuard()
   })
   win.on('hide', () => stopAlwaysOnTopGuard())
   win.on('blur', () => {
-    if (!win?.isVisible()) return
+    if (!floatingEnabled || !win?.isVisible()) return
     pinAboveFullscreen()
   })
   screen.on('display-metrics-changed', () => {
-    if (!win || win.isDestroyed() || !win.isVisible()) return
+    if (!floatingEnabled || !win || win.isDestroyed() || !win.isVisible()) return
     pinAboveFullscreen()
   })
 
@@ -236,12 +236,21 @@ export function restoreTaskbarPresence() {
 function applyFloatingChrome() {
   if (!win || win.isDestroyed()) return
   win.setSkipTaskbar(skipTaskbar)
-  pinAboveFullscreen()
-  if (win.isVisible()) startAlwaysOnTopGuard()
+  if (floatingEnabled) {
+    pinAboveFullscreen()
+    if (win.isVisible()) startAlwaysOnTopGuard()
+    return
+  }
+  unpinFromTop()
+}
+
+export function setFloatingEnabled(enabled: boolean) {
+  floatingEnabled = enabled
+  applyFloatingChrome()
 }
 
 function pinAboveFullscreen() {
-  if (!win || win.isDestroyed()) return
+  if (!win || win.isDestroyed() || !floatingEnabled) return
   try {
     win.setAlwaysOnTop(true, 'screen-saver', 1)
   } catch {
@@ -258,10 +267,25 @@ function pinAboveFullscreen() {
   }
 }
 
+function unpinFromTop() {
+  if (!win || win.isDestroyed()) return
+  stopAlwaysOnTopGuard()
+  try {
+    win.setAlwaysOnTop(false)
+  } catch {
+    undefined
+  }
+  try {
+    win.setVisibleOnAllWorkspaces(false)
+  } catch {
+    undefined
+  }
+}
+
 function startAlwaysOnTopGuard() {
-  if (alwaysOnTopTimer) return
+  if (!floatingEnabled || alwaysOnTopTimer) return
   alwaysOnTopTimer = setInterval(() => {
-    if (!win || win.isDestroyed() || !win.isVisible()) return
+    if (!floatingEnabled || !win || win.isDestroyed() || !win.isVisible()) return
     pinAboveFullscreen()
   }, 400)
 }

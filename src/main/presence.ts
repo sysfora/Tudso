@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { CHANNELS } from '../shared/channels'
 import type { AppStore } from './store'
 import { createTray, destroyTray } from './tray'
-import { sendToRenderer, getMainWindow, setHideFromCapture, setQuitting, setSkipTaskbar } from './windows'
+import { sendToRenderer, getMainWindow, setFloatingEnabled, setHideFromCapture, setQuitting, setSkipTaskbar } from './windows'
 
 let storeRef: AppStore | null = null
 let signedInReady = false
@@ -20,6 +20,7 @@ export function initPresence(store: AppStore) {
 
 export function setSignedInReady(ready: boolean) {
   signedInReady = ready
+  setFloatingEnabled(ready)
   applyPresence()
 }
 

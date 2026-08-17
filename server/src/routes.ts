@@ -5,7 +5,7 @@ import express, { type Request, type Response, type Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import { authenticateWithEmailPassword, buildCallbackUrl, createAccount, exchangeDesktopToken, exchangeOAuthCallback, generateAuthState, getOAuthUrl, verifyAuthState } from './auth.js'
-import { chat, getProfileContext, transcription, vision, buildChatMessages, buildSystemPrompt } from './ai.js'
+import { chat, getProfileContext, transcription, vision, buildChatMessages, buildSystemPrompt, resolveChatModel } from './ai.js'
 import { beginPlainStream, endPlainStream, writePlainStream } from './stream.js'
 import { config } from './config.js'
 import { authCompletePage, loginPage } from './login.html.js'
@@ -366,8 +366,9 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
     stream: z.boolean().default(true),
     includeProfile: z.boolean().default(true),
     includeHistory: z.boolean().default(true),
+    model: z.enum(['gpt-4.1-nano', 'gpt-4.1']).optional(),
   })
-  const { conversationId, message, stream, includeProfile, includeHistory } = schema.parse(req.body)
+  const { conversationId, message, stream, includeProfile, includeHistory, model } = schema.parse(req.body)
 
   const [entitlement, historyRecords, profileContext] = await Promise.all([
     getEntitlementForUser(req.userId!),
@@ -395,7 +396,7 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
     beginPlainStream(res)
     let content = ''
     await chat(
-      { messages, stream: true },
+      { messages, stream: true, model: resolveChatModel(model) },
       {
         onDelta: (delta) => {
           content += delta
@@ -417,7 +418,7 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
     return
   }
 
-  const result = await chat({ messages })
+  const result = await chat({ messages, model: resolveChatModel(model) })
   try {
     if (conversationId) {
       await createMessage(req.userId!, conversationId, 'user', storedUserContent(message))
@@ -435,8 +436,9 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
     image: z.string().min(1),
     message: z.string().min(1),
     conversationId: z.string().optional(),
+    model: z.enum(['gpt-4.1-nano', 'gpt-4.1']).optional(),
   })
-  const { image, message, conversationId } = schema.parse(req.body)
+  const { image, message, conversationId, model } = schema.parse(req.body)
 
   const [entitlement, profileContext] = await Promise.all([
     getEntitlementForUser(req.userId!),
@@ -453,7 +455,7 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
   beginPlainStream(res)
   let content = ''
   await vision(
-    { messages, image },
+    { messages, image, model: resolveChatModel(model) },
     {
       onDelta: (delta) => {
         content += delta

@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { config } from '@/config'
 import { useAuthStore } from '@/store/auth-store'
 import { desktop } from '@/lib/desktop'
 import type { Plan } from '@/types/api'
@@ -10,7 +11,7 @@ export function Subscription() {
   const status = entitlement?.status ?? 'active'
 
   const openPortal = async () => {
-    const { url } = await fetch(`${import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3000'}/billing/portal`, {
+    const { url } = await fetch(`${config.serverUrl}/billing/portal`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${localStorage.getItem('tudso.token') ?? ''}` },
     }).then((r) => r.json()) as { url: string }

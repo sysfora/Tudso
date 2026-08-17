@@ -139,17 +139,31 @@ export function buildChatMessages(
   return [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content: userMessage }]
 }
 
+const ALLOWED_CHAT_MODELS = ['gpt-4.1-nano', 'gpt-4.1'] as const
+type ChatModel = (typeof ALLOWED_CHAT_MODELS)[number]
+
+export function resolveChatModel(requested?: string): ChatModel {
+  if (requested === 'gpt-4.1' || requested === 'gpt-4.1-nano') return requested
+  return config.ai.chatModel === 'gpt-4.1' ? 'gpt-4.1' : 'gpt-4.1-nano'
+}
+
+function tokenLimitFor(model: ChatModel) {
+  return model === 'gpt-4.1' ? 8192 : 2048
+}
+
 export async function chat(
   request: AIRequest,
   handler?: AIStreamHandler,
 ): Promise<AIResponse> {
+  const model = resolveChatModel(request.model)
+  const maxTokens = request.max_tokens ?? tokenLimitFor(model)
   if (handler) {
     const stream = await openai.chat.completions.create({
-      model: config.ai.chatModel,
+      model,
       messages: request.messages,
       stream: true,
       temperature: request.temperature ?? 0.3,
-      max_tokens: request.max_tokens ?? 2048,
+      max_tokens: maxTokens,
     })
     let content = ''
     for await (const chunk of stream) {
@@ -164,10 +178,10 @@ export async function chat(
   }
 
   const completion = await openai.chat.completions.create({
-    model: config.ai.chatModel,
+    model,
     messages: request.messages,
     temperature: request.temperature ?? 0.7,
-    max_tokens: request.max_tokens ?? 4096,
+    max_tokens: maxTokens,
   })
   const content = completion.choices[0]?.message?.content ?? ''
   return {
@@ -202,13 +216,16 @@ export async function vision(
     },
   ]
 
+  const model = resolveChatModel(request.model)
+  const maxTokens = request.max_tokens ?? tokenLimitFor(model)
+
   if (handler) {
     const stream = await openai.chat.completions.create({
-      model: config.ai.visionModel,
+      model,
       messages,
       stream: true,
       temperature: 0.3,
-      max_tokens: 2048,
+      max_tokens: maxTokens,
     })
     let content = ''
     for await (const chunk of stream) {
@@ -223,10 +240,10 @@ export async function vision(
   }
 
   const completion = await openai.chat.completions.create({
-    model: config.ai.visionModel,
+    model,
     messages,
     temperature: 0.7,
-    max_tokens: 4096,
+    max_tokens: maxTokens,
   })
   const content = completion.choices[0]?.message?.content ?? ''
   return { content }

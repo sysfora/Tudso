@@ -20,6 +20,9 @@ export const WINDOW_SIZES = {
   expanded: { width: 1100, height: 760 },
 } as const
 
+export const FAST_CHAT_MODEL = 'gpt-4.1-nano'
+export const INTELLIGENT_CHAT_MODEL = 'gpt-4.1'
+
 export const DEFAULT_SETTINGS: Settings = {
   launchAtStartup: false,
   startMinimized: false,
@@ -35,7 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontSize: 14,
   transparency: false,
   transparencyAmount: 12,
-  model: 'gpt-4.1-nano',
+  model: FAST_CHAT_MODEL,
   temperature: 0.7,
   responseLength: 'medium',
   streaming: true,
@@ -44,7 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   retentionDays: null,
   apiBaseUrl: 'https://api.openai.com/v1',
   releaseChannel: 'stable',
-  defaultsRevision: 8,
+  defaultsRevision: 9,
 }
 
 export const SHORTCUT_TAKEN_MESSAGE =
@@ -70,6 +73,7 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = {
   togglePrivacy: 'Control+Alt+P',
   toggleHideFromCapture: 'Control+Alt+H',
   openCommandPalette: 'Control+Alt+/',
+  toggleModel: 'Control+Alt+I',
   windowCompact: 'Control+Alt+Shift+1',
   windowNormal: 'Control+Alt+Shift+2',
   windowExpanded: 'Control+Alt+Shift+3',
@@ -110,6 +114,7 @@ export const SHORTCUT_LABELS: Record<keyof ShortcutMap, string> = {
   togglePrivacy: 'Privacy mode',
   toggleHideFromCapture: 'Hide from screen share',
   openCommandPalette: 'Command palette',
+  toggleModel: 'Switch model',
   windowCompact: 'Compact window',
   windowNormal: 'Normal window',
   windowExpanded: 'Expanded window',
@@ -150,6 +155,7 @@ export const SHORTCUT_DESCRIPTIONS: Record<keyof ShortcutMap, string> = {
   togglePrivacy: 'Hide message text on screen.',
   toggleHideFromCapture: 'Show or hide Tudso in screenshots and screen shares.',
   openCommandPalette: 'Search commands.',
+  toggleModel: 'Switch between Fast (GPT-4.1 nano) and Intelligent (GPT-4.1).',
   windowCompact: 'Resize to the compact window size.',
   windowNormal: 'Resize to the normal window size.',
   windowExpanded: 'Resize to the expanded window size.',
@@ -227,7 +233,7 @@ export const SHORTCUT_GROUPS: { title: string; ids: (keyof ShortcutMap)[] }[] = 
   },
   {
     title: 'Chat',
-    ids: ['focusComposer'],
+    ids: ['focusComposer', 'toggleModel'],
   },
   {
     title: 'App',
@@ -312,13 +318,34 @@ function copyAnswerShortcutDescriptions(): Pick<
 }
 
 export const MODEL_OPTIONS = [
-  { value: 'gpt-4.1-nano', label: 'GPT-4.1 nano' },
-  { value: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4.1', label: 'GPT-4.1' },
-  { value: 'custom', label: 'Custom' },
+  {
+    value: FAST_CHAT_MODEL,
+    label: 'Fast',
+    detail: 'GPT-4.1 nano',
+    description: 'Quick answers. Best for short questions.',
+  },
+  {
+    value: INTELLIGENT_CHAT_MODEL,
+    label: 'Intelligent',
+    detail: 'GPT-4.1',
+    description: 'Full GPT-4.1. Coding challenges, interviews, and harder problems.',
+  },
 ] as const
+
+export type ChatModelId = (typeof MODEL_OPTIONS)[number]['value']
+
+export function resolveChatModel(value?: string): ChatModelId {
+  return MODEL_OPTIONS.some((option) => option.value === value) ? (value as ChatModelId) : FAST_CHAT_MODEL
+}
+
+export function toggleChatModel(value?: string): ChatModelId {
+  return resolveChatModel(value) === INTELLIGENT_CHAT_MODEL ? FAST_CHAT_MODEL : INTELLIGENT_CHAT_MODEL
+}
+
+export function chatModelLabel(value?: string) {
+  const option = MODEL_OPTIONS.find((item) => item.value === resolveChatModel(value))
+  return option ? `${option.label} · ${option.detail}` : 'Fast · GPT-4.1 nano'
+}
 
 export const RESPONSE_TOKEN_LIMITS = {
   short: 400,

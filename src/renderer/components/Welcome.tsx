@@ -33,7 +33,7 @@ export function Welcome() {
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-      <Logo className="mb-4 h-8 w-8" />
+      <Logo className="mb-6 h-20 w-20" />
       <h1 className="text-[22px] font-semibold tracking-tight">Welcome to Tudso</h1>
       <p className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-muted">
         Your personal AI assistant for your desktop. Understand your work. Understand your context. Help you solve problems faster.

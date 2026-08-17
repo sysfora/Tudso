@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Search, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
-import { FONT_SIZE_MAX, FONT_SIZE_MIN, DEFAULT_SETTINGS } from '@shared/defaults'
+import { FONT_SIZE_MAX, FONT_SIZE_MIN, DEFAULT_SETTINGS, MODEL_OPTIONS, resolveChatModel } from '@shared/defaults'
 import type { Settings, SettingsSection, ThemeMode } from '@shared/types'
 import { ShortcutManager } from '@/components/ShortcutManager'
 import { Subscription } from '@/components/Subscription'
@@ -23,6 +23,7 @@ import { useAuthStore } from '@/store/auth-store'
 const NAV: { id: SettingsSection; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'appearance', label: 'Appearance' },
+  { id: 'ai', label: 'AI' },
   { id: 'shortcuts', label: 'Keyboard' },
   { id: 'privacy', label: 'Privacy' },
   { id: 'profile', label: 'Profile' },
@@ -144,6 +145,11 @@ function SettingsPages({ section, searching }: { section: SettingsSection; searc
       {searching || section === 'appearance' ? (
         <SearchSection title="Appearance">
           <AppearanceSection />
+        </SearchSection>
+      ) : null}
+      {searching || section === 'ai' ? (
+        <SearchSection title="AI">
+          <AiSection />
         </SearchSection>
       ) : null}
       {!searching && section === 'shortcuts' ? <ShortcutManager /> : null}
@@ -292,6 +298,44 @@ function GeneralSection() {
           Reset
         </Button>
       </Row>
+    </div>
+  )
+}
+
+function AiSection() {
+  const settings = useAppStore((state) => state.settings)
+  const setSettings = useAppStore((state) => state.setSettings)
+  const shortcuts = useAppStore((state) => state.shortcuts)
+  const current = resolveChatModel(settings.model)
+
+  return (
+    <div>
+      <Row
+        title="Model"
+        description={`Fast for quick answers. Intelligent (GPT-4.1) for coding challenges and harder problems. ${formatAccelerator(shortcuts.toggleModel, desktop.platform)} switches.`}
+      >
+        <div className="grid w-[200px] grid-cols-2 gap-1 rounded-md bg-surface-2 p-0.5">
+          {MODEL_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={current === option.value}
+              className={cn(
+                'h-8 rounded-md px-2 text-[12px] transition-colors duration-150',
+                current === option.value ? 'bg-raised font-medium text-fg' : 'text-muted hover:bg-lift hover:text-fg',
+              )}
+              onClick={() => void setSettings({ model: option.value })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </Row>
+      {MODEL_OPTIONS.map((option) => (
+        <Row key={option.value} title={`${option.label} · ${option.detail}`} description={option.description}>
+          <span className="text-[12px] text-muted">{current === option.value ? 'Selected' : ''}</span>
+        </Row>
+      ))}
     </div>
   )
 }

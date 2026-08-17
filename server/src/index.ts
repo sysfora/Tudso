@@ -9,8 +9,11 @@ import { attachRealtimeAudio } from './realtime.js'
 import { isR2Configured, localStorageRoot } from './storage.js'
 
 const app = express()
+app.set('trust proxy', 1)
 
 app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
