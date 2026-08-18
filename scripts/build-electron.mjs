@@ -15,7 +15,7 @@ export async function buildElectron() {
       platform: 'node',
       format: 'esm',
       outfile: path.join(root, 'dist-electron/main.js'),
-      external: ['electron'],
+      external: ['electron', 'koffi'],
       sourcemap: true,
       packages: 'bundle',
       define,

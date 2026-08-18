@@ -360,13 +360,13 @@ export const RESPONSE_TOKEN_LIMITS = {
 } as const
 
 export const SCREEN_ASK_PROMPT =
-  'Answer whatever needs a response on this screenshot. Solve it directly. Output only the answer or code to copy or write. Do not describe the screen. If several items need answers, answer all of them. If nothing needs an answer, give the most useful next step in one line.'
+  'Answer from this screenshot. Read the latest interviewer question, coding task, or prompt on screen and output the words or code the user should use now, in first person as them. Ignore recording, stop-sharing, browser chrome, and this app. Do not restate the question. Greetings count as questions.'
 
 export const REALTIME_ASK_PROMPT =
   'Answer from this live transcript. If there is a question, interview prompt, coding task, or anything to solve, output the words or code to use immediately. Concise. No coaching wrapper.'
 
 export const REALTIME_SCREEN_ASK_PROMPT =
-  'Answer from this screenshot and live transcript. If there is a question, interview prompt, coding task, or anything to solve, output the words or code to use immediately. Concise. No coaching wrapper.'
+  'Answer from this screenshot and live transcript. Reply as the user to the latest interviewer question or task. Ignore recording, stop-sharing, and chrome. Do not restate the question. Concise. No coaching wrapper.'
 
 export const QUICK_ACTIONS = [
   { id: 'explain', label: 'Explain', prompt: 'Explain this clearly:\n\n' },

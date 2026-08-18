@@ -15,6 +15,10 @@ function codeChild(children: ReactNode) {
   return child
 }
 
+function isProseFence(language?: string) {
+  return language === 'plaintext' || language === 'text'
+}
+
 const components: Components = {
   a: ({ href, children }) => (
     <a
@@ -30,8 +34,15 @@ const components: Components = {
   pre: ({ children }) => {
     const child = codeChild(children)
     const className = child?.props.className
+    const language = fencedLanguage(className)
     const code = nodeText(child?.props.children ?? children).replace(/\n$/, '')
-    return <CodeBlock language={fencedLanguage(className)} code={code} />
+    if (isProseFence(language) && !code.includes('\n')) {
+      return <p>{code}</p>
+    }
+    if (isProseFence(language) && !/[{};=<>]|^\s*(def |class |func |fn |import |package )/m.test(code)) {
+      return <p className="whitespace-pre-wrap">{code}</p>
+    }
+    return <CodeBlock language={language} code={code} />
   },
   code: ({ className, children }) => <code className={className}>{children}</code>,
 }

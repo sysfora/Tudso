@@ -79,14 +79,14 @@ export function CodeBlock({ language, code }: { language?: string; code: string 
   }
 
   return (
-    <div className="my-3 overflow-hidden rounded-lg bg-surface-2">
+    <div className="my-3 min-w-0 max-w-full overflow-hidden rounded-lg bg-surface-2">
       <div className="flex items-center justify-between px-3 py-1.5">
         <span className="text-[11px] tracking-wide text-muted uppercase">{detected}</span>
         <IconButton label={copied ? 'Copied' : 'Copy code'} onClick={() => void copy()}>
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
         </IconButton>
       </div>
-      <pre className="overflow-x-auto px-3 py-3 font-mono text-[13px] leading-[1.55]">
+      <pre className="whitespace-pre-wrap break-words px-3 py-3 font-mono text-[13px] leading-[1.55]">
         {highlighted ? (
           <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
         ) : (

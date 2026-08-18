@@ -3,17 +3,33 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { getMainWindow, restoreTaskbarPresence, showMainWindow } from './windows'
+import { getMainWindow, restoreTaskbarPresence } from './windows'
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function captureThumbnailSize() {
+  const point = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(point)
+  const scale = display.scaleFactor || 1
+  return {
+    display,
+    width: Math.max(1, Math.round(display.size.width * scale)),
+    height: Math.max(1, Math.round(display.size.height * scale)),
+  }
+}
 
 export async function captureScreen(): Promise<string | null> {
   try {
-    const primary = screen.getPrimaryDisplay()
+    const { display, width, height } = captureThumbnailSize()
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: { width: primary.size.width, height: primary.size.height },
+      thumbnailSize: { width, height },
     })
     restoreTaskbarPresence()
-    const source = sources[0]
+    const source =
+      sources.find((item) => item.display_id && item.display_id === String(display.id)) ?? sources[0]
     if (!source) return null
     return source.thumbnail.toDataURL()
   } catch {
@@ -23,17 +39,28 @@ export async function captureScreen(): Promise<string | null> {
 }
 
 export async function captureScreenWithoutApp(): Promise<string | null> {
-  const image = await captureScreen()
   const win = getMainWindow()
-  if (image && win && !win.isDestroyed() && !win.isVisible()) showMainWindow()
-  return image
+  const usable = Boolean(win && !win.isDestroyed())
+  const wasVisible = Boolean(usable && win!.isVisible())
+  if (usable && wasVisible) {
+    win!.hide()
+    await delay(120)
+  }
+  try {
+    return await captureScreen()
+  } finally {
+    if (usable && wasVisible && win && !win.isDestroyed()) {
+      win.showInactive()
+    }
+  }
 }
 
 export async function captureActiveWindow(): Promise<string | null> {
   try {
+    const { width, height } = captureThumbnailSize()
     const sources = await desktopCapturer.getSources({
       types: ['window'],
-      thumbnailSize: { width: 1920, height: 1080 },
+      thumbnailSize: { width, height },
     })
     restoreTaskbarPresence()
     const source = sources[0]

@@ -4,7 +4,7 @@ import express, { type Request, type Response, type Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import { authenticateWithEmailPassword, buildCallbackUrl, confirmEmailChange, confirmEmailVerification, confirmPasswordReset, createAccount, exchangeDesktopToken, exchangeOAuthCallback, generateAuthState, getOAuthUrl, requestEmailVerification, requestPasswordReset, verifyAuthState } from './auth.js'
-import { chat, getProfileContext, transcription, vision, buildChatMessages, buildSystemPrompt, resolveChatModel, invalidateProfileContext } from './ai.js'
+import { chat, getProfileContext, transcription, vision, buildChatMessages, buildSystemPrompt, resolveChatModel, resolveVisionModel, invalidateProfileContext } from './ai.js'
 import { learnFromExchange } from './learn.js'
 import { beginPlainStream, endPlainStream, writePlainStream } from './stream.js'
 import { config } from './config.js'
@@ -734,8 +734,9 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
   })
   const { image, message, conversationId, model, profile: profileBody } = schema.parse(req.body)
 
-  const [entitlement, profileContext] = await Promise.all([
+  const [entitlement, historyRecords, profileContext] = await Promise.all([
     getEntitlementForUser(req.userId!),
+    conversationId ? getMessages(req.userId!, conversationId) : Promise.resolve([]),
     getProfileContext(req.userId!, clientProfile(req.userId!, profileBody)),
   ])
   if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
@@ -743,13 +744,17 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
     return
   }
 
+  const history: ChatMessage[] = historyRecords
+    .filter((m) => !(m.role === 'user' && /^(Answer from screen|Live copilot)$/i.test(m.content)))
+    .slice(-12)
+    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
   const { profile, resume, contextEntries } = profileContext
   const systemPrompt = buildSystemPrompt({ profile, resume, contextEntries, screenContext: true })
-  const messages = buildChatMessages(systemPrompt, [], message)
+  const messages = buildChatMessages(systemPrompt, history, message)
   beginPlainStream(res)
   let content = ''
   await vision(
-    { messages, image, model: resolveChatModel(model) },
+    { messages, image, model: resolveVisionModel(model) },
     {
       onDelta: (delta) => {
         content += delta
@@ -1046,7 +1051,7 @@ function storedUserContent(message: string): string {
   const transcript = message.match(/Transcript:\s*([\s\S]+)$/i)?.[1]?.trim()
   if (transcript && transcript !== '(no speech in this moment)') return transcript
   if (/live interview copilot|Audio source:/i.test(message)) return 'Live copilot'
-  if (/Answer whatever needs a response on this screenshot/i.test(message)) return 'Answer from screen'
+  if (/Answer from this screenshot|Answer whatever needs a response on this screenshot/i.test(message)) return 'Answer from screen'
   return message
 }
 

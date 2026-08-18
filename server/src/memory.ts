@@ -17,7 +17,7 @@ export interface UserContextData {
 
 const CANNED_USER_TEXT = /^(Live copilot|Answer from screen)$/i
 const SCREEN_OR_LIVE_PROMPT =
-  /^(Answer whatever needs a response on this screenshot|Answer from this live transcript|Answer from this screenshot and live transcript)/i
+  /^(Answer from this screenshot|Answer whatever needs a response on this screenshot|Answer from this live transcript|Answer from this screenshot and live transcript)/i
 
 export function parseUserContext(raw: unknown): UserContextData {
   let value = raw

@@ -53,7 +53,7 @@ describe('shouldLearnFromMessage', () => {
   it('skips canned screen and live prompts', () => {
     expect(shouldLearnFromMessage('Answer from screen')).toBe(false)
     expect(shouldLearnFromMessage('Live copilot')).toBe(false)
-    expect(shouldLearnFromMessage('Answer whatever needs a response on this screenshot. Solve it directly.')).toBe(false)
+    expect(shouldLearnFromMessage('Answer from this screenshot. Read the latest interviewer question.')).toBe(false)
   })
 })
 

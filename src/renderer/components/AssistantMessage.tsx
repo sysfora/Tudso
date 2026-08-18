@@ -29,9 +29,9 @@ export function AssistantMessage({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <article className="anim-rise rounded-lg px-5 py-4 transition-colors duration-150 hover:bg-raised" data-role="assistant" data-message-id={message.id}>
+        <article className="anim-rise min-w-0 max-w-full rounded-lg px-5 py-4 transition-colors duration-150 hover:bg-raised" data-role="assistant" data-message-id={message.id}>
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">AI</p>
-          <div className="mt-1 text-[14.5px] leading-relaxed">
+          <div className="mt-1 min-w-0 max-w-full text-[14.5px] leading-relaxed">
             {hidden ? (
               <p className="text-muted">Message hidden</p>
             ) : message.error && !message.content.includes('\n') ? (

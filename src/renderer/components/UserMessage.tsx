@@ -21,12 +21,12 @@ export function UserMessage({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <article className="anim-rise rounded-lg px-5 py-4 transition-colors duration-150 hover:bg-raised" data-role="user" data-message-id={message.id}>
+        <article className="anim-rise min-w-0 max-w-full rounded-lg px-5 py-4 transition-colors duration-150 hover:bg-raised" data-role="user" data-message-id={message.id}>
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">User</p>
           {hidden ? (
             <p className="mt-1 text-[14.5px] leading-relaxed text-muted">Message hidden</p>
           ) : message.content ? (
-            <p className="mt-1 whitespace-pre-wrap text-[14.5px] leading-relaxed">{message.content}</p>
+            <p className="mt-1 min-w-0 whitespace-pre-wrap break-words text-[14.5px] leading-relaxed">{message.content}</p>
           ) : null}
           {!hidden && message.attachments?.length ? (
             <ul className="mt-2 space-y-1.5 text-xs text-muted">

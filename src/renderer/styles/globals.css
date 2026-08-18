@@ -141,6 +141,12 @@ body,
   scrollbar-width: none;
 }
 
+.scroll-area-viewport > div {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100%;
+}
+
 .scroll-area-viewport::-webkit-scrollbar {
   display: none;
   width: 0;
@@ -218,8 +224,20 @@ article {
 }
 
 .markdown {
-  line-height: 1.65;
+  max-width: 100%;
+  min-width: 0;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.65;
+}
+
+.markdown p,
+.markdown li,
+.markdown td,
+.markdown th,
+.markdown blockquote {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .markdown > :first-child {
@@ -282,7 +300,9 @@ article {
 }
 
 .markdown table {
+  display: block;
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   font-size: 0.92em;
   margin: 0.8em 0;
@@ -306,11 +326,23 @@ article {
   background: var(--surface-2);
   border-radius: 4px;
   padding: 0.12em 0.35em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown pre,
+.markdown pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .hljs {
   color: var(--fg);
   background: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .hljs-comment,

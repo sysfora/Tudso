@@ -13,7 +13,7 @@ export function ScrollArea({ className, children, viewportId, viewportRef, ...pr
       <ScrollAreaPrimitive.Viewport
         id={viewportId}
         ref={viewportRef}
-        className="scroll-area-viewport h-full w-full"
+        className="scroll-area-viewport h-full w-full min-w-0"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

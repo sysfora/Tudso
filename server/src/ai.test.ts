@@ -30,8 +30,9 @@ describe('ai system prompt', () => {
 
   it('includes screen context instructions when enabled', () => {
     const prompt = buildSystemPrompt({ screenContext: true })
-    expect(prompt).toContain('SCREEN CONTEXT')
-    expect(prompt).toContain('Solve whatever is on screen')
+    expect(prompt).toContain('SCREEN')
+    expect(prompt).toContain('Answer the latest question or task')
+    expect(prompt).toContain('Never')
   })
 
   it('includes memory entries when provided', () => {

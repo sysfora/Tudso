@@ -5,6 +5,12 @@ import { CHANNELS } from '../shared/channels'
 import { DEFAULT_BOUNDS, WINDOW_SIZES } from '../shared/defaults'
 import type { ThemeMode, WindowBounds, WindowMode } from '../shared/types'
 import { appIconPath, loadAppIcon } from './icon'
+import {
+  applyOverlayWindowStyle,
+  clearOverlayWindowStyle,
+  showWithoutActivating,
+  startOverlayKeyboard,
+} from './overlay'
 import type { AppStore } from './store'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -19,7 +25,6 @@ let collapsed = false
 let expandedHeight = DEFAULT_BOUNDS.height
 let skipTaskbar = false
 let floatingEnabled = false
-let alwaysOnTopTimer: ReturnType<typeof setInterval> | null = null
 
 export function getMainWindow() {
   return win
@@ -63,7 +68,10 @@ export function createMainWindow(store: AppStore) {
     fullscreenable: false,
     autoHideMenuBar: true,
     alwaysOnTop: false,
-    skipTaskbar: false,
+    skipTaskbar: true,
+    focusable: true,
+    ...(process.platform === 'win32' ? { type: 'toolbar' as const } : {}),
+    ...(process.platform === 'darwin' ? { type: 'panel' as const, hiddenInMissionControl: true } : {}),
     icon: appIconPath() ?? undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -89,6 +97,7 @@ export function createMainWindow(store: AppStore) {
     return permission === 'media' || permission === 'clipboard-sanitized-write'
   })
 
+  win.webContents.setBackgroundThrottling(false)
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
@@ -140,18 +149,21 @@ export function createMainWindow(store: AppStore) {
   win.on('show', () => {
     applyFloatingChrome()
   })
-  win.on('hide', () => stopAlwaysOnTopGuard())
   win.on('blur', () => {
     if (!floatingEnabled || !win?.isVisible()) return
-    pinAboveFullscreen()
+    applyOverlayWindowStyle(win)
   })
   screen.on('display-metrics-changed', () => {
     if (!floatingEnabled || !win || win.isDestroyed() || !win.isVisible()) return
-    pinAboveFullscreen()
+    applyOverlayWindowStyle(win)
   })
 
   win.once('ready-to-show', () => {
-    if (!settings.startMinimized) win?.show()
+    if (settings.startMinimized) return
+    const current = getMainWindow()
+    if (!current || current.isDestroyed()) return
+    if (floatingEnabled) showWithoutActivating(current)
+    else current.show()
   })
 
   const rendererUrl = process.env.ELECTRON_RENDERER_URL
@@ -174,6 +186,10 @@ export function showMainWindow() {
   if (!win || win.isDestroyed()) return
   if (win.isMinimized()) win.restore()
   applyFloatingChrome()
+  if (floatingEnabled) {
+    showWithoutActivating(win)
+    return
+  }
   win.show()
   win.focus()
 }
@@ -250,13 +266,13 @@ export function restoreTaskbarPresence() {
 
 function applyFloatingChrome() {
   if (!win || win.isDestroyed()) return
-  win.setSkipTaskbar(skipTaskbar)
   if (floatingEnabled) {
-    pinAboveFullscreen()
-    if (win.isVisible()) startAlwaysOnTopGuard()
+    applyOverlayWindowStyle(win)
+    startOverlayKeyboard(win)
     return
   }
-  unpinFromTop()
+  clearOverlayWindowStyle(win)
+  win.setSkipTaskbar(skipTaskbar)
 }
 
 export function setFloatingEnabled(enabled: boolean) {
@@ -264,56 +280,9 @@ export function setFloatingEnabled(enabled: boolean) {
   applyFloatingChrome()
 }
 
-function pinAboveFullscreen() {
-  if (!win || win.isDestroyed() || !floatingEnabled) return
-  try {
-    win.setAlwaysOnTop(true, 'screen-saver', 1)
-  } catch {
-    try {
-      win.setAlwaysOnTop(true, 'screen-saver')
-    } catch {
-      win.setAlwaysOnTop(true)
-    }
-  }
-  try {
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  } catch {
-    undefined
-  }
-}
-
-function unpinFromTop() {
-  if (!win || win.isDestroyed()) return
-  stopAlwaysOnTopGuard()
-  try {
-    win.setAlwaysOnTop(false)
-  } catch {
-    undefined
-  }
-  try {
-    win.setVisibleOnAllWorkspaces(false)
-  } catch {
-    undefined
-  }
-}
-
-function startAlwaysOnTopGuard() {
-  if (!floatingEnabled || alwaysOnTopTimer) return
-  alwaysOnTopTimer = setInterval(() => {
-    if (!floatingEnabled || !win || win.isDestroyed() || !win.isVisible()) return
-    pinAboveFullscreen()
-  }, 400)
-}
-
-function stopAlwaysOnTopGuard() {
-  if (!alwaysOnTopTimer) return
-  clearInterval(alwaysOnTopTimer)
-  alwaysOnTopTimer = null
-}
-
 export function setSkipTaskbar(skip: boolean) {
   skipTaskbar = skip
-  if (!win || win.isDestroyed()) return
+  if (!win || win.isDestroyed() || floatingEnabled) return
   win.setSkipTaskbar(skip)
 }
 

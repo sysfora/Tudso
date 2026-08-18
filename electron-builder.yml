@@ -6,6 +6,9 @@ directories:
 files:
   - dist
   - dist-electron
+  - node_modules/koffi/**/*
+asarUnpack:
+  - node_modules/koffi/**/*
 extraResources:
   - from: public/icon.png
     to: icon.png

@@ -24,8 +24,8 @@ export function MessageList() {
   }
 
   return (
-    <ScrollArea className="min-h-0 flex-1" viewportId="message-list" viewportRef={scrollerRef}>
-      <div className="mx-auto w-full max-w-[720px]">
+    <ScrollArea className="min-h-0 min-w-0 flex-1" viewportId="message-list" viewportRef={scrollerRef}>
+      <div className="mx-auto w-full min-w-0 max-w-[720px]">
         {privacyMode ? (
           <div className="px-5 pt-3">
             <button

@@ -42,6 +42,7 @@ async function handleDeepLink(url: string) {
 app.setName(APP_NAME)
 app.setAppUserModelId(APP_ID)
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
 registerProtocol()
 
 const gotLock = app.requestSingleInstanceLock()

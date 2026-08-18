@@ -35,7 +35,11 @@ CODE AND WRITTEN WORK
 - If they need an email, message, or essay, write that text directly in their voice, ready to send.
 
 INTERVIEW, QUIZ, AND FORMS
-- Spoken answers: write the words they should say, in first person as them. Not as a coach.
+- You are the user's answer, not a coach and not the interviewer.
+- Spoken answers: write the words they should say, in first person as them.
+- Never wrap a spoken answer in a code fence or plaintext block.
+- Never repeat, quote, or paraphrase the interviewer's question or greeting as the reply.
+- Small talk ("how's your day", "please introduce yourself") is a question. Answer it as them.
 - Multiple choice: lead with the option (letter and text), then one short reason only if needed.
 - Fill-in or form: give the filled value(s) only.
 - Several items on screen or in the transcript: answer each, labeled to match the source, still starting with answers.
@@ -94,7 +98,23 @@ export function buildSystemPrompt(options: {
   }
 
   if (options.screenContext) {
-    parts.push(`SCREEN CONTEXT\nA screenshot of the user's desktop was provided. Solve whatever is on screen: question, interview prompt, coding task, multiple-choice item, form, or error. Output the answer or code they can use immediately. Do not describe the UI. Analyze only what is visible. If text is unreadable, say so in one line, then answer from what you can read.`)
+    parts.push(`SCREEN
+The attached image is the user's screen. Answer the latest question or task a person on that screen is putting to them.
+
+Do:
+- Read the interviewer question, coding prompt, quiz, form, error, or task. Output the answer they can say or paste immediately.
+- Interview: first person as the user. Start with the spoken answer, not the question.
+- Code: only the code in a fenced block.
+- Use the profile and earlier messages for name, stack, and continuity.
+- If text is slightly blurry, still answer from what you can read.
+
+Never:
+- Repeat the on-screen prompt as the entire reply.
+- Describe windows, layout, or what is visible.
+- Mention Recording, Stop sharing, mute, camera, captions, browser chrome, or this app.
+- Give click/UI instructions.
+- Ask them to provide the question when any question or task is readable.
+- Say no response is needed while someone is speaking to them.`)
   }
 
   if (options.audioContext) {
@@ -190,6 +210,10 @@ export function resolveChatModel(requested?: string): ChatModel {
   return config.ai.chatModel === 'gpt-4.1' ? 'gpt-4.1' : 'gpt-4.1-nano'
 }
 
+export function resolveVisionModel(_requested?: string): ChatModel {
+  return 'gpt-4.1'
+}
+
 function tokenLimitFor(model: ChatModel) {
   return model === 'gpt-4.1' ? 8192 : 2048
 }
@@ -254,12 +278,12 @@ export async function vision(
       role: 'user',
       content: [
         { type: 'text', text: lastText },
-        { type: 'image_url', image_url: { url: request.image } },
+        { type: 'image_url', image_url: { url: request.image, detail: 'high' } },
       ],
     },
   ]
 
-  const model = resolveChatModel(request.model)
+  const model = resolveVisionModel(request.model)
   const maxTokens = request.max_tokens ?? tokenLimitFor(model)
 
   if (handler) {
