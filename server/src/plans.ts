@@ -27,6 +27,10 @@ export function isPlan(value: unknown): value is Plan {
   return value === 'free' || value === 'pro' || value === 'premium'
 }
 
+export function isPaidPlan(plan?: string | null, status?: string | null): boolean {
+  return (plan === 'pro' || plan === 'premium') && Boolean(status && PAID_STATUSES.has(status))
+}
+
 export function featuresForPlan(plan: Plan, status?: string): typeof PLAN_FEATURES[Plan] {
   if (status && !PAID_STATUSES.has(status) && plan !== 'free') return PLAN_FEATURES.free
   return PLAN_FEATURES[plan]

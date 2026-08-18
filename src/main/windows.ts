@@ -111,6 +111,7 @@ export function createMainWindow(store: AppStore) {
 
   win.on('minimize', () => {
     if (!win || win.isDestroyed()) return
+    if (!floatingEnabled) return
     if (store.getSettings().minimizeToTray) {
       win.restore()
       win.hide()
@@ -180,6 +181,20 @@ export function showMainWindow() {
 export function hideMainWindow() {
   if (!win || win.isDestroyed()) return
   win.hide()
+}
+
+export function minimizeMainWindow(toTray = false) {
+  if (!win || win.isDestroyed()) return
+  if (collapsed) {
+    expandMainWindow()
+    return
+  }
+  if (!floatingEnabled) {
+    win.minimize()
+    return
+  }
+  if (toTray) hideMainWindow()
+  else collapseMainWindow()
 }
 
 export function isWindowCollapsed() {

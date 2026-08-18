@@ -57,6 +57,13 @@ function createMock(): ElectronAPI {
       nudge: async () => undefined,
       restoreTaskbar: async () => undefined,
       setSignedInReady: async () => undefined,
+      setHideFromCaptureAllowed: async (allowed) => {
+        if (!allowed && memory.settings.hideFromCapture) {
+          memory.settings = { ...memory.settings, hideFromCapture: false }
+          localStorage.setItem('tudso.settings', JSON.stringify(memory.settings))
+          listeners.settings.forEach((fn) => fn(memory.settings))
+        }
+      },
       onCollapsed: () => () => undefined,
     },
     settings: {
@@ -178,6 +185,7 @@ function createMock(): ElectronAPI {
       setApiKey: async () => ({ configured: true, encrypted: false }),
       clearApiKey: async () => ({ configured: false, encrypted: false }),
       setPin: async () => undefined,
+      clearPin: async () => true,
       unlock: async () => true,
       lock: async () => undefined,
       getLockState: async () => ({ locked: false, enabled: false }),

@@ -1,5 +1,5 @@
 import { config } from '@/config'
-import type { Entitlement, Plan, UserProfile } from '@/types/api'
+import type { BillingPlanPrice, Entitlement, MemoryEntry, Plan, Subscription, UserProfile } from '@/types/api'
 
 const API_BASE = config.serverUrl
 
@@ -81,12 +81,13 @@ export const api = {
     getProfile: () => fetchJson<UserProfile>('/me/profile'),
     updateProfile: (profile: Partial<UserProfile>) =>
       fetchJson<UserProfile>('/me/profile', { method: 'PATCH', body: JSON.stringify(profile) }),
-    deleteAccount: () => fetchJson<void>('/me/account', { method: 'DELETE' }),
+    deleteAccount: (confirm: string) => fetchJson<void>('/me/account', { method: 'DELETE', body: JSON.stringify({ confirm }) }),
     export: () => fetchJson<unknown>('/me/export'),
   },
   devices: {
-    list: () => fetchJson<Array<{ id: string; deviceId: string; platform: string; appVersion: string; lastSeen: string }>>('/me/devices'),
-    delete: (deviceId: string) => fetchJson<void>(`/me/devices/${deviceId}`, { method: 'DELETE' }),
+    list: () => fetchJson<Array<{ id: string; deviceId: string; platform: string; appVersion: string; lastSeen: string; current?: boolean }>>('/me/devices'),
+    delete: (deviceId: string) => fetchJson<{ ok: true; current?: boolean }>(`/me/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),
+    revokeOthers: () => fetchJson<{ ok: true; revoked: number }>('/me/sessions/revoke-others', { method: 'POST' }),
   },
   resume: {
     upload: (file: File) => {
@@ -101,10 +102,13 @@ export const api = {
     delete: () => fetchJson<void>('/me/resume', { method: 'DELETE' }),
   },
   context: {
-    get: () => fetchJson<{ id: string; user: string; entries: Array<{ id: string; text: string; created: string }> } | null>('/me/context'),
-    update: (entries: Array<{ id: string; text: string; created: string }>) =>
-      fetchJson<{ id: string; user: string; entries: Array<{ id: string; text: string; created: string }> }>('/me/context', { method: 'PATCH', body: JSON.stringify({ entries }) }),
-    delete: () => fetchJson<void>('/me/context', { method: 'DELETE' }),
+    get: () => fetchJson<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean }>('/me/context'),
+    update: (patch: { entries?: MemoryEntry[]; enabled?: boolean }) =>
+      fetchJson<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean }>('/me/context', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    delete: () => fetchJson<{ ok: true; entries: MemoryEntry[]; enabled: boolean }>('/me/context', { method: 'DELETE' }),
   },
   conversations: {
     list: () => fetchJson<Array<{ id: string; title: string; created: string; updated: string }>>('/conversations'),
@@ -153,8 +157,10 @@ export const api = {
   },
   billing: {
     checkout: (plan: Plan) => fetchJson<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
-    portal: () => fetchJson<{ url: string }>('/billing/portal', { method: 'POST' }),
-    subscription: () => fetchJson<unknown>('/billing/subscription'),
+    portal: (payload?: { action?: 'manage' | 'cancel' | 'upgrade'; plan?: Plan }) =>
+      fetchJson<{ url: string }>('/billing/portal', { method: 'POST', body: JSON.stringify(payload ?? { action: 'manage' }) }),
+    subscription: () => fetchJson<Subscription | null>('/billing/subscription'),
+    plans: () => fetchJson<{ plans: BillingPlanPrice[] }>('/billing/plans'),
   },
   updates: {
     latest: (currentVersion: string, channel: string) =>

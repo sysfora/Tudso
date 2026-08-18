@@ -6,10 +6,11 @@ import { cn } from '@/lib/cn'
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string
   shortcut?: string
+  loading?: boolean
   children: ReactNode
 }
 
-export function IconButton({ label, shortcut, className, children, ...props }: IconButtonProps) {
+export function IconButton({ label, shortcut, className, loading, children, ...props }: IconButtonProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -22,6 +23,7 @@ export function IconButton({ label, shortcut, className, children, ...props }: I
             className,
           )}
           {...props}
+          loading={loading}
         >
           {children}
         </Button>

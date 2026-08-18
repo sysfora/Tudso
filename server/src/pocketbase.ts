@@ -1,7 +1,10 @@
 import PocketBase from 'pocketbase'
 import { config } from './config.js'
+import { log, logError } from './log.js'
 import { applyPlanFeatures, isPlan, PLAN_FEATURES } from './plans.js'
+import { pbQuote } from './pb-filter.js'
 import { deleteStoredObject, type StorageBackend } from './storage.js'
+import { parseUserContext, serializeUserContext, type MemoryEntry } from './memory.js'
 import {
   DEFAULT_PROFILE_PREFERENCES,
   type DesktopSession,
@@ -97,7 +100,7 @@ export async function syncUserBilling(
     await pb.collection('users').update(userId, payload)
     emitEntitlement(userId)
   } catch (error) {
-    console.warn('Could not sync billing fields on users:', pocketbaseDetails(error))
+    log.warn('Could not sync billing fields on users', { err: pocketbaseDetails(error) })
   }
 }
 
@@ -108,7 +111,7 @@ export async function ensureUserBilling(userId: string): Promise<void> {
     if (user.plan) return
     await syncUserBilling(userId, DEFAULT_USER_BILLING)
   } catch (error) {
-    console.warn('Could not ensure user billing fields:', pocketbaseDetails(error))
+    log.warn('Could not ensure user billing fields', { err: pocketbaseDetails(error) })
   }
 }
 
@@ -261,7 +264,7 @@ export async function deleteResume(userId: string): Promise<void> {
   const existing = await getResume(userId)
   if (!existing) return
   await deleteStoredObject(resumeStorageRef(existing)).catch((error) => {
-    console.error('Failed to delete stored resume file', error)
+    logError('Failed to delete stored resume file', error)
   })
   await pb.collection('resumes').delete(existing.id)
 }
@@ -385,7 +388,7 @@ export async function watchEntitlement(
   listener: (value: EntitlementRecord | null) => void,
 ): Promise<() => void> {
   await ensureEntitlementRealtime().catch((error) => {
-    console.warn('PocketBase realtime for entitlements is unavailable:', error)
+    log.warn('PocketBase realtime for entitlements is unavailable', { err: String(error) })
   })
   let listeners = entitlementWatchers.get(userId)
   if (!listeners) {
@@ -468,7 +471,7 @@ export async function incrementUsage(userId: string, increments: Partial<Omit<Us
 export async function upsertDevice(userId: string, device: Omit<DeviceRecord, 'id' | 'user' | 'created' | 'updated'>): Promise<DeviceRecord> {
   const pb = await getAdminPb()
   try {
-    const existing = await pb.collection('devices').getFirstListItem(`user="${userId}" && deviceId="${device.deviceId}"`)
+    const existing = await pb.collection('devices').getFirstListItem(`user=${pbQuote(userId)} && deviceId=${pbQuote(device.deviceId)}`)
     const record = await pb.collection('devices').update(existing.id, { ...device, lastSeen: new Date().toISOString() })
     return record as unknown as DeviceRecord
   } catch {
@@ -483,18 +486,19 @@ export async function upsertDevice(userId: string, device: Omit<DeviceRecord, 'i
 
 export async function getDevices(userId: string): Promise<DeviceRecord[]> {
   const pb = await getAdminPb()
-  const records = await pb.collection('devices').getFullList({ filter: `user="${userId}"`, sort: '-lastSeen' })
+  const records = await pb.collection('devices').getFullList({ filter: `user=${pbQuote(userId)}`, sort: '-lastSeen' })
   return records as unknown as DeviceRecord[]
 }
 
 export async function deleteDevice(userId: string, deviceId: string): Promise<void> {
   const pb = await getAdminPb()
   try {
-    const existing = await pb.collection('devices').getFirstListItem(`user="${userId}" && deviceId="${deviceId}"`)
+    const existing = await pb.collection('devices').getFirstListItem(`user=${pbQuote(userId)} && deviceId=${pbQuote(deviceId)}`)
     await pb.collection('devices').delete(existing.id)
   } catch {
     // ignore
   }
+  await deleteDesktopSessionsForDevice(userId, deviceId)
 }
 
 export async function createConversation(userId: string, title: string): Promise<{ id: string; title: string; created: string; updated: string }> {
@@ -506,25 +510,49 @@ export async function createConversation(userId: string, title: string): Promise
   return record as unknown as { id: string; title: string; created: string; updated: string }
 }
 
-export async function getContext(userId: string): Promise<{ id: string; user: string; entries: Array<{ id: string; text: string; created: string }> } | null> {
+export async function getContext(userId: string): Promise<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean } | null> {
   const pb = await getAdminPb()
   try {
     const record = await pb.collection('user_context').getFirstListItem(`user="${userId}"`)
-    return record as unknown as { id: string; user: string; entries: Array<{ id: string; text: string; created: string }> }
+    const parsed = parseUserContext(record.entries)
+    return {
+      id: record.id,
+      user: String(record.user),
+      entries: parsed.entries,
+      enabled: parsed.enabled,
+    }
   } catch {
     return null
   }
 }
 
-export async function updateContext(userId: string, entries: Array<{ id: string; text: string; created: string }>): Promise<{ id: string; user: string; entries: Array<{ id: string; text: string; created: string }> }> {
+export async function updateContext(
+  userId: string,
+  patch: { entries?: MemoryEntry[]; enabled?: boolean },
+): Promise<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean }> {
   const pb = await getAdminPb()
   const existing = await getContext(userId)
+  const entries = patch.entries ?? existing?.entries ?? []
+  const enabled = patch.enabled ?? existing?.enabled ?? true
+  const payload = serializeUserContext(entries, enabled)
   if (existing) {
-    const record = await pb.collection('user_context').update(existing.id, { entries })
-    return record as unknown as { id: string; user: string; entries: Array<{ id: string; text: string; created: string }> }
+    const record = await pb.collection('user_context').update(existing.id, { entries: payload })
+    const parsed = parseUserContext(record.entries)
+    return {
+      id: record.id,
+      user: String(record.user),
+      entries: parsed.entries,
+      enabled: parsed.enabled,
+    }
   }
-  const record = await pb.collection('user_context').create({ user: userId, entries })
-  return record as unknown as { id: string; user: string; entries: Array<{ id: string; text: string; created: string }> }
+  const record = await pb.collection('user_context').create({ user: userId, entries: payload })
+  const parsed = parseUserContext(record.entries)
+  return {
+    id: record.id,
+    user: String(record.user),
+    entries: parsed.entries,
+    enabled: parsed.enabled,
+  }
 }
 
 export async function deleteContext(userId: string): Promise<void> {
@@ -596,19 +624,31 @@ export async function deleteConversation(userId: string, conversationId: string)
 
 export async function storeDesktopSession(session: DesktopSession): Promise<void> {
   const pb = await getAdminPb()
-  await pb.collection('desktop_sessions').create({
+  const payload = {
     user: session.userId,
     token: session.token,
     expiresAt: new Date(session.expiresAt).toISOString(),
-  })
+  }
+  try {
+    await pb.collection('desktop_sessions').create({
+      ...payload,
+      ...(session.deviceId ? { deviceId: session.deviceId } : {}),
+    })
+  } catch {
+    await pb.collection('desktop_sessions').create(payload)
+  }
 }
 
-export async function getDesktopSession(token: string): Promise<{ userId: string; expiresAt: string } | null> {
+export async function getDesktopSession(token: string): Promise<{ userId: string; expiresAt: string; deviceId?: string } | null> {
   const pb = await getAdminPb()
   try {
-    const record = await pb.collection('desktop_sessions').getFirstListItem(`token="${token}"`)
+    const record = await pb.collection('desktop_sessions').getFirstListItem(`token=${pbQuote(token)}`)
     if (new Date(record.expiresAt as string) < new Date()) return null
-    return { userId: record.user as string, expiresAt: record.expiresAt as string }
+    return {
+      userId: record.user as string,
+      expiresAt: record.expiresAt as string,
+      deviceId: typeof record.deviceId === 'string' && record.deviceId ? record.deviceId : undefined,
+    }
   } catch {
     return null
   }
@@ -617,11 +657,35 @@ export async function getDesktopSession(token: string): Promise<{ userId: string
 export async function deleteDesktopSession(token: string): Promise<void> {
   const pb = await getAdminPb()
   try {
-    const record = await pb.collection('desktop_sessions').getFirstListItem(`token="${token}"`)
+    const record = await pb.collection('desktop_sessions').getFirstListItem(`token=${pbQuote(token)}`)
     await pb.collection('desktop_sessions').delete(record.id)
   } catch {
     // ignore
   }
+}
+
+export async function deleteDesktopSessionsForDevice(userId: string, deviceId: string): Promise<void> {
+  const pb = await getAdminPb()
+  try {
+    const records = await pb.collection('desktop_sessions').getFullList({
+      filter: `user=${pbQuote(userId)} && deviceId=${pbQuote(deviceId)}`,
+      batch: 200,
+    })
+    await Promise.all(records.map((record) => pb.collection('desktop_sessions').delete(record.id)))
+  } catch {
+    // field may not exist until the collection is updated
+  }
+}
+
+export async function deleteOtherDesktopSessions(userId: string, keepToken: string): Promise<number> {
+  const pb = await getAdminPb()
+  const records = await pb.collection('desktop_sessions').getFullList({
+    filter: `user=${pbQuote(userId)}`,
+    batch: 200,
+  })
+  const others = records.filter((record) => record.token !== keepToken)
+  await Promise.all(others.map((record) => pb.collection('desktop_sessions').delete(record.id)))
+  return others.length
 }
 
 export async function deleteUserData(userId: string): Promise<void> {

@@ -16,6 +16,7 @@ export function destroyTray() {
 
 export function createTray(
   getSettings: () => Settings,
+  getHideFromCaptureAllowed: () => boolean,
   onHideFromCapture: (value: boolean) => void,
   onQuit: () => void,
 ) {
@@ -28,6 +29,7 @@ export function createTray(
 
   refreshMenu = () => {
     const settings = getSettings()
+    const hideAllowed = getHideFromCaptureAllowed()
     tray?.setContextMenu(
       Menu.buildFromTemplate([
         { label: `Show ${APP_NAME}`, click: () => showMainWindow() },
@@ -60,12 +62,14 @@ export function createTray(
             sendToRenderer(CHANNELS.appCommand, 'open-subscription')
           },
         },
-        {
-          label: 'Hide from screen share',
-          type: 'checkbox',
-          checked: settings.hideFromCapture,
-          click: (item) => onHideFromCapture(item.checked),
-        },
+        ...(hideAllowed
+          ? [{
+              label: 'Hide from screen share',
+              type: 'checkbox' as const,
+              checked: settings.hideFromCapture,
+              click: (item: Electron.MenuItem) => onHideFromCapture(item.checked),
+            }]
+          : []),
         { type: 'separator' },
         { label: 'Quit', click: onQuit },
       ]),

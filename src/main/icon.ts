@@ -6,14 +6,19 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export function appIconPath(): string | null {
-  const candidates = [
-    path.join(process.resourcesPath, 'icon.png'),
-    path.join(__dirname, '../public/icon.png'),
-    path.join(__dirname, '../dist/icon.png'),
-    path.join(app.getAppPath(), 'public/icon.png'),
-    path.join(app.getAppPath(), 'dist/icon.png'),
+  const names = process.platform === 'win32' ? ['icon.ico', 'icon.png'] : ['icon.png', 'icon.ico']
+  const roots = [
+    process.resourcesPath,
+    path.join(__dirname, '..', 'public'),
+    path.join(__dirname, '..', 'dist'),
+    path.join(app.getAppPath(), 'public'),
+    path.join(app.getAppPath(), 'dist'),
   ]
-  return candidates.find((file) => existsSync(file)) ?? null
+  for (const name of names) {
+    const match = roots.map((dir) => path.join(dir, name)).find((file) => existsSync(file))
+    if (match) return match
+  }
+  return null
 }
 
 export function loadAppIcon(): NativeImage | undefined {

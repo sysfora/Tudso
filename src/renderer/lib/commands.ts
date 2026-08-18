@@ -1,7 +1,9 @@
 import { FONT_SIZE_MAX, FONT_SIZE_MIN, chatModelLabel, toggleChatModel } from '@shared/defaults'
+import { canHideFromCapture } from '@shared/plans'
 import type { AppCommand } from '@shared/types'
 import { desktop } from '@/lib/desktop'
 import { useAppStore } from '@/store/app-store'
+import { useAuthStore } from '@/store/auth-store'
 import { useRealtimeStore } from '@/store/realtime-store'
 
 export function focusComposer() {
@@ -13,7 +15,8 @@ let lastCommandAt = 0
 
 export function runAppCommand(command: AppCommand) {
   const now = Date.now()
-  if (command === lastCommand && now - lastCommandAt < 200) return
+  const repeating = command === 'scroll-up' || command === 'scroll-down'
+  if (command === lastCommand && now - lastCommandAt < (repeating ? 25 : 200)) return
   lastCommand = command
   lastCommandAt = now
 
@@ -134,9 +137,16 @@ export function runAppCommand(command: AppCommand) {
     case 'toggle-privacy':
       void store.setSettings({ privacyMode: !store.settings.privacyMode })
       return
-    case 'toggle-hide-from-capture':
+    case 'toggle-hide-from-capture': {
+      const entitlement = useAuthStore.getState().entitlement
+      if (!canHideFromCapture(entitlement?.plan, entitlement?.status)) {
+        store.setSettingsOpen(true, 'subscription')
+        desktop.app.notify('Premium', 'Hide from screen share is on Premium.')
+        return
+      }
       void store.setSettings({ hideFromCapture: !store.settings.hideFromCapture })
       return
+    }
     case 'toggle-model': {
       const next = toggleChatModel(store.settings.model)
       void store.setSettings({ model: next })
@@ -169,5 +179,18 @@ export function runAppCommand(command: AppCommand) {
     case 'move-window-down':
       void desktop.window.nudge('down')
       return
+    case 'scroll-up':
+      scrollConversation(-1)
+      return
+    case 'scroll-down':
+      scrollConversation(1)
+      return
   }
+}
+
+function scrollConversation(direction: -1 | 1) {
+  const node = document.getElementById('message-list')
+  if (!node) return
+  const amount = Math.max(96, Math.round(node.clientHeight * 0.8))
+  node.scrollTop += direction * amount
 }

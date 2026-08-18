@@ -2,6 +2,7 @@ import { WebSocketServer, type RawData, type WebSocket } from 'ws'
 import type { Server } from 'node:http'
 import { transcription } from './ai.js'
 import { resolveAccessToken } from './auth.js'
+import { log, logError } from './log.js'
 import { getOrCreateProfile, incrementUsage, getEntitlementForUser } from './pocketbase.js'
 import { isActionableTranscript } from './transcript.js'
 import type { UserProfile } from './types.js'
@@ -23,16 +24,19 @@ export function attachRealtimeAudio(server: Server): void {
   wss.on('connection', async (ws, req) => {
     const token = extractToken(req.url)
     if (!token) {
+      log.warn('Realtime audio rejected', { reason: 'missing token' })
       ws.close(1008, 'Missing token')
       return
     }
     const user = await resolveAccessToken(token)
     if (!user) {
+      log.warn('Realtime audio rejected', { reason: 'invalid token' })
       ws.close(1008, 'Invalid token')
       return
     }
     const entitlement = await getEntitlementForUser(user.userId)
     if (!entitlement?.audioAccess && !entitlement?.realtimeAccess) {
+      log.warn('Realtime audio rejected', { user: user.userId, reason: 'plan' })
       ws.close(1008, 'Realtime audio is not available on your plan')
       return
     }
@@ -46,6 +50,7 @@ export function attachRealtimeAudio(server: Server): void {
       closed: false,
     }
     sessions.set(ws, session)
+    log.info('Realtime audio connected', { user: user.userId })
     send(ws, { type: 'ready' })
 
     ws.on('message', (data) => {
@@ -96,6 +101,7 @@ async function processAudio(ws: WebSocket, session: RealtimeSession): Promise<vo
     const profile = await getOrCreateProfile(session.userId)
     send(ws, { type: 'transcript', transcript, context: buildContext(profile, transcript) })
   } catch (error) {
+    logError('Realtime transcription failed', error, { user: session.userId })
     send(ws, { type: 'error', message: (error as Error).message })
   } finally {
     session.transcribing = false
@@ -117,6 +123,7 @@ function send(ws: WebSocket, message: unknown): void {
 }
 
 function cleanup(session: RealtimeSession, ws: WebSocket): void {
+  if (!session.closed) log.info('Realtime audio closed', { user: session.userId })
   session.closed = true
   sessions.delete(ws)
 }

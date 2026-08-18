@@ -6,174 +6,733 @@ function escapeHtml(value: string): string {
     .replaceAll('"', '&quot;')
 }
 
-export function loginPage(params: { state: string; error?: string; mode?: 'login' | 'register' }): string {
-  const { state, error } = params
-  const mode = params.mode === 'register' ? 'register' : 'login'
-  const isRegister = mode === 'register'
-  const safeState = escapeHtml(state)
-  const safeError = error ? escapeHtml(error) : ''
+const GOOGLE_MARK = `<svg class="google-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+</svg>`
 
+const STYLES = `
+  :root {
+    color-scheme: dark;
+    --bg: #1c1c1f;
+    --fg: #f3f3f5;
+    --muted: #a8a8b0;
+    --quiet: #8a8a94;
+    --border: color-mix(in srgb, #ffffff 8%, transparent);
+    --surface: #26262b;
+    --field: #303036;
+    --lift: #3a3a42;
+    --accent: #c4c6ff;
+    --fill: #5b5fee;
+    --fill-hover: color-mix(in srgb, #5b5fee 82%, #ffffff);
+    --fill-fg: #ffffff;
+    --danger: #e07070;
+    --google: var(--surface);
+    --google-fg: var(--fg);
+    --google-hover: var(--lift);
+    --google-border: var(--border);
+    --radius: 8px;
+    --motion: 140ms;
+  }
+  html.light {
+    color-scheme: light;
+    --bg: #f4f4f5;
+    --fg: #1a1a1e;
+    --muted: #6d6d76;
+    --quiet: #8a8a94;
+    --border: color-mix(in srgb, #000000 8%, transparent);
+    --surface: #ffffff;
+    --field: #ececee;
+    --lift: #d0d0d8;
+    --accent: #5b5fee;
+    --fill: #5b5fee;
+    --fill-hover: color-mix(in srgb, #5b5fee 82%, #000000);
+    --fill-fg: #ffffff;
+    --danger: #c44444;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  main {
+    width: 100%;
+    max-width: 360px;
+  }
+  .mark {
+    display: block;
+    width: 48px;
+    height: 48px;
+    margin: 0 0 28px;
+    object-fit: contain;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+  .lede {
+    margin: 0 0 28px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .error {
+    margin: -8px 0 20px;
+    color: var(--danger);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  form { margin: 0; }
+  .stack { display: grid; gap: 14px; }
+  .field { display: grid; gap: 6px; }
+  .field-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .field-head label { margin: 0; }
+  .forgot {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    text-decoration: none;
+    text-underline-offset: 2px;
+    white-space: nowrap;
+  }
+  .forgot:hover { text-decoration: underline; }
+  label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+  }
+  input {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: var(--field);
+    color: var(--fg);
+    caret-color: var(--fg);
+    font: inherit;
+    font-size: 13px;
+    color-scheme: inherit;
+  }
+  input::placeholder {
+    color: var(--quiet);
+    opacity: 1;
+  }
+  input:hover { background: var(--lift); }
+  input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    background: var(--lift);
+  }
+  input:autofill,
+  input:autofill:hover,
+  input:autofill:focus,
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--fg);
+    caret-color: var(--fg);
+    border-color: transparent;
+    background-color: var(--field);
+    background-image: none;
+    color: var(--fg);
+    box-shadow: inset 0 0 0 1000px var(--field);
+    transition: background-color 99999s ease-out;
+  }
+  input:hover:autofill,
+  input:hover:-webkit-autofill,
+  input:focus-visible:autofill,
+  input:focus-visible:-webkit-autofill {
+    background-color: var(--lift);
+    box-shadow: inset 0 0 0 1000px var(--lift);
+  }
+  .hint {
+    margin: 0;
+    font-size: 12px;
+    color: var(--quiet);
+  }
+  button, a.primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background: var(--fill);
+    color: var(--fill-fg);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    position: relative;
+    transition: background-color var(--motion) ease;
+  }
+  button:hover, a.primary:hover { background: var(--fill-hover); }
+  button:focus-visible, a.primary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button.is-loading, a.primary.is-loading { opacity: 1; }
+  button.is-loading > :not(.spinner),
+  a.primary.is-loading > :not(.spinner) { opacity: 0; }
+  .oauth {
+    background: var(--google);
+    color: var(--google-fg);
+    border-color: var(--google-border);
+  }
+  .oauth:hover { background: var(--google-hover); }
+  .theme-toggle {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 20;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    color: var(--muted);
+  }
+  .theme-toggle:hover {
+    background: var(--surface);
+    color: var(--fg);
+  }
+  .theme-toggle:disabled { opacity: 1; cursor: pointer; }
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+  }
+  html.light .icon-sun { display: none; }
+  html:not(.light) .icon-moon { display: none; }
+  .google-mark {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+  }
+  .spinner {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.65s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .rule {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: var(--quiet);
+    font-size: 12px;
+  }
+  .rule::before, .rule::after {
+    content: "";
+    height: 1px;
+    background: var(--border);
+  }
+  .switch {
+    margin: 20px 0 0;
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .switch a {
+    color: var(--accent);
+    text-decoration: none;
+    text-underline-offset: 2px;
+  }
+  .switch a:hover { text-decoration: underline; }
+  .footnote {
+    margin: 28px 0 0;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--quiet);
+  }
+  body.choose-plan {
+    align-items: flex-start;
+    padding: 48px 24px 64px;
+  }
+  body.choose-plan main {
+    max-width: 760px;
+  }
+  .who {
+    margin: -12px 0 28px;
+    color: var(--quiet);
+    font-size: 13px;
+  }
+  .plans {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: stretch;
+  }
+  .plan {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding: 22px 20px 20px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .plan-featured {
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    background: var(--field);
+  }
+  .plan h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .price {
+    margin: 10px 0 0;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .price small {
+    margin-left: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--muted);
+  }
+  .plan-copy {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .features {
+    list-style: none;
+    display: grid;
+    gap: 8px;
+    flex: 1;
+    margin: 18px 0 20px;
+    padding: 0;
+  }
+  .features li {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    gap: 8px;
+    align-items: start;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .features .out { color: var(--quiet); }
+  .tick, .dash {
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+  }
+  .plan form { margin-top: auto; }
+  @media (max-width: 700px) {
+    .plans { grid-template-columns: 1fr; }
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root { --motion: 0ms; }
+    .spinner { animation: none; opacity: 0.7; }
+  }
+`
+
+const THEME_BOOT = `<script>
+(function () {
+  var light = false
+  try {
+    light = localStorage.getItem('tudso-theme') === 'light'
+  } catch (e) {}
+  if (light) document.documentElement.classList.add('light')
+  var meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) meta.setAttribute('content', light ? '#f4f4f5' : '#1c1c1f')
+})()
+</script>`
+
+const THEME_TOGGLE = `<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Use light mode" title="Light mode">
+    <svg class="icon-sun" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <circle cx="8" cy="8" r="3.25" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M8 1.5v1.5M8 13v1.5M1.5 8h1.5M13 8h1.5M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/>
+    </svg>
+    <svg class="icon-moon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" d="M13.5 9.2A5.5 5.5 0 1 1 6.8 2.5 4.25 4.25 0 0 0 13.5 9.2z"/>
+    </svg>
+  </button>`
+
+function documentPage(title: string, body: string, bodyClass = ''): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${isRegister ? 'Create your Tudso account' : 'Sign in to Tudso'}</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #0b0b0d;
-      color: #f3f3f5;
-    }
-    .card {
-      width: 100%;
-      max-width: 380px;
-      padding: 32px;
-      border-radius: 16px;
-      background: #111114;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-    h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
-    p { margin: 0 0 24px; color: #a8a8b0; font-size: 14px; }
-    label { display: block; margin-bottom: 6px; font-size: 13px; color: #a8a8b0; }
-    input {
-      width: 100%;
-      padding: 10px 12px;
-      margin-bottom: 16px;
-      border-radius: 8px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: #18181c;
-      color: #f3f3f5;
-      font-size: 14px;
-    }
-    input:focus { outline: 2px solid #c3cce4; outline-offset: 2px; }
-    button {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: none;
-      background: #c3cce4;
-      color: #0b0b0d;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    button:hover { background: #d8deed; }
-    .error { color: #e07070; font-size: 13px; margin-bottom: 16px; }
-    .separator { text-align: center; margin: 20px 0; color: #6d6d76; font-size: 13px; }
-    .oauth { background: transparent; border: 1px solid rgba(255,255,255,0.1); color: #f3f3f5; }
-    .oauth:hover { background: rgba(255,255,255,0.05); }
-    .footer { margin-top: 20px; font-size: 13px; color: #6d6d76; text-align: center; }
-    .switch { margin-top: 16px; font-size: 13px; color: #a8a8b0; text-align: center; }
-    .switch a { color: #c3cce4; text-decoration: none; }
-    .switch a:hover { color: #d8deed; }
-    .hint { margin: -8px 0 16px; font-size: 12px; color: #6d6d76; }
-  </style>
+  <title>${escapeHtml(title)}</title>
+  <meta name="application-name" content="Tudso">
+  <meta name="apple-mobile-web-app-title" content="Tudso">
+  <meta name="theme-color" content="#1c1c1f">
+  <link rel="icon" href="/brand/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/brand/favicon-16.png">
+  <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+  <link rel="manifest" href="/brand/site.webmanifest">
+  <style>${STYLES}</style>
+  ${THEME_BOOT}
+  <script src="/brand/login.js" defer></script>
 </head>
-<body>
-  <div class="card">
-    <h1>${isRegister ? 'Create your account' : 'Sign in to Tudso'}</h1>
-    <p>${isRegister ? 'Set up Tudso so it can learn how you work.' : 'Your personal AI assistant for desktop.'}</p>
-    ${safeError ? `<div class="error">${safeError}</div>` : ''}
-    ${isRegister ? `
-    <form method="POST" action="/auth/desktop/register">
-      <input type="hidden" name="state" value="${safeState}">
-      <label for="name">Name</label>
-      <input id="name" name="name" type="text" autocomplete="name" placeholder="What should we call you?">
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" required autofocus autocomplete="email">
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password">
-      <p class="hint">Use at least 8 characters.</p>
-      <label for="passwordConfirm">Confirm password</label>
-      <input id="passwordConfirm" name="passwordConfirm" type="password" required minlength="8" autocomplete="new-password">
-      <button type="submit">Create account</button>
-    </form>
-    ` : `
-    <form method="POST" action="/auth/desktop/login">
-      <input type="hidden" name="state" value="${safeState}">
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" required autofocus autocomplete="email">
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" required autocomplete="current-password">
-      <button type="submit">Continue with Email</button>
-    </form>
-    `}
-    <div class="separator">or</div>
-    <form method="POST" action="/auth/desktop/oauth">
-      <input type="hidden" name="state" value="${safeState}">
-      <input type="hidden" name="provider" value="google">
-      <button type="submit" class="oauth">${isRegister ? 'Sign up with Google' : 'Continue with Google'}</button>
-    </form>
-    <div class="switch">
-      ${isRegister
-        ? `Already have an account? <a href="/auth/desktop?state=${encodeURIComponent(state)}">Sign in</a>`
-        : `New to Tudso? <a href="/auth/desktop?state=${encodeURIComponent(state)}&mode=register">Create account</a>`}
-    </div>
-    <div class="footer">This window will close automatically after ${isRegister ? 'creating your account' : 'signing in'}.</div>
-  </div>
+<body${bodyClass ? ` class="${escapeHtml(bodyClass)}"` : ''}>
+${THEME_TOGGLE}
+${body}
 </body>
 </html>`
 }
 
-export function authCompletePage(callbackUrl: string): string {
+function brandMark(): string {
+  return `<img class="mark" src="/brand/icon.png" width="48" height="48" alt="Tudso">`
+}
+
+function googleButton(label: string, state: string, mode: 'login' | 'register'): string {
+  return `<form method="POST" action="/auth/desktop/oauth">
+      <input type="hidden" name="state" value="${state}">
+      <input type="hidden" name="provider" value="google">
+      <input type="hidden" name="mode" value="${mode}">
+      <button type="submit" class="oauth">${GOOGLE_MARK}<span>${escapeHtml(label)}</span></button>
+    </form>`
+}
+
+export function loginPage(params: { state: string; error?: string; mode?: 'login' | 'register' }): string {
+  const { state, error } = params
+  const isRegister = params.mode === 'register'
+  const safeState = escapeHtml(state)
+  const title = isRegister ? 'Create your Tudso account' : 'Sign in to Tudso'
+  const heading = isRegister ? 'Create your account' : 'Sign in to Tudso'
+  const lede = isRegister
+    ? 'Set up Tudso so it can learn how you work.'
+    : 'Your personal AI assistant for desktop.'
+  const googleLabel = isRegister ? 'Sign up with Google' : 'Continue with Google'
+  const switchLine = isRegister
+    ? `Already have an account? <a href="/auth/desktop?state=${encodeURIComponent(state)}">Sign in</a>`
+    : `New to Tudso? <a href="/auth/desktop?state=${encodeURIComponent(state)}&mode=register">Create account</a>`
+  const footnote = isRegister
+    ? 'This window will close automatically after creating your account.'
+    : 'This window will close automatically after signing in.'
+
+  const fields = isRegister
+    ? `<form method="POST" action="/auth/desktop/register">
+      <input type="hidden" name="state" value="${safeState}">
+      <div class="stack">
+        <div class="field">
+          <label for="name">Name</label>
+          <input id="name" name="name" type="text" autocomplete="name" placeholder="Alex">
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com">
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="Create a password">
+          <p class="hint">Use at least 8 characters.</p>
+        </div>
+        <div class="field">
+          <label for="passwordConfirm">Confirm password</label>
+          <input id="passwordConfirm" name="passwordConfirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Re-enter your password">
+        </div>
+        <button type="submit">Create account</button>
+      </div>
+    </form>`
+    : `<form method="POST" action="/auth/desktop/login">
+      <input type="hidden" name="state" value="${safeState}">
+      <div class="stack">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com">
+        </div>
+        <div class="field">
+          <div class="field-head">
+            <label for="password">Password</label>
+            <a class="forgot" href="/auth/desktop/forgot?state=${encodeURIComponent(state)}">Forgot password?</a>
+          </div>
+          <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Your password">
+        </div>
+        <button type="submit">Continue with email</button>
+      </div>
+    </form>`
+
+  const body = `  <main>
+    ${brandMark()}
+    <h1>${heading}</h1>
+    <p class="lede">${lede}</p>
+    ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
+    ${googleButton(googleLabel, safeState, isRegister ? 'register' : 'login')}
+    <div class="rule">or</div>
+    ${fields}
+    <p class="switch">${switchLine}</p>
+    <p class="footnote">${footnote}</p>
+  </main>`
+
+  return documentPage(title, body)
+}
+
+export function authCompletePage(callbackUrl: string, copy?: { title?: string; lede?: string }): string {
   const safeUrl = escapeHtml(callbackUrl)
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="refresh" content="0;url=${safeUrl}">
-  <title>Returning to Tudso</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #0b0b0d;
-      color: #f3f3f5;
-    }
-    .card {
-      width: 100%;
-      max-width: 380px;
-      padding: 32px;
-      border-radius: 16px;
-      background: #111114;
-      border: 1px solid rgba(255,255,255,0.08);
-      text-align: center;
-    }
-    h1 { margin: 0 0 8px; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
-    p { margin: 0 0 24px; color: #a8a8b0; font-size: 14px; }
-    a.primary {
-      display: block;
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 8px;
-      background: #c3cce4;
-      color: #0b0b0d;
-      font-weight: 600;
-      font-size: 14px;
-      text-decoration: none;
-    }
-    a.primary:hover { background: #d8deed; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>You're signed in</h1>
-    <p>Returning to the Tudso app. You can close this tab after it opens.</p>
+  const title = copy?.title ?? "You're signed in"
+  const lede = copy?.lede ?? 'Returning to the Tudso app. You can close this tab after it opens.'
+  const body = `  <main>
+    ${brandMark()}
+    <h1>${escapeHtml(title)}</h1>
+    <p class="lede">${escapeHtml(lede)}</p>
     <a class="primary" href="${safeUrl}">Open Tudso</a>
-  </div>
-</body>
-</html>`
+  </main>`
+  return documentPage('Returning to Tudso', body)
+}
+
+const CHECK = `<svg class="tick" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>`
+const DASH = `<svg class="dash" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M4 8h8"/></svg>`
+
+type PlanPrice = {
+  id: 'pro' | 'premium'
+  amount: number | null
+  currency: string
+  interval: string
+}
+
+function formatPlanPrice(price?: PlanPrice): string {
+  if (!price || price.amount == null || !price.currency) return ''
+  const value = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: price.currency.toUpperCase(),
+    maximumFractionDigits: price.amount % 100 === 0 ? 0 : 2,
+  }).format(price.amount / 100)
+  const interval = price.interval || 'month'
+  return `${value}<small>/ ${interval}</small>`
+}
+
+const PLAN_CARDS: Array<{
+  id: 'pro' | 'premium'
+  name: string
+  description: string
+  featured?: boolean
+  action: string
+  features: Array<{ text: string; included: boolean }>
+}> = [
+  {
+    id: 'pro',
+    name: 'Pro',
+    description: 'Chat, screen answers, and live copilot. Always visible in screen share.',
+    action: 'Subscribe to Pro',
+    features: [
+      { text: 'Chat and Intelligent model', included: true },
+      { text: 'Screen answers', included: true },
+      { text: 'Live copilot', included: true },
+      { text: 'Hide from screen share', included: false },
+    ],
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    description: 'Everything in Pro, plus a switch to hide Tudso from screen share.',
+    featured: true,
+    action: 'Subscribe to Premium',
+    features: [
+      { text: 'Chat and Intelligent model', included: true },
+      { text: 'Screen answers', included: true },
+      { text: 'Live copilot', included: true },
+      { text: 'Hide from screen share — turn it on or off', included: true },
+    ],
+  },
+]
+
+export function subscribePage(params: {
+  code: string
+  state: string
+  email: string
+  prices: PlanPrice[]
+  error?: string
+}): string {
+  const code = escapeHtml(params.code)
+  const state = escapeHtml(params.state)
+  const prices = Object.fromEntries(params.prices.map((price) => [price.id, price])) as Partial<Record<'pro' | 'premium', PlanPrice>>
+  const cards = PLAN_CARDS.map((plan) => {
+    const price = formatPlanPrice(prices[plan.id])
+    const features = plan.features.map((feature) => `
+          <li class="${feature.included ? '' : 'out'}">${feature.included ? CHECK : DASH}<span>${escapeHtml(feature.text)}</span></li>`).join('')
+    return `<article class="plan${plan.featured ? ' plan-featured' : ''}">
+        <h2>${escapeHtml(plan.name)}</h2>
+        ${price ? `<p class="price">${price}</p>` : ''}
+        <p class="plan-copy">${escapeHtml(plan.description)}</p>
+        <ul class="features">${features}
+        </ul>
+        <form method="POST" action="/auth/desktop/subscribe">
+          <input type="hidden" name="code" value="${code}">
+          <input type="hidden" name="state" value="${state}">
+          <input type="hidden" name="plan" value="${plan.id}">
+          <button type="submit">${escapeHtml(plan.action)}</button>
+        </form>
+      </article>`
+  }).join('\n      ')
+
+  const body = `  <main>
+    ${brandMark()}
+    <h1>Choose a plan</h1>
+    <p class="lede">Tudso needs a plan for chat, screen answers, and live copilot. Subscribe to open the app.</p>
+    <p class="who">Billing for ${escapeHtml(params.email)}</p>
+    ${params.error ? `<p class="error" role="alert">${escapeHtml(params.error)}</p>` : ''}
+    <div class="plans">
+      ${cards}
+    </div>
+    <p class="footnote">Checkout opens with Stripe. This window returns to Tudso when the plan is active.</p>
+  </main>`
+  return documentPage('Choose a Tudso plan', body, 'choose-plan')
+}
+
+export function sessionExpiredPage(): string {
+  const body = `  <main>
+    ${brandMark()}
+    <h1>Sign-in expired</h1>
+    <p class="lede">Return to the Tudso app and sign in again to pick a plan.</p>
+  </main>`
+  return documentPage('Sign-in expired', body)
+}
+
+function signInLink(state?: string): string {
+  if (!state) return ''
+  return `<p class="switch"><a href="/auth/desktop?state=${encodeURIComponent(state)}">Back to sign in</a></p>`
+}
+
+export function forgotPasswordPage(params: { state?: string; error?: string; email?: string }): string {
+  const state = escapeHtml(params.state ?? '')
+  const body = `  <main>
+    ${brandMark()}
+    <h1>Forgot your password?</h1>
+    <p class="lede">Enter the email for your Tudso account. If it exists, we will send a reset link.</p>
+    ${params.error ? `<p class="error" role="alert">${escapeHtml(params.error)}</p>` : ''}
+    <form method="POST" action="/auth/desktop/forgot">
+      ${state ? `<input type="hidden" name="state" value="${state}">` : ''}
+      <div class="stack">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required autofocus autocomplete="email" placeholder="you@example.com" value="${escapeHtml(params.email ?? '')}">
+        </div>
+        <button type="submit">Send reset link</button>
+      </div>
+    </form>
+    ${signInLink(params.state)}
+  </main>`
+  return documentPage('Forgot password', body)
+}
+
+export function checkEmailPage(params: {
+  title: string
+  lede: string
+  email?: string
+  state?: string
+  resendAction?: string
+}): string {
+  const resend = params.resendAction && params.email
+    ? `<form method="POST" action="${escapeHtml(params.resendAction)}">
+      ${params.state ? `<input type="hidden" name="state" value="${escapeHtml(params.state)}">` : ''}
+      <input type="hidden" name="email" value="${escapeHtml(params.email)}">
+      <button type="submit" class="oauth">Resend email</button>
+    </form>`
+    : ''
+  const body = `  <main>
+    ${brandMark()}
+    <h1>${escapeHtml(params.title)}</h1>
+    <p class="lede">${escapeHtml(params.lede)}</p>
+    ${resend}
+    ${signInLink(params.state)}
+  </main>`
+  return documentPage(params.title, body)
+}
+
+export function resetPasswordPage(params: { token: string; error?: string }): string {
+  const token = escapeHtml(params.token)
+  const body = `  <main>
+    ${brandMark()}
+    <h1>Choose a new password</h1>
+    <p class="lede">Use at least 8 characters. You can sign in after this.</p>
+    ${params.error ? `<p class="error" role="alert">${escapeHtml(params.error)}</p>` : ''}
+    <form method="POST" action="/auth/reset-password">
+      <input type="hidden" name="token" value="${token}">
+      <div class="stack">
+        <div class="field">
+          <label for="password">New password</label>
+          <input id="password" name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="Create a password" autofocus>
+        </div>
+        <div class="field">
+          <label for="passwordConfirm">Confirm password</label>
+          <input id="passwordConfirm" name="passwordConfirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Re-enter your password">
+        </div>
+        <button type="submit">Update password</button>
+      </div>
+    </form>
+  </main>`
+  return documentPage('Reset password', body)
+}
+
+export function confirmEmailChangePage(params: { token: string; error?: string }): string {
+  const token = escapeHtml(params.token)
+  const body = `  <main>
+    ${brandMark()}
+    <h1>Confirm your new email</h1>
+    <p class="lede">Enter your current password to finish changing the email on this account.</p>
+    ${params.error ? `<p class="error" role="alert">${escapeHtml(params.error)}</p>` : ''}
+    <form method="POST" action="/auth/confirm-email-change">
+      <input type="hidden" name="token" value="${token}">
+      <div class="stack">
+        <div class="field">
+          <label for="password">Current password</label>
+          <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="Your password" autofocus>
+        </div>
+        <button type="submit">Confirm email</button>
+      </div>
+    </form>
+  </main>`
+  return documentPage('Confirm email change', body)
+}
+
+export function statusPage(params: { title: string; heading: string; lede: string; state?: string }): string {
+  const body = `  <main>
+    ${brandMark()}
+    <h1>${escapeHtml(params.heading)}</h1>
+    <p class="lede">${escapeHtml(params.lede)}</p>
+    ${signInLink(params.state)}
+  </main>`
+  return documentPage(params.title, body)
 }

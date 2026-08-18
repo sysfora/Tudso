@@ -27,7 +27,11 @@ const SHOW_FIRST = new Set<ShortcutId>([
   'togglePrivacy',
   'increaseFontSize',
   'decreaseFontSize',
+  'scrollUp',
+  'scrollDown',
 ])
+
+const REPEATABLE = new Set<ShortcutId>(['scrollUp', 'scrollDown'])
 
 export { SHORTCUT_TAKEN_MESSAGE }
 
@@ -139,9 +143,10 @@ function bindInputListener() {
 
   win.webContents.on('before-input-event', (event, input) => {
     if (suspended || !current) return
-    if (input.type !== 'keyDown' || input.isAutoRepeat || input.isComposing) return
+    if (input.type !== 'keyDown' || input.isComposing) return
     const id = matchShortcut(input)
     if (!id) return
+    if (input.isAutoRepeat && !REPEATABLE.has(id)) return
     event.preventDefault()
     dispatch(id)
   })
@@ -166,7 +171,8 @@ function matchShortcut(input: Electron.Input): ShortcutId | null {
 
 function dispatch(id: ShortcutId) {
   const now = Date.now()
-  if (id === lastDispatchId && now - lastDispatchAt < 180) return
+  const gap = REPEATABLE.has(id) ? 40 : 180
+  if (id === lastDispatchId && now - lastDispatchAt < gap) return
   lastDispatchId = id
   lastDispatchAt = now
 

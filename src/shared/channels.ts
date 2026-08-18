@@ -31,6 +31,7 @@ export const CHANNELS = {
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   settingsChanged: 'settings:changed',
+  planVisibility: 'plan:visibility',
 
   shortcutsGet: 'shortcuts:get',
   shortcutsGetFailed: 'shortcuts:get-failed',
@@ -62,6 +63,7 @@ export const CHANNELS = {
   appSetApiKey: 'app:set-api-key',
   appClearApiKey: 'app:clear-api-key',
   appSetPin: 'app:set-pin',
+  appClearPin: 'app:clear-pin',
   appUnlock: 'app:unlock',
   appLock: 'app:lock',
   appGetLockState: 'app:lock-state',

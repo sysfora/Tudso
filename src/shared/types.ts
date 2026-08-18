@@ -24,6 +24,7 @@ export interface AuthSession {
   token: string
   userId: string
   email: string
+  deviceId?: string
 }
 
 export type OnboardingStep =
@@ -143,6 +144,8 @@ export interface ShortcutMap {
   moveWindowRight: string
   moveWindowUp: string
   moveWindowDown: string
+  scrollUp: string
+  scrollDown: string
 }
 
 export type ShortcutId = keyof ShortcutMap
@@ -238,6 +241,8 @@ export type AppCommand =
   | 'move-window-right'
   | 'move-window-up'
   | 'move-window-down'
+  | 'scroll-up'
+  | 'scroll-down'
 
 export interface ApiKeyStatus {
   configured: boolean

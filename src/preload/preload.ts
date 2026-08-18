@@ -40,6 +40,7 @@ const api: ElectronAPI = {
     nudge: (direction) => ipcRenderer.invoke(CHANNELS.windowNudge, direction),
     restoreTaskbar: () => ipcRenderer.invoke(CHANNELS.windowRestoreTaskbar),
     setSignedInReady: (ready: boolean) => ipcRenderer.invoke(CHANNELS.windowSetSignedInReady, ready),
+    setHideFromCaptureAllowed: (allowed: boolean) => ipcRenderer.invoke(CHANNELS.planVisibility, allowed),
     onCollapsed: (callback) => subscribe(CHANNELS.windowCollapsed, callback),
   },
   settings: {
@@ -85,7 +86,8 @@ const api: ElectronAPI = {
     getApiKeyStatus: () => ipcRenderer.invoke(CHANNELS.appGetApiKeyStatus),
     setApiKey: (key: string) => ipcRenderer.invoke(CHANNELS.appSetApiKey, key),
     clearApiKey: () => ipcRenderer.invoke(CHANNELS.appClearApiKey),
-    setPin: (pin: string) => ipcRenderer.invoke(CHANNELS.appSetPin, pin),
+    setPin: (pin: string, currentPin?: string) => ipcRenderer.invoke(CHANNELS.appSetPin, pin, currentPin),
+    clearPin: (currentPin: string) => ipcRenderer.invoke(CHANNELS.appClearPin, currentPin),
     unlock: (pin: string) => ipcRenderer.invoke(CHANNELS.appUnlock, pin),
     lock: () => ipcRenderer.invoke(CHANNELS.appLock),
     getLockState: () => ipcRenderer.invoke(CHANNELS.appGetLockState),

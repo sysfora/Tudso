@@ -67,13 +67,29 @@ export interface Subscription {
   id: string
   user: string
   status: string
-  plan: Plan
+  plan?: Plan
   currentPeriodEnd: string
   cancelAtPeriodEnd: boolean
+  stripeCustomerId?: string
+  stripeSubscriptionId?: string
 }
 
-export interface AuthSession {
-  token: string
-  userId: string
-  email: string
+export interface BillingPlanPrice {
+  id: 'pro' | 'premium'
+  priceId: string
+  amount: number | null
+  currency: string
+  interval: string
 }
+
+export type MemorySource = 'auto' | 'manual'
+
+export interface MemoryEntry {
+  id: string
+  text: string
+  created: string
+  source?: MemorySource
+}
+
+export const MAX_MEMORIES = 80
+export const MAX_MEMORY_CHARS = 400

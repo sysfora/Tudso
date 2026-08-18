@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { generateAuthState, generateDesktopToken, verifyAuthState } from './auth.js'
+import { findOAuthProvider, generateAuthState, generateDesktopToken, verifyAuthState } from './auth.js'
 
 describe('auth', () => {
+  it('finds Google from the current PocketBase oauth2 list', () => {
+    const google = findOAuthProvider(
+      {
+        oauth2: {
+          providers: [{ name: 'google', authURL: 'https://accounts.google.com/o/oauth2/auth?redirect_uri=', codeVerifier: 'pkce' }],
+        },
+      },
+      'google',
+    )
+    expect(google?.codeVerifier).toBe('pkce')
+  })
+
+  it('does not throw when PocketBase omits authProviders', () => {
+    expect(findOAuthProvider({}, 'google')).toBeNull()
+    expect(findOAuthProvider({ oauth2: { providers: [] } }, 'google')).toBeNull()
+  })
+
   it('generates a unique state and verifier', () => {
     const { state, codeVerifier, url } = generateAuthState()
     expect(state).toHaveLength(64)

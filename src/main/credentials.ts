@@ -1,18 +1,20 @@
+import { randomUUID } from 'node:crypto'
 import { safeStorage } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import type { ApiKeyStatus } from '../shared/types'
+import type { ApiKeyStatus, AuthSession } from '../shared/types'
 
 interface SecretFile {
   apiKey?: string
   pin?: string
-  session?: { token: string; userId: string; email: string }
+  deviceId?: string
+  session?: AuthSession
 }
 
 export class CredentialStore {
   private filePath = ''
-  private memory: { apiKey?: string; pin?: string; session?: { token: string; userId: string; email: string } } = {}
+  private memory: { apiKey?: string; pin?: string; deviceId?: string; session?: AuthSession } = {}
 
   async init() {
     this.filePath = path.join(app.getPath('userData'), 'tudso-secrets.json')
@@ -52,6 +54,18 @@ export class CredentialStore {
     await this.persist()
   }
 
+  async clearPin() {
+    this.memory.pin = undefined
+    await this.persist()
+  }
+
+  async getOrCreateDeviceId(): Promise<string> {
+    if (this.memory.deviceId) return this.memory.deviceId
+    this.memory.deviceId = randomUUID()
+    await this.persist()
+    return this.memory.deviceId
+  }
+
   verifyPin(pin: string) {
     return this.memory.pin === pin
   }
@@ -61,12 +75,13 @@ export class CredentialStore {
     await this.persist()
   }
 
-  getSession(): { token: string; userId: string; email: string } | null {
+  getSession(): AuthSession | null {
     return this.memory.session ?? null
   }
 
-  async setSession(session: { token: string; userId: string; email: string }) {
+  async setSession(session: AuthSession) {
     this.memory.session = session
+    if (session.deviceId) this.memory.deviceId = session.deviceId
     await this.persist()
   }
 
@@ -86,6 +101,7 @@ export class CredentialStore {
       this.memory = {
         apiKey: secrets.apiKey,
         pin: secrets.pin,
+        deviceId: secrets.deviceId,
         session: secrets.session,
       }
     } catch {

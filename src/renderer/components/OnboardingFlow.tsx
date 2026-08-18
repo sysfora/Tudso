@@ -16,27 +16,34 @@ export function OnboardingFlow() {
   const [goals, setGoals] = useState(profile?.goals?.join('\n') ?? '')
   const [communicationStyle, setCommunicationStyle] = useState<'concise' | 'balanced' | 'detailed'>(profile?.communicationStyle ?? 'balanced')
   const [resumeUploading, setResumeUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [resumeError, setResumeError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const steps = ['name', 'profession', 'resume', 'skills', 'goals', 'preferences']
 
   const next = async () => {
-    if (step === 0) {
-      await updateProfile({ preferredName: preferredName || undefined })
-    } else if (step === 1) {
-      await updateProfile({ profession: profession || undefined })
-    }
-    if (step < steps.length - 1) {
-      setStep(step + 1)
-    } else {
-      await updateProfile({
-        skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
-        goals: goals.split('\n').map((s) => s.trim()).filter(Boolean),
-        ...DEFAULT_PROFILE_PREFERENCES,
-        communicationStyle,
-      })
-      await completeOnboarding()
+    if (saving || resumeUploading) return
+    setSaving(true)
+    try {
+      if (step === 0) {
+        await updateProfile({ preferredName: preferredName || undefined })
+      } else if (step === 1) {
+        await updateProfile({ profession: profession || undefined })
+      }
+      if (step < steps.length - 1) {
+        setStep(step + 1)
+      } else {
+        await updateProfile({
+          skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
+          goals: goals.split('\n').map((s) => s.trim()).filter(Boolean),
+          ...DEFAULT_PROFILE_PREFERENCES,
+          communicationStyle,
+        })
+        await completeOnboarding()
+      }
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -87,11 +94,11 @@ export function OnboardingFlow() {
                 const file = e.target.files?.[0]
                 if (file) void uploadResume(file)
               }} />
-              <Button variant="outline" className="w-full" onClick={() => fileRef.current?.click()} disabled={resumeUploading}>
-                {resumeUploading ? 'Uploading…' : 'Upload resume (PDF, DOCX, TXT)'}
+              <Button variant="outline" className="w-full" onClick={() => fileRef.current?.click()} disabled={resumeUploading} loading={resumeUploading}>
+                Upload resume (PDF, DOCX, TXT)
               </Button>
               {resumeError ? <p className="text-[12px] text-danger">{resumeError}</p> : null}
-              <Button variant="ghost" className="w-full" onClick={() => setStep(step + 1)}>
+              <Button variant="ghost" className="w-full" onClick={() => setStep(step + 1)} disabled={resumeUploading}>
                 Skip
               </Button>
             </div>
@@ -115,8 +122,8 @@ export function OnboardingFlow() {
         </div>
         {step !== 2 && (
           <div className="mt-6 flex gap-2">
-            {step > 0 && <Button variant="outline" className="flex-1" onClick={() => setStep(step - 1)}>Back</Button>}
-            <Button className="flex-1" onClick={() => void next()}>{step === steps.length - 1 ? 'Finish' : 'Next'}</Button>
+            {step > 0 && <Button variant="outline" className="flex-1" onClick={() => setStep(step - 1)} disabled={saving}>Back</Button>}
+            <Button className="flex-1" onClick={() => void next()} loading={saving}>{step === steps.length - 1 ? 'Finish' : 'Next'}</Button>
           </div>
         )}
       </div>

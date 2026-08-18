@@ -47,7 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   retentionDays: null,
   apiBaseUrl: 'https://api.openai.com/v1',
   releaseChannel: 'stable',
-  defaultsRevision: 9,
+  defaultsRevision: 10,
 }
 
 export const SHORTCUT_TAKEN_MESSAGE =
@@ -92,6 +92,8 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = {
   moveWindowRight: 'Control+Alt+Shift+Right',
   moveWindowUp: 'Control+Alt+Shift+Up',
   moveWindowDown: 'Control+Alt+Shift+Down',
+  scrollUp: 'Control+Alt+U',
+  scrollDown: 'Control+Alt+J',
 }
 
 export const SHORTCUT_LABELS: Record<keyof ShortcutMap, string> = {
@@ -133,6 +135,8 @@ export const SHORTCUT_LABELS: Record<keyof ShortcutMap, string> = {
   moveWindowRight: 'Nudge right',
   moveWindowUp: 'Nudge up',
   moveWindowDown: 'Nudge down',
+  scrollUp: 'Scroll up',
+  scrollDown: 'Scroll down',
 }
 
 export const SHORTCUT_DESCRIPTIONS: Record<keyof ShortcutMap, string> = {
@@ -174,6 +178,8 @@ export const SHORTCUT_DESCRIPTIONS: Record<keyof ShortcutMap, string> = {
   moveWindowRight: 'Move the window right a step.',
   moveWindowUp: 'Move the window up a step.',
   moveWindowDown: 'Move the window down a step.',
+  scrollUp: 'Scroll the conversation up.',
+  scrollDown: 'Scroll the conversation down.',
 }
 
 export const SHORTCUT_GROUPS: { title: string; ids: (keyof ShortcutMap)[] }[] = [
@@ -233,7 +239,7 @@ export const SHORTCUT_GROUPS: { title: string; ids: (keyof ShortcutMap)[] }[] = 
   },
   {
     title: 'Chat',
-    ids: ['focusComposer', 'toggleModel'],
+    ids: ['focusComposer', 'toggleModel', 'scrollUp', 'scrollDown'],
   },
   {
     title: 'App',

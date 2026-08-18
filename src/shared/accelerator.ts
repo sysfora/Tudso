@@ -134,6 +134,8 @@ export function formatAccelerator(accelerator: string, platform = 'win32'): stri
       if (part === 'Alt' || part === 'Option') return isMac ? '⌥' : 'Alt'
       if (part === 'Space') return 'Space'
       if (part === 'Esc') return 'Esc'
+      if (part === 'PageUp') return isMac ? 'Page Up' : 'PgUp'
+      if (part === 'PageDown') return isMac ? 'Page Down' : 'PgDn'
       return part
     })
     .join(isMac ? '' : ' + ')

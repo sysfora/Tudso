@@ -109,7 +109,7 @@ export class AppStore {
       const parsed = JSON.parse(raw) as Partial<PersistedState>
       const parsedSettings = { ...DEFAULT_SETTINGS, ...parsed.settings }
       const savedRevision = parsed.settings?.defaultsRevision ?? 0
-      const needsDefaults = savedRevision < 9
+      const needsDefaults = savedRevision < 10
       if (savedRevision < 1) {
         parsedSettings.rememberPosition = true
         parsedSettings.rememberSize = true
@@ -148,6 +148,15 @@ export class AppStore {
         if (shortcuts.copyAnswerCode8 === 'Control+Alt+Shift+F8') {
           shortcuts.copyAnswerCode8 = DEFAULT_SHORTCUTS.copyAnswerCode8
         }
+      }
+      if (savedRevision < 10) {
+        if (!shortcuts.scrollUp || shortcuts.scrollUp === 'Control+Alt+PageUp') {
+          shortcuts.scrollUp = DEFAULT_SHORTCUTS.scrollUp
+        }
+        if (!shortcuts.scrollDown || shortcuts.scrollDown === 'Control+Alt+PageDown') {
+          shortcuts.scrollDown = DEFAULT_SHORTCUTS.scrollDown
+        }
+        parsedSettings.defaultsRevision = 10
       }
       this.state = {
         settings: parsedSettings,

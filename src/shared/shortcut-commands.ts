@@ -37,6 +37,8 @@ export const SHORTCUT_COMMANDS: Partial<Record<ShortcutId, AppCommand>> = {
   moveWindowRight: 'move-window-right',
   moveWindowUp: 'move-window-up',
   moveWindowDown: 'move-window-down',
+  scrollUp: 'scroll-up',
+  scrollDown: 'scroll-down',
 }
 
 for (const index of ANSWER_INDEXES) {

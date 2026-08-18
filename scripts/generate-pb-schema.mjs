@@ -1,8 +1,12 @@
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+function emailBody(name) {
+  return readFileSync(join(root, 'EmailStructures', name), 'utf8').trim()
+}
 
 const idField = {
   autogeneratePattern: '[a-z0-9]{15}',
@@ -459,10 +463,7 @@ function usersCollection() {
     manageRule: null,
     authAlert: {
       enabled: true,
-      emailTemplate: emailTemplate(
-        'Login from a new location',
-        '<p>Hello,</p>\n<p>We noticed a login to your {APP_NAME} account from a new location:</p>\n<p><em>{ALERT_INFO}</em></p>\n<p><strong>If this wasn\'t you, you should immediately change your {APP_NAME} account password to revoke access from all other locations.</strong></p>\n<p>If this was you, you may disregard this email.</p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>',
-      ),
+      emailTemplate: emailTemplate('Login from a new location', emailBody('auth-alert.html')),
     },
     oauth2: {
       enabled: false,
@@ -487,28 +488,16 @@ function usersCollection() {
       enabled: false,
       duration: 180,
       length: 8,
-      emailTemplate: emailTemplate(
-        'OTP for {APP_NAME}',
-        '<p>Hello,</p>\n<p>Your one-time password is: <strong>{OTP}</strong></p>\n<p><i>If you didn\'t ask for the one-time password, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>',
-      ),
+      emailTemplate: emailTemplate('OTP for {APP_NAME}', emailBody('otp.html')),
     },
     authToken: { duration: 604800 },
     passwordResetToken: { duration: 1800 },
     emailChangeToken: { duration: 1800 },
     verificationToken: { duration: 259200 },
     fileToken: { duration: 180 },
-    verificationTemplate: emailTemplate(
-      'Verify your {APP_NAME} email',
-      '<p>Hello,</p>\n<p>Thank you for joining us at {APP_NAME}.</p>\n<p>Click on the button below to verify your email address.</p>\n<p>\n  <a class="btn" href="{APP_URL}/_/#/auth/confirm-verification/{TOKEN}" target="_blank" rel="noopener">Verify</a>\n</p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>',
-    ),
-    resetPasswordTemplate: emailTemplate(
-      'Reset your {APP_NAME} password',
-      '<p>Hello,</p>\n<p>Click on the button below to reset your password.</p>\n<p>\n  <a class="btn" href="{APP_URL}/_/#/auth/confirm-password-reset/{TOKEN}" target="_blank" rel="noopener">Reset password</a>\n</p>\n<p><i>If you didn\'t ask to reset your password, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>',
-    ),
-    confirmEmailChangeTemplate: emailTemplate(
-      'Confirm your {APP_NAME} new email address',
-      '<p>Hello,</p>\n<p>Click on the button below to confirm your new email address.</p>\n<p>\n  <a class="btn" href="{APP_URL}/_/#/auth/confirm-email-change/{TOKEN}" target="_blank" rel="noopener">Confirm new email</a>\n</p>\n<p><i>If you didn\'t ask to change your email address, you can ignore this email.</i></p>\n<p>\n  Thanks,<br/>\n  {APP_NAME} team\n</p>',
-    ),
+    verificationTemplate: emailTemplate('Verify your {APP_NAME} email', emailBody('verification.html')),
+    resetPasswordTemplate: emailTemplate('Reset your {APP_NAME} password', emailBody('reset-password.html')),
+    confirmEmailChangeTemplate: emailTemplate('Confirm your {APP_NAME} new email address', emailBody('confirm-email-change.html')),
   }
 }
 
@@ -631,9 +620,13 @@ const collections = [
     relation('user', USERS, { cascadeDelete: true }),
     text('token', { required: true, hidden: true, max: 512 }),
     date('expiresAt', { required: true }),
+    text('deviceId', { max: 255 }),
   ], {
     ...adminOnly(),
-    indexes: ['CREATE UNIQUE INDEX `idx_desktop_sessions_token` ON `desktop_sessions` (`token`)'],
+    indexes: [
+      'CREATE UNIQUE INDEX `idx_desktop_sessions_token` ON `desktop_sessions` (`token`)',
+      'CREATE INDEX `idx_desktop_sessions_user_device` ON `desktop_sessions` (`user`, `deviceId`)',
+    ],
   }),
   collection(USER_CONTEXT, 'user_context', [
     relation('user', USERS, { cascadeDelete: true }),

@@ -7,6 +7,7 @@ import { ConversationSidebar } from '@/components/ConversationSidebar'
 import { LockScreen } from '@/components/LockScreen'
 import { OnboardingFlow } from '@/components/OnboardingFlow'
 import { Settings } from '@/components/Settings'
+import { GuestWindowChrome } from '@/components/GuestWindowChrome'
 import { Welcome } from '@/components/Welcome'
 import { WindowHeader } from '@/components/WindowHeader'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -74,7 +75,7 @@ export default function App() {
   return (
     <TooltipProvider>
       <AppShell>
-        {session && onboardingComplete ? <WindowHeader /> : null}
+        {session && onboardingComplete ? <WindowHeader /> : <GuestWindowChrome />}
         {windowCollapsed ? null : body}
         {windowCollapsed ? null : (
           <>

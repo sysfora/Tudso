@@ -1,10 +1,11 @@
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
+import { LoaderCircle } from 'lucide-react'
 import type { ButtonHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-1.5 rounded-md text-[13px] font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-40',
+  'relative inline-flex items-center justify-center gap-1.5 rounded-md text-[13px] font-medium transition-colors duration-150 disabled:pointer-events-none',
   {
     variants: {
       variant: {
@@ -30,9 +31,47 @@ const buttonVariants = cva(
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  loading?: boolean
 }
 
-export function Button({ className, variant, size, asChild = false, type = 'button', ...props }: ButtonProps) {
+export function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  type = 'button',
+  loading = false,
+  disabled,
+  children,
+  ...props
+}: ButtonProps) {
   const Comp = asChild ? Slot : 'button'
-  return <Comp className={cn(buttonVariants({ variant, size }), className)} type={asChild ? undefined : type} {...props} />
+  if (asChild) {
+    return (
+      <Comp className={cn(buttonVariants({ variant, size }), className)} type={asChild ? undefined : type} {...props}>
+        {children}
+      </Comp>
+    )
+  }
+  return (
+    <Comp
+      className={cn(
+        buttonVariants({ variant, size }),
+        disabled && !loading && 'opacity-40',
+        className,
+      )}
+      type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...props}
+    >
+      {loading ? (
+        <LoaderCircle
+          className={cn('absolute animate-spin', size === 'icon' || size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4')}
+          aria-hidden
+        />
+      ) : null}
+      <span className={cn('inline-flex items-center justify-center gap-1.5', loading && 'invisible')}>{children}</span>
+    </Comp>
+  )
 }

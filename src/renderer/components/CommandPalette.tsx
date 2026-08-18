@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
+import { canHideFromCapture } from '@shared/plans'
 import type { AppCommand, ShortcutId } from '@shared/types'
 import { Input } from '@/components/ui/input'
 import { runAppCommand } from '@/lib/commands'
 import { cn } from '@/lib/cn'
 import { desktop } from '@/lib/desktop'
 import { useAppStore } from '@/store/app-store'
+import { useAuthStore } from '@/store/auth-store'
 
 interface Command {
   id: AppCommand
@@ -22,6 +24,8 @@ const COMMANDS: Command[] = [
   { id: 'previous-conversation', label: 'Previous session', shortcutId: 'previousConversation', section: 'Session' },
   { id: 'focus-composer', label: 'Focus prompt', shortcutId: 'focusComposer', section: 'Chat' },
   { id: 'toggle-model', label: 'Switch model', shortcutId: 'toggleModel', section: 'Chat' },
+  { id: 'scroll-up', label: 'Scroll up', shortcutId: 'scrollUp', section: 'Chat' },
+  { id: 'scroll-down', label: 'Scroll down', shortcutId: 'scrollDown', section: 'Chat' },
   { id: 'ask-screen', label: 'Answer from screen', shortcutId: 'askScreen', section: 'Copilot' },
   { id: 'live-copilot-screen', label: 'Live copilot with screen', shortcutId: 'liveCopilotScreen', section: 'Copilot' },
   { id: 'live-copilot-audio', label: 'Live copilot', shortcutId: 'liveCopilotAudio', section: 'Copilot' },
@@ -93,11 +97,16 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [selected, setSelected] = useState(0)
   const listRef = useRef<HTMLUListElement>(null)
   const shortcuts = useAppStore((state) => state.shortcuts)
+  const entitlement = useAuthStore((state) => state.entitlement)
+  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
 
   const filtered = useMemo(() => {
-    if (!query) return COMMANDS
+    const available = hideAllowed
+      ? COMMANDS
+      : COMMANDS.filter((command) => command.id !== 'toggle-hide-from-capture')
+    if (!query) return available
     const lower = query.toLowerCase()
-    return COMMANDS.filter((command) => {
+    return available.filter((command) => {
       const accelerator = command.shortcutId ? shortcuts[command.shortcutId] : ''
       return (
         command.label.toLowerCase().includes(lower) ||
@@ -105,7 +114,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         accelerator.toLowerCase().includes(lower)
       )
     })
-  }, [query, shortcuts])
+  }, [query, shortcuts, hideAllowed])
 
   const clamped = Math.min(selected, Math.max(0, filtered.length - 1))
 

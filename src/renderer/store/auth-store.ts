@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { api, clearToken, setToken } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import type { AuthSession } from '@shared/types'
-import type { Entitlement, Plan, UserProfile } from '@/types/api'
+import type { Entitlement, MemoryEntry, Plan, UserProfile } from '@/types/api'
+import { canHideFromCapture } from '@shared/plans'
 
 let entitlementStream: AbortController | null = null
 
@@ -18,7 +19,10 @@ function startEntitlementStream(onUpdate: (entitlement: Entitlement | null) => v
   const run = async () => {
     while (!controller.signal.aborted) {
       try {
-        await api.entitlements.subscribe(onUpdate, controller.signal)
+        await api.entitlements.subscribe((entitlement) => {
+          syncHideFromCapture(entitlement)
+          onUpdate(entitlement)
+        }, controller.signal)
       } catch {
         if (controller.signal.aborted) return
         await new Promise((resolve) => setTimeout(resolve, 2000))
@@ -26,6 +30,10 @@ function startEntitlementStream(onUpdate: (entitlement: Entitlement | null) => v
     }
   }
   void run()
+}
+
+function syncHideFromCapture(entitlement: Entitlement | null) {
+  void desktop.window.setHideFromCaptureAllowed(canHideFromCapture(entitlement?.plan, entitlement?.status))
 }
 
 interface AuthState {
@@ -37,6 +45,9 @@ interface AuthState {
   loginError: string | null
   onboardingStep: number
   onboardingComplete: boolean
+  memories: MemoryEntry[]
+  memoriesLoaded: boolean
+  memoryEnabled: boolean
 }
 
 interface AuthActions {
@@ -50,7 +61,12 @@ interface AuthActions {
   setOnboardingStep: (step: number) => void
   completeOnboarding: () => Promise<void>
   loadEntitlement: () => Promise<void>
+  loadMemories: () => Promise<void>
+  saveMemories: (entries: MemoryEntry[]) => Promise<MemoryEntry[]>
+  setMemoryEnabled: (enabled: boolean) => Promise<void>
+  clearMemories: () => Promise<void>
   checkout: (plan: Plan) => Promise<string>
+  openBilling: (action: 'manage' | 'cancel' | 'upgrade', plan?: Plan) => Promise<string>
 }
 
 export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
@@ -62,6 +78,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   loginError: null,
   onboardingStep: 0,
   onboardingComplete: false,
+  memories: [],
+  memoriesLoaded: false,
+  memoryEnabled: true,
 
   init: async () => {
     const complete = localStorage.getItem('tudso.onboardingComplete') === 'true'
@@ -74,7 +93,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       setToken(session.token)
       set({ session, onboardingComplete: complete, loading: false, loginStatus: 'idle' })
       await get().loadProfile()
-      await get().loadEntitlement()
+      await Promise.all([get().loadEntitlement(), get().loadMemories()])
       startEntitlementStream((entitlement) => set({ entitlement }))
     } else {
       set({ loading: false, onboardingComplete: complete })
@@ -108,7 +127,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       await desktop.auth.setSession(session)
       setToken(session.token)
       await get().loadProfile()
-      await get().loadEntitlement()
+      await Promise.all([get().loadEntitlement(), get().loadMemories()])
       startEntitlementStream((entitlement) => set({ entitlement }))
       set({ session, loading: false, loginStatus: 'idle' })
     } catch (error) {
@@ -124,7 +143,8 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     await api.auth.logout().catch(() => undefined)
     await desktop.auth.clearSession()
     clearToken()
-    set({ session: null, profile: null, entitlement: null, onboardingComplete: false, loginStatus: 'idle', loginError: null })
+    void desktop.window.setHideFromCaptureAllowed(false)
+    set({ session: null, profile: null, entitlement: null, memories: [], memoriesLoaded: false, memoryEnabled: true, onboardingComplete: false, loginStatus: 'idle', loginError: null })
   },
 
   loadProfile: async () => {
@@ -151,14 +171,55 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   loadEntitlement: async () => {
     try {
       const entitlement = await api.entitlements.get()
+      syncHideFromCapture(entitlement)
       set({ entitlement })
     } catch {
-      // ignore
+      syncHideFromCapture(null)
     }
+  },
+
+  loadMemories: async () => {
+    try {
+      const context = await api.context.get()
+      set({
+        memories: context.entries ?? [],
+        memoryEnabled: context.enabled !== false,
+        memoriesLoaded: true,
+      })
+    } catch {
+      set({ memories: [], memoryEnabled: true, memoriesLoaded: true })
+    }
+  },
+
+  saveMemories: async (entries) => {
+    const context = await api.context.update({ entries })
+    const next = context.entries ?? []
+    set({ memories: next, memoryEnabled: context.enabled !== false, memoriesLoaded: true })
+    return next
+  },
+
+  setMemoryEnabled: async (enabled) => {
+    const context = await api.context.update({ enabled })
+    set({
+      memories: context.entries ?? get().memories,
+      memoryEnabled: context.enabled !== false,
+      memoriesLoaded: true,
+    })
+  },
+
+  clearMemories: async () => {
+    const context = await api.context.delete()
+    set({ memories: [], memoryEnabled: context.enabled !== false, memoriesLoaded: true })
   },
 
   checkout: async (plan) => {
     const { url } = await api.billing.checkout(plan)
+    await desktop.app.openExternal(url)
+    return url
+  },
+
+  openBilling: async (action, plan) => {
+    const { url } = await api.billing.portal({ action, plan })
     await desktop.app.openExternal(url)
     return url
   },

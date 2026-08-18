@@ -1,9 +1,11 @@
 import OpenAI from 'openai'
 import { config } from './config.js'
+import { logError } from './log.js'
 import { getOrCreateProfile, getResume } from './pocketbase.js'
 import { cleanTranscript } from './transcript.js'
 import type { AIRequest, AIResponse, AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
 import { DEFAULT_PROFILE_PREFERENCES } from './types.js'
+import { parseExtractedFacts } from './memory.js'
 
 const openai = new OpenAI({
   apiKey: config.ai.apiKey,
@@ -101,7 +103,7 @@ export function buildSystemPrompt(options: {
   }
 
   if (options.contextEntries?.length) {
-    parts.push(`MEMORY\nThe user asked you to remember:\n${options.contextEntries.map((e) => `- ${e}`).join('\n')}\nUse these facts only when relevant. Never mention that they are memories.`)
+    parts.push(`MEMORY\nKnown facts about the user:\n${options.contextEntries.map((e) => `- ${e}`).join('\n')}\nUse these facts only when relevant. Never mention that they are memories.`)
   }
 
   return parts.join('\n\n')
@@ -125,10 +127,50 @@ export async function getProfileContext(userId: string): Promise<{ profile?: Use
   const value = {
     profile,
     resume: resumeRecord?.parsedData,
-    contextEntries: context?.entries?.map((e) => e.text),
+    contextEntries: context?.enabled === false ? undefined : context?.entries?.map((entry) => entry.text).filter(Boolean),
   }
   profileContextCache.set(userId, { at: Date.now(), value })
   return value
+}
+
+export function invalidateProfileContext(userId?: string) {
+  if (userId) profileContextCache.delete(userId)
+  else profileContextCache.clear()
+}
+
+const MEMORY_EXTRACT_SYSTEM = `Extract durable personal facts about the USER from this exchange.
+Return JSON only: {"facts":["..."]}
+Include only stable facts: name, role, tools, stack, preferences, constraints, timezone, company, how they like answers.
+Do not include the current task, one-off questions, secrets, passwords, keys, code, or interview answers.
+Skip anything already listed.
+Max 3 facts. Each fact is one short first-person sentence, like "I prefer TypeScript."
+If nothing durable, return {"facts":[]}.`
+
+export async function extractMemoryFacts(
+  userMessage: string,
+  assistantContent: string,
+  existing: string[],
+): Promise<string[]> {
+  try {
+    const remembered = existing.slice(0, 50).map((text) => `- ${text}`).join('\n') || '(none)'
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4.1-nano',
+      temperature: 0,
+      max_tokens: 250,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: MEMORY_EXTRACT_SYSTEM },
+        {
+          role: 'user',
+          content: `Already remembered:\n${remembered}\n\nUser:\n${userMessage.slice(0, 2500)}\n\nAssistant (context only):\n${assistantContent.slice(0, 600)}`,
+        },
+      ],
+    })
+    return parseExtractedFacts(completion.choices[0]?.message?.content ?? '')
+  } catch (error) {
+    logError('Failed to extract memories', error)
+    return []
+  }
 }
 
 export function buildChatMessages(

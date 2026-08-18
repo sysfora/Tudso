@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
 import { MODEL_OPTIONS, SHORTCUT_LABELS, resolveChatModel } from '@shared/defaults'
+import { canHideFromCapture } from '@shared/plans'
 import type { ShortcutId, WindowMode } from '@shared/types'
 import {
   DropdownMenu,
@@ -46,6 +47,8 @@ export function TitleBarMenu() {
   const windowWidth = useAppStore((state) => state.windowWidth)
   const mode = windowModeFromWidth(windowWidth)
   const email = useAuthStore((state) => state.session?.email)
+  const entitlement = useAuthStore((state) => state.entitlement)
+  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
   const hint = (value: string) => formatAccelerator(value, desktop.platform)
 
   return (
@@ -70,22 +73,25 @@ export function TitleBarMenu() {
           </>
         ) : null}
 
-        <DropdownMenuLabel>Interview</DropdownMenuLabel>
-        <DropdownMenuCheckboxItem
-          className="justify-between gap-3"
-          checked={settings.hideFromCapture}
-          onCheckedChange={(checked) => {
-            void useAppStore.getState().setSettings({ hideFromCapture: Boolean(checked) })
-          }}
-        >
-          <span className="flex items-center gap-2">
-            <MonitorOff className="h-3.5 w-3.5 text-muted" />
-            Hide from share
-          </span>
-          <span className="text-[11px] text-muted">{hint(shortcuts.toggleHideFromCapture)}</span>
-        </DropdownMenuCheckboxItem>
-
-        <DropdownMenuSeparator />
+        {hideAllowed ? (
+          <>
+            <DropdownMenuLabel>Interview</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem
+              className="justify-between gap-3"
+              checked={settings.hideFromCapture}
+              onCheckedChange={(checked) => {
+                void useAppStore.getState().setSettings({ hideFromCapture: Boolean(checked) })
+              }}
+            >
+              <span className="flex items-center gap-2">
+                <MonitorOff className="h-3.5 w-3.5 text-muted" />
+                Hide from share
+              </span>
+              <span className="text-[11px] text-muted">{hint(shortcuts.toggleHideFromCapture)}</span>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuLabel>Model</DropdownMenuLabel>
         {MODEL_OPTIONS.map((option) => (
           <DropdownMenuCheckboxItem

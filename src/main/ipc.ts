@@ -23,21 +23,20 @@ import {
   suspendShortcuts,
 } from './shortcuts'
 import { type AppStore, applyNativeTheme } from './store'
-import { applyPresence, refreshTray, setSignedInReady } from './presence'
+import { applyPresence, isHideFromCaptureAllowed, refreshTray, setHideFromCaptureAllowed, setSignedInReady } from './presence'
 import { moveToPreset, nudgeWindow } from './window-position'
 import {
   applyWindowChrome,
   getMainWindow,
   getWindowBounds,
-  isWindowCollapsed,
   hideMainWindow,
+  minimizeMainWindow,
   moveMainWindow,
   restoreTaskbarPresence,
   sendToRenderer,
   setAlwaysOnTop,
   setHideFromCapture,
   setWindowMode,
-  toggleCollapsed,
 } from './windows'
 
 let abortController: AbortController | null = null
@@ -47,7 +46,7 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   locked = store.getSettings().lockEnabled && credentials.hasPin()
 
   ipcMain.handle(CHANNELS.authStartLogin, async () => {
-    const deviceId = `desktop-${Date.now()}`
+    const deviceId = await credentials.getOrCreateDeviceId()
     return startLogin(deviceId, process.platform, app.getVersion())
   })
   ipcMain.handle(CHANNELS.authOpenLogin, async (_event, url: string) => openLogin(url))
@@ -56,12 +55,7 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.handle(CHANNELS.authClearSession, async () => clearSession(credentials))
 
   ipcMain.on(CHANNELS.windowMinimize, () => {
-    if (isWindowCollapsed()) {
-      toggleCollapsed()
-      return
-    }
-    if (store.getSettings().minimizeToTray) hideMainWindow()
-    else toggleCollapsed()
+    minimizeMainWindow(store.getSettings().minimizeToTray)
   })
   ipcMain.on(CHANNELS.windowClose, () => hideMainWindow())
   ipcMain.on(CHANNELS.windowHide, () => hideMainWindow())
@@ -92,6 +86,9 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.handle(CHANNELS.windowSetSignedInReady, (_event, ready: boolean) => {
     setSignedInReady(Boolean(ready))
   })
+  ipcMain.handle(CHANNELS.planVisibility, (_event, allowed: boolean) => {
+    void setHideFromCaptureAllowed(Boolean(allowed), store)
+  })
 
   ipcMain.handle(CHANNELS.captureScreen, async () => captureScreenWithoutApp())
   ipcMain.handle(CHANNELS.captureActiveWindow, async () => captureActiveWindow())
@@ -111,6 +108,13 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.handle(CHANNELS.settingsGet, () => store.getSettings())
   ipcMain.handle(CHANNELS.settingsSet, async (_event, partial: Partial<Settings>) => {
     const previous = store.getSettings()
+    if (partial.hideFromCapture && !isHideFromCaptureAllowed()) {
+      partial = { ...partial, hideFromCapture: false }
+    }
+    if (partial.lockEnabled === false && credentials.hasPin()) {
+      partial = { ...partial }
+      delete partial.lockEnabled
+    }
     const settings = store.setSettings({ ...partial, alwaysOnTop: true })
     if (settings.hideFromCapture !== previous.hideFromCapture) setHideFromCapture(settings.hideFromCapture)
     setAlwaysOnTop(true)
@@ -270,15 +274,41 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.handle(CHANNELS.appSetApiKey, (_event, key: string) => credentials.setApiKey(key))
   ipcMain.handle(CHANNELS.appClearApiKey, () => credentials.clearApiKey())
 
-  ipcMain.handle(CHANNELS.appSetPin, async (_event, pin: string) => {
+  ipcMain.handle(CHANNELS.appSetPin, async (_event, pin: string, currentPin?: string) => {
+    if (!/^\d{4,8}$/.test(pin)) throw new Error('PIN must be 4 to 8 digits.')
+    if (credentials.hasPin() && !credentials.verifyPin(currentPin ?? '')) {
+      throw new Error('Current PIN does not match.')
+    }
     await credentials.setPin(pin)
-    store.setSettings({ lockEnabled: true })
+    const settings = store.setSettings({ lockEnabled: true })
+    sendToRenderer(CHANNELS.settingsChanged, settings)
   })
 
+  ipcMain.handle(CHANNELS.appClearPin, async (_event, currentPin: string) => {
+    if (!credentials.verifyPin(currentPin)) return false
+    await credentials.clearPin()
+    const settings = store.setSettings({ lockEnabled: false })
+    locked = false
+    sendToRenderer(CHANNELS.settingsChanged, settings)
+    return true
+  })
+
+  let pinFails = 0
+  let pinBlockedUntil = 0
   ipcMain.handle(CHANNELS.appUnlock, (_event, pin: string) => {
+    if (Date.now() < pinBlockedUntil) return false
     const ok = credentials.verifyPin(pin)
-    if (ok) locked = false
-    return ok
+    if (ok) {
+      pinFails = 0
+      locked = false
+      return true
+    }
+    pinFails += 1
+    if (pinFails >= 5) {
+      pinBlockedUntil = Date.now() + 30_000
+      pinFails = 0
+    }
+    return false
   })
 
   ipcMain.handle(CHANNELS.appLock, () => {

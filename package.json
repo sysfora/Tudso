@@ -19,7 +19,8 @@
     "test": "cd server && npm test",
     "preview": "vite preview",
     "package": "npm run build && electron-builder",
-    "dev:electron": "node scripts/electron-dev.mjs"
+    "dev:electron": "node scripts/electron-dev.mjs",
+    "brand:icons": "node scripts/generate-brand-icons.mjs"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.3.7",

@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, TextareaHTMLAttributes } from 'react'
+import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
@@ -13,17 +13,20 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   )
 }
 
-export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      className={cn(
-        'w-full resize-none rounded-md bg-surface-2 px-2.5 py-2 text-[13px] outline-none placeholder:text-muted transition-colors duration-150 hover:bg-lift focus-visible:bg-lift',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
+  function Textarea({ className, ...props }, ref) {
+    return (
+      <textarea
+        ref={ref}
+        className={cn(
+          'w-full resize-none rounded-md bg-surface-2 px-2.5 py-2 text-[13px] outline-none placeholder:text-muted transition-colors duration-150 hover:bg-lift focus-visible:bg-lift',
+          className,
+        )}
+        {...props}
+      />
+    )
+  },
+)
 
 export function Label({ className, ...props }: InputHTMLAttributes<HTMLLabelElement> & { htmlFor?: string }) {
   return <label className={cn('text-[13px] font-medium', className)} {...props} />

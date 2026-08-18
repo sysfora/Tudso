@@ -3,13 +3,17 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import http from 'node:http'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
 import routes from './routes.js'
 import { attachRealtimeAudio } from './realtime.js'
 import { isR2Configured, localStorageRoot } from './storage.js'
+import { log, requestLogger } from './log.js'
 
 const app = express()
 app.set('trust proxy', 1)
+const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public')
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -42,19 +46,29 @@ app.use(express.json({
   },
 }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use('/brand', express.static(publicDir, { maxAge: '7d', index: false }))
+app.use(express.static(publicDir, { maxAge: '7d', index: false }))
+app.use(requestLogger)
 
 app.use(routes)
 
-app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (res.headersSent) {
     next(error)
     return
   }
   if (error instanceof SyntaxError) {
+    log.warn('Invalid JSON body', { method: req.method, path: req.path })
     res.status(400).json({ error: 'Invalid request body' })
     return
   }
-  console.error(error)
+  const err = error as { name?: string; message?: string; stack?: string }
+  log.error(err.message || 'Unhandled error', {
+    method: req.method,
+    path: req.path,
+    user: req.userId,
+  })
+  if (err.stack) console.error(err.stack)
   res.status(500).json({ error: 'Internal server error' })
 })
 
@@ -65,6 +79,20 @@ server.on('connection', (socket) => {
 attachRealtimeAudio(server)
 
 server.listen(config.app.port, () => {
-  console.log(`${config.app.name} server running on ${config.app.url}`)
-  console.log(`Resume storage: ${isR2Configured() ? 'Cloudflare R2' : `local (${localStorageRoot()})`}`)
+  log.info(`${config.app.name} server listening`, {
+    url: config.app.url,
+    port: config.app.port,
+    env: config.app.env,
+  })
+  log.info('Resume storage', { backend: isR2Configured() ? 'r2' : 'local', path: isR2Configured() ? undefined : localStorageRoot() })
+})
+
+process.on('unhandledRejection', (reason) => {
+  log.error('Unhandled rejection', { err: reason instanceof Error ? reason.message : String(reason) })
+  if (reason instanceof Error && reason.stack) console.error(reason.stack)
+})
+
+process.on('uncaughtException', (error) => {
+  log.error('Uncaught exception', { err: error.message })
+  console.error(error.stack)
 })

@@ -8,6 +8,7 @@ import { useAppStore } from '@/store/app-store'
 export function LockScreen() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [unlocking, setUnlocking] = useState(false)
   const setLocked = useAppStore((state) => state.setLocked)
 
   return (
@@ -19,12 +20,19 @@ export function LockScreen() {
         className="w-full max-w-[220px] space-y-2"
         onSubmit={async (event) => {
           event.preventDefault()
-          const ok = await desktop.app.unlock(pin)
-          if (ok) {
-            setLocked(false)
-            return
+          if (unlocking) return
+          setUnlocking(true)
+          setError(null)
+          try {
+            const ok = await desktop.app.unlock(pin)
+            if (ok) {
+              setLocked(false)
+              return
+            }
+            setError('That PIN does not match. After five tries, wait 30 seconds.')
+          } finally {
+            setUnlocking(false)
           }
-          setError('That PIN does not match.')
         }}
       >
         <Input
@@ -36,7 +44,7 @@ export function LockScreen() {
           aria-label="PIN"
         />
         {error ? <p className="text-xs text-danger">{error}</p> : null}
-        <Button className="w-full" type="submit">
+        <Button className="w-full" type="submit" loading={unlocking}>
           Unlock
         </Button>
       </form>

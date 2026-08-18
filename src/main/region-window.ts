@@ -13,7 +13,7 @@ const overlayHtml = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { cursor: crosshair; overflow: hidden; background: rgba(0,0,0,0.2); }
     #hint { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); color: white; font: 14px sans-serif; pointer-events: none; text-shadow: 0 1px 2px black; }
-    #rect { position: fixed; border: 2px solid #c3cce4; background: rgba(195,204,228,0.15); pointer-events: none; display: none; }
+    #rect { position: fixed; border: 2px solid #5b5fee; background: rgba(91,95,238,0.15); pointer-events: none; display: none; }
   </style>
 </head>
 <body>

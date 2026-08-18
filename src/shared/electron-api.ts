@@ -37,6 +37,7 @@ export interface ElectronAPI {
     nudge: (direction: 'left' | 'right' | 'up' | 'down') => Promise<void>
     restoreTaskbar: () => Promise<void>
     setSignedInReady: (ready: boolean) => Promise<void>
+    setHideFromCaptureAllowed: (allowed: boolean) => Promise<void>
     onCollapsed: (callback: (collapsed: boolean) => void) => () => void
   }
   settings: {
@@ -76,7 +77,8 @@ export interface ElectronAPI {
     getApiKeyStatus: () => Promise<ApiKeyStatus>
     setApiKey: (key: string) => Promise<ApiKeyStatus>
     clearApiKey: () => Promise<ApiKeyStatus>
-    setPin: (pin: string) => Promise<void>
+    setPin: (pin: string, currentPin?: string) => Promise<void>
+    clearPin: (currentPin: string) => Promise<boolean>
     unlock: (pin: string) => Promise<boolean>
     lock: () => Promise<void>
     getLockState: () => Promise<{ locked: boolean; enabled: boolean }>

@@ -1,5 +1,5 @@
 import { ArrowUp, AudioLines, Mic, MicOff, Monitor, Paperclip, Radio, ScanSearch, Square, User, X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatAccelerator } from '@shared/accelerator'
 import { MODEL_OPTIONS, resolveChatModel } from '@shared/defaults'
 import { Button } from '@/components/ui/button'
@@ -38,6 +38,7 @@ export function Composer() {
   const realtimeTranscript = useRealtimeStore((state) => state.transcript)
   const realtimeMode = useRealtimeStore((state) => state.mode)
   const { listening, error: voiceError, toggle: toggleVoice } = useVoiceInput()
+  const [attaching, setAttaching] = useState(false)
   const canSend = Boolean(composer.trim() || attachments.length) && !generatingId
   const screenAllowed = entitlement?.screenAnalysis ?? false
   const audioAllowed = entitlement?.audioAccess ?? false
@@ -51,12 +52,18 @@ export function Composer() {
   }, [composer])
 
   const attach = async () => {
-    const files = await desktop.app.pickFiles()
-    if (!files.length) return
-    setAttachments([
-      ...attachments,
-      ...files.map((file) => ({ ...file, id: createId() })),
-    ])
+    if (attaching) return
+    setAttaching(true)
+    try {
+      const files = await desktop.app.pickFiles()
+      if (!files.length) return
+      setAttachments([
+        ...attachments,
+        ...files.map((file) => ({ ...file, id: createId() })),
+      ])
+    } finally {
+      setAttaching(false)
+    }
   }
 
   return (
@@ -144,7 +151,7 @@ export function Composer() {
         />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between px-2 pb-2">
           <div className="pointer-events-auto flex items-center">
-            <IconButton label="Attach file" onClick={() => void attach()}>
+            <IconButton label="Attach file" loading={attaching} onClick={() => void attach()}>
               <Paperclip className="h-4 w-4" />
             </IconButton>
             <IconButton

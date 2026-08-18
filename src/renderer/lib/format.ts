@@ -41,6 +41,28 @@ export function formatSessionTime(timestamp: number) {
   }).format(date)
 }
 
+export function formatMemoryDate(iso: string) {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const now = new Date()
+  const sameYear = date.getFullYear() === now.getFullYear()
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: sameYear ? undefined : 'numeric',
+  }).format(date)
+}
+
+export function formatPlanPrice(amount: number | null | undefined, currency?: string, interval?: string) {
+  if (amount == null || !currency) return null
+  const value = new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    maximumFractionDigits: amount % 100 === 0 ? 0 : 2,
+  }).format(amount / 100)
+  return interval ? `${value} / ${interval}` : value
+}
+
 export function formatBytes(size: number) {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`

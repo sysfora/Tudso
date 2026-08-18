@@ -24,6 +24,7 @@ export function ShortcutManager() {
   const resetShortcuts = useAppStore((state) => state.resetShortcuts)
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     if (!recording) return
@@ -98,11 +99,13 @@ export function ShortcutManager() {
           variant="outline"
           size="sm"
           className="shrink-0"
-          disabled={!customized}
+          disabled={!customized || resetting}
+          loading={resetting}
           onClick={() => {
             setError(null)
             setRecordingShortcut(null)
-            void resetShortcuts()
+            setResetting(true)
+            void resetShortcuts().finally(() => setResetting(false))
           }}
         >
           Reset all

@@ -51,7 +51,7 @@ export async function handleAuthCallback(code: string, state: string, credential
   const data = (await response.json()) as { token?: string; desktopToken?: string; userId: string; email: string }
   const token = data.token ?? data.desktopToken
   if (!token || !data.userId) return null
-  const session: AuthSession = { token, userId: data.userId, email: data.email }
+  const session: AuthSession = { token, userId: data.userId, email: data.email, deviceId }
   await credentials.setSession(session)
   activeAuth = null
   sendAuthSession(session)
@@ -75,7 +75,13 @@ export async function setSession(session: AuthSession, credentials: CredentialSt
 }
 
 export async function getSession(credentials: CredentialStore): Promise<AuthSession | null> {
-  return credentials.getSession()
+  const session = credentials.getSession()
+  if (!session) return null
+  if (session.deviceId) return session
+  const deviceId = await credentials.getOrCreateDeviceId()
+  const next = { ...session, deviceId }
+  await credentials.setSession(next)
+  return next
 }
 
 export async function clearSession(credentials: CredentialStore): Promise<void> {

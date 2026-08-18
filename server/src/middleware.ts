@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import rateLimit from 'express-rate-limit'
-import { verifyJwt } from './auth.js'
-import { getDesktopSession } from './pocketbase.js'
+import { resolveAccessToken } from './auth.js'
+import { log } from './log.js'
 import type { EntitlementRecord } from './types.js'
 
 declare global {
@@ -9,6 +9,7 @@ declare global {
     interface Request {
       userId?: string
       email?: string
+      deviceId?: string
       entitlement?: EntitlementRecord
     }
   }
@@ -18,23 +19,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const authHeader = req.headers.authorization
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : req.cookies?.token
   if (!token) {
+    log.warn('Auth rejected', { method: req.method, path: req.path, reason: 'missing token' })
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
-  const session = await getDesktopSession(token)
-  if (!session) {
-    // fallback to JWT
-    const jwt = verifyJwt(token)
-    if (!jwt) {
-      res.status(401).json({ error: 'Session expired or invalid' })
-      return
-    }
-    req.userId = jwt.userId
-    req.email = jwt.email
-    next()
+  const resolved = await resolveAccessToken(token)
+  if (!resolved?.userId) {
+    log.warn('Auth rejected', { method: req.method, path: req.path, reason: 'invalid session' })
+    res.status(401).json({ error: 'Session expired or invalid' })
     return
   }
-  req.userId = session.userId
+  req.userId = resolved.userId
+  req.email = resolved.email
+  req.deviceId = resolved.deviceId
   next()
 }
 
@@ -49,6 +46,14 @@ export const rateLimiter = rateLimit({
 export const aiRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => req.userId ?? req.ip ?? 'unknown',
+})
+
+export const sensitiveRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: Request) => req.userId ?? req.ip ?? 'unknown',

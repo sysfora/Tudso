@@ -2,21 +2,24 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Search, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
 import { FONT_SIZE_MAX, FONT_SIZE_MIN, DEFAULT_SETTINGS, MODEL_OPTIONS, resolveChatModel } from '@shared/defaults'
+import { canHideFromCapture } from '@shared/plans'
 import type { Settings, SettingsSection, ThemeMode } from '@shared/types'
 import { ShortcutManager } from '@/components/ShortcutManager'
 import { Subscription } from '@/components/Subscription'
+import { Account } from '@/components/Account'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input, Kbd, Textarea } from '@/components/ui/input'
-import type { UserProfile } from '@/types/api'
-import { resolveProfilePreferences } from '@/types/api'
+import type { MemoryEntry, UserProfile } from '@/types/api'
+import { MAX_MEMORIES, MAX_MEMORY_CHARS, resolveProfilePreferences } from '@/types/api'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { api } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import { cn } from '@/lib/cn'
+import { createId, formatMemoryDate } from '@/lib/format'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
 
@@ -164,22 +167,19 @@ function SettingsPages({ section, searching }: { section: SettingsSection; searc
         </SearchSection>
       ) : null}
       {searching || section === 'memory' ? (
-        <SearchablePanel
-          title="Memory"
-          terms={['memories', 'remember', 'facts', 'context', 'Add facts the assistant should remember']}
-        >
+        <SearchSection title="Memory">
           <MemorySection />
-        </SearchablePanel>
+        </SearchSection>
       ) : null}
       {searching || section === 'subscription' ? (
-        <SearchablePanel title="Subscription" terms={['plan', 'billing', 'upgrade', 'pro', 'premium', 'free', 'manage']}>
+        <SearchablePanel title="Subscription" terms={['plan', 'billing', 'upgrade', 'pro', 'premium', 'manage', 'cancel', 'subscribe']}>
           <SubscriptionSection />
         </SearchablePanel>
       ) : null}
       {searching || section === 'account' ? (
         <SearchablePanel
           title="Account"
-          terms={['signed in', 'email', 'devices', 'export', 'delete account', 'log out', 'logout', 'data']}
+          terms={['signed in', 'email', 'devices', 'export', 'delete account', 'log out', 'logout', 'data', 'pin', 'security', 'revoke']}
         >
           <AccountSection />
         </SearchablePanel>
@@ -258,6 +258,9 @@ function GeneralSection() {
   const settings = useAppStore((state) => state.settings)
   const setSettings = useAppStore((state) => state.setSettings)
   const resetSettings = useAppStore((state) => state.resetSettings)
+  const entitlement = useAuthStore((state) => state.entitlement)
+  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
+  const [resetting, setResetting] = useState(false)
 
   return (
     <div>
@@ -273,9 +276,11 @@ function GeneralSection() {
       <Row title="Remember window size">
         <Switch checked={settings.rememberSize} onCheckedChange={(value) => void setSettings({ rememberSize: value })} />
       </Row>
-      <Row title="Hide from screen share" description="Stay invisible in screenshots, recordings, and shared screens.">
-        <Switch checked={settings.hideFromCapture} onCheckedChange={(value) => void setSettings({ hideFromCapture: value })} />
-      </Row>
+      {hideAllowed ? (
+        <Row title="Hide from screen share" description="Stay invisible in screenshots, recordings, and shared screens.">
+          <Switch checked={settings.hideFromCapture} onCheckedChange={(value) => void setSettings({ hideFromCapture: value })} />
+        </Row>
+      ) : null}
       <Row title="Show in taskbar" description="Keep a taskbar button after you sign in. Sign-in and onboarding always show one.">
         <Switch checked={settings.showInTaskbar} onCheckedChange={(value) => void setSettings({ showInTaskbar: value })} />
       </Row>
@@ -289,10 +294,12 @@ function GeneralSection() {
         <Button
           variant="outline"
           size="sm"
-          disabled={!settingsAreCustomized(settings)}
+          disabled={!settingsAreCustomized(settings) || resetting}
+          loading={resetting}
           onClick={() => {
             if (!window.confirm('Reset all settings to their defaults? Keyboard shortcuts will not change.')) return
-            void resetSettings()
+            setResetting(true)
+            void resetSettings().finally(() => setResetting(false))
           }}
         >
           Reset
@@ -736,7 +743,7 @@ function ProfileSection() {
             />
             <div className="flex shrink-0 items-center gap-1">
               {resumeName ? (
-                <Button variant="danger" size="sm" disabled={resumeBusy} onClick={() => void removeResume()}>
+                <Button variant="danger" size="sm" disabled={resumeBusy} loading={resumeBusy} onClick={() => void removeResume()}>
                   Remove
                 </Button>
               ) : null}
@@ -744,9 +751,10 @@ function ProfileSection() {
                 variant="outline"
                 size="sm"
                 disabled={resumeBusy}
+                loading={resumeBusy}
                 onClick={() => fileRef.current?.click()}
               >
-                {resumeBusy ? 'Uploading…' : resumeName ? 'Replace' : 'Upload'}
+                {resumeName ? 'Replace' : 'Upload'}
               </Button>
             </div>
           </ProfileControl>
@@ -808,145 +816,292 @@ function SubscriptionSection() {
 }
 
 function MemorySection() {
-  const [entries, setEntries] = useState<Array<{ id: string; text: string; created: string }>>([])
-  const [newText, setNewText] = useState('')
-  const [loaded, setLoaded] = useState(false)
-
-  const load = async () => {
-    const context = await api.context.get()
-    setEntries(context?.entries ?? [])
-    setLoaded(true)
-  }
+  const query = useContext(SettingsSearchContext)
+  const searching = Boolean(normalizeSearch(query))
+  const memories = useAuthStore((state) => state.memories)
+  const memoriesLoaded = useAuthStore((state) => state.memoriesLoaded)
+  const memoryEnabled = useAuthStore((state) => state.memoryEnabled)
+  const loadMemories = useAuthStore((state) => state.loadMemories)
+  const saveMemories = useAuthStore((state) => state.saveMemories)
+  const setMemoryEnabled = useAuthStore((state) => state.setMemoryEnabled)
+  const clearMemories = useAuthStore((state) => state.clearMemories)
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const atLimit = memories.length >= MAX_MEMORIES
 
   useEffect(() => {
-    // Data fetch on mount; loading state is needed for UI.
+    // Refresh so facts learned from recent chats show up.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load()
-  }, [])
+    void loadMemories()
+  }, [loadMemories])
 
-  const save = async (next: Array<{ id: string; text: string; created: string }>) => {
-    setEntries(next)
-    await api.context.update(next)
+  const persist = async (next: MemoryEntry[], message: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await saveMemories(next)
+      setStatus(message)
+    } catch (err) {
+      setStatus(null)
+      setError(err instanceof Error ? err.message : 'Could not save memories.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggleMemory = async (enabled: boolean) => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await setMemoryEnabled(enabled)
+      setStatus(enabled
+        ? 'Memory is on. Tudso will learn from chats and use saved facts.'
+        : 'Memory is off. Tudso will not learn or use saved facts.')
+    } catch (err) {
+      setStatus(null)
+      setError(err instanceof Error ? err.message : 'Could not update memory.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const add = () => {
-    if (!newText.trim()) return
-    const entry = { id: crypto.randomUUID(), text: newText.trim(), created: new Date().toISOString() }
-    void save([entry, ...entries])
-    setNewText('')
+    const text = draft.replace(/\s+/g, ' ').trim()
+    if (!text || busy || atLimit) return
+    if (text.length > MAX_MEMORY_CHARS) {
+      setError(`Keep each memory under ${MAX_MEMORY_CHARS} characters.`)
+      return
+    }
+    if (memories.some((entry) => entry.text.toLowerCase() === text.toLowerCase())) {
+      setError('That is already saved.')
+      return
+    }
+    setDraft('')
+    void persist(
+      [{ id: createId(), text, created: new Date().toISOString(), source: 'manual' }, ...memories],
+      memoryEnabled ? 'Saved. Tudso will use this in answers.' : 'Saved. Turn memory on to use this in answers.',
+    )
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const update = (id: string, text: string) => {
+    const nextText = text.replace(/\s+/g, ' ').trim()
+    const current = memories.find((entry) => entry.id === id)
+    if (!current || nextText === current.text) return
+    if (!nextText) {
+      void persist(memories.filter((entry) => entry.id !== id), 'Memory removed.')
+      return
+    }
+    void persist(
+      memories.map((entry) => (entry.id === id ? { ...entry, text: nextText.slice(0, MAX_MEMORY_CHARS), source: 'manual' } : entry)),
+      'Saved.',
+    )
   }
 
   const remove = (id: string) => {
-    void save(entries.filter((e) => e.id !== id))
+    void persist(memories.filter((entry) => entry.id !== id), 'Memory removed.')
   }
 
+  const clear = () => {
+    if (!memories.length || busy) return
+    if (!window.confirm('Clear every saved memory?')) return
+    setBusy(true)
+    setError(null)
+    void clearMemories()
+      .then(() => setStatus('All memories cleared.'))
+      .catch((err: Error) => {
+        setStatus(null)
+        setError(err.message || 'Could not clear memories.')
+      })
+      .finally(() => setBusy(false))
+  }
+
+  const toggleVisible = useSettingVisible('Memory', 'automatic learn chats facts answers')
+  const composerVisible = useSettingVisible('Add a memory', 'facts remember keep across sessions')
+  const listVisible = useSettingVisible('Saved memories', ...memories.map((entry) => entry.text))
+  const clearVisible = useSettingVisible('Clear all memories')
+
   return (
-    <div className="space-y-4">
-      <p className="text-[12px] leading-relaxed text-muted">
-        Add facts the assistant should remember. These are included in the AI context when relevant.
-      </p>
-      <div className="flex gap-2">
-        <Input value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Remember that I prefer…" />
-        <Button onClick={add}>Add</Button>
-      </div>
-      {loaded && entries.length === 0 ? <p className="text-[12px] text-muted">No memories yet.</p> : null}
-      <div className="space-y-2">
-        {entries.map((entry) => (
-          <div key={entry.id} className="flex items-start justify-between gap-2 rounded-md bg-surface-2 p-2">
-            <p className="text-[13px] leading-relaxed">{entry.text}</p>
-            <Button variant="ghost" size="sm" onClick={() => remove(entry.id)}>
-              Remove
+    <div className="space-y-6">
+      {searching ? null : (
+        <p className="text-[12px] leading-relaxed text-muted">
+          Tudso learns durable facts from your chats — tools, preferences, constraints — and uses them in later answers. You can add or remove anything here.
+        </p>
+      )}
+
+      {toggleVisible ? (
+        <section data-setting>
+          <div className="overflow-hidden rounded-md bg-surface-2">
+            <PrivacyToggle
+              title="Memory"
+              description={memoryEnabled
+                ? 'On. Learns from chats and uses saved facts in answers.'
+                : 'Off. Will not learn from chats or use saved facts.'}
+              checked={memoryEnabled}
+              disabled={busy || !memoriesLoaded}
+              onCheckedChange={(value) => void toggleMemory(value)}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {composerVisible ? (
+        <section data-setting>
+          <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Add</h3>
+          <div className="overflow-hidden rounded-md bg-surface-2 p-3">
+            <label htmlFor="memory-input" className="sr-only">
+              New memory
+            </label>
+            <Textarea
+              id="memory-input"
+              ref={inputRef}
+              value={draft}
+              rows={3}
+              maxLength={MAX_MEMORY_CHARS}
+              disabled={busy || atLimit}
+              placeholder="I prefer TypeScript. I work in UTC+5. Never use class components."
+              className="min-h-[72px] bg-surface hover:bg-lift focus-visible:bg-lift"
+              onChange={(event) => {
+                setDraft(event.target.value)
+                if (error) setError(null)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  add()
+                }
+              }}
+            />
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <p className="text-[11px] text-muted">
+                {atLimit
+                  ? `Limit reached · ${MAX_MEMORIES} memories`
+                  : `${draft.trim().length}/${MAX_MEMORY_CHARS} · Enter to save`}
+              </p>
+              <Button onClick={add} disabled={busy || atLimit || !draft.trim()} loading={busy}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {listVisible ? (
+        <section data-setting>
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <h3 className="text-[12px] font-medium tracking-wide text-muted uppercase">Saved</h3>
+            {memoriesLoaded ? (
+              <p className="text-[11px] text-muted">
+                {memories.length === 0 ? 'None yet' : `${memories.length} of ${MAX_MEMORIES}`}
+              </p>
+            ) : null}
+          </div>
+
+          {!memoriesLoaded ? (
+            <div className="space-y-2 rounded-md bg-surface-2 p-3" aria-busy="true" aria-label="Loading memories">
+              <div className="skeleton-bar h-3 w-5/6" />
+              <div className="skeleton-bar h-3 w-2/3" style={{ animationDelay: '80ms' }} />
+              <div className="skeleton-bar h-3 w-4/5" style={{ animationDelay: '160ms' }} />
+            </div>
+          ) : memories.length === 0 ? (
+            <p className="rounded-md bg-surface-2 px-3 py-6 text-center text-[13px] leading-relaxed text-muted">
+              {memoryEnabled
+                ? 'Nothing saved yet. Tudso will learn facts from chats, or you can add one here.'
+                : 'Nothing saved yet. Turn memory on to learn from chats, or add a fact here.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-border overflow-hidden rounded-md bg-surface-2">
+              {memories.map((entry) => (
+                <MemoryRow
+                  key={entry.id}
+                  entry={entry}
+                  disabled={busy}
+                  onSave={(text) => update(entry.id, text)}
+                  onRemove={() => remove(entry.id)}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {memories.length > 0 && clearVisible ? (
+        <section data-setting>
+          <div className="flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
+            <div>
+              <p className="text-[13px] font-medium">Clear all</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">Remove every saved memory from this account.</p>
+            </div>
+            <Button variant="danger" size="sm" disabled={busy} loading={busy} onClick={clear}>
+              Clear
             </Button>
           </div>
-        ))}
-      </div>
-      {entries.length > 0 ? (
-        <Button variant="outline" className="w-full text-danger hover:bg-danger/20 hover:text-danger" onClick={() => {
-          if (window.confirm('Clear all memories?')) void api.context.delete().then(load)
-        }}>
-          Clear all
-        </Button>
+        </section>
       ) : null}
+
+      {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+      {!error && status ? <p className="text-[12px] text-muted">{status}</p> : null}
     </div>
   )
 }
 
-function AccountSection() {
-  const session = useAuthStore((state) => state.session)
-  const logout = useAuthStore((state) => state.logout)
-  const [devices, setDevices] = useState<Array<{ id: string; deviceId: string; platform: string; appVersion: string; lastSeen: string }>>([])
-  const [status, setStatus] = useState<string | null>(null)
-
-  const loadDevices = async () => {
-    const list = await api.devices.list()
-    setDevices(list)
-  }
+function MemoryRow({
+  entry,
+  disabled,
+  onSave,
+  onRemove,
+}: {
+  entry: MemoryEntry
+  disabled: boolean
+  onSave: (text: string) => void
+  onRemove: () => void
+}) {
+  const [text, setText] = useState(entry.text)
+  const visible = useSettingVisible(entry.text)
 
   useEffect(() => {
-    // Data fetch on mount; loading state is needed for UI.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadDevices()
-  }, [])
+    setText(entry.text)
+  }, [entry.text])
+
+  if (!visible) return null
+
+  const date = formatMemoryDate(entry.created)
+  const meta = [entry.source === 'auto' ? 'Learned' : null, date].filter(Boolean).join(' · ')
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-surface-2 p-3">
-        <p className="text-[12px] text-muted">Signed in as</p>
-        <p className="text-[14px] font-medium">{session?.email}</p>
+    <li data-setting className="flex items-start gap-2 px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <Textarea
+          value={text}
+          rows={2}
+          maxLength={MAX_MEMORY_CHARS}
+          disabled={disabled}
+          aria-label="Memory"
+          className="min-h-[44px] bg-surface hover:bg-lift focus-visible:bg-lift"
+          onChange={(event) => setText(event.target.value)}
+          onBlur={() => onSave(text)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              ;(event.target as HTMLTextAreaElement).blur()
+            }
+          }}
+        />
+        {meta ? <p className="mt-1 text-[11px] text-muted">{meta}</p> : null}
       </div>
-
-      <div>
-        <p className="mb-2 text-[13px] font-medium">Devices</p>
-        <div className="space-y-1">
-          {devices.map((device) => (
-            <div key={device.id} className="flex items-center justify-between rounded-md bg-surface-2 p-2 text-[12px]">
-              <div>
-                <p className="font-medium">{device.platform}</p>
-                <p className="text-muted">{device.appVersion} · {new Date(device.lastSeen).toLocaleDateString()}</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => void api.devices.delete(device.deviceId).then(loadDevices)}>
-                Revoke
-              </Button>
-            </div>
-          ))}
-          {devices.length === 0 ? <p className="text-[12px] text-muted">No other devices found.</p> : null}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-[13px] font-medium">Data</p>
-        <Button variant="outline" className="w-full" onClick={async () => {
-          const data = await api.me.export()
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `tudso-export-${new Date().toISOString().slice(0, 10)}.json`
-          a.click()
-          URL.revokeObjectURL(url)
-          setStatus('Export downloaded.')
-        }}>
-          Export my data
-        </Button>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-[13px] font-medium">Danger zone</p>
-        <Button variant="outline" className="w-full text-danger hover:bg-danger/20 hover:text-danger" onClick={() => {
-          if (window.confirm('Delete your Tudso account and all data? This cannot be undone.')) {
-            void api.me.deleteAccount().then(() => logout())
-          }
-        }}>
-          Delete account
-        </Button>
-      </div>
-
-      <Button variant="outline" className="w-full" onClick={() => void logout()}>
-        Log out
-      </Button>
-      {status ? <p className="text-[12px] text-muted">{status}</p> : null}
-    </div>
+      <IconButton label="Remove memory" disabled={disabled} className="mt-0.5 hover:bg-danger/20 hover:text-danger" onClick={onRemove}>
+        <X className="h-3.5 w-3.5" />
+      </IconButton>
+    </li>
   )
+}
+
+function AccountSection() {
+  return <Account />
 }
 
 function PrivacySection() {
@@ -955,6 +1110,8 @@ function PrivacySection() {
   const setSettings = useAppStore((state) => state.setSettings)
   const clearConversations = useAppStore((state) => state.clearConversations)
   const deleteLocalData = useAppStore((state) => state.deleteLocalData)
+  const entitlement = useAuthStore((state) => state.entitlement)
+  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
   const [status, setStatus] = useState<string | null>(null)
   const hint = (value: string) => formatAccelerator(value, desktop.platform)
 
@@ -963,13 +1120,15 @@ function PrivacySection() {
       <section className="[&:not(:has([data-setting]))]:hidden">
         <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">On screen</h3>
         <div className="divide-y divide-border overflow-hidden rounded-md bg-surface-2">
-          <PrivacyToggle
-            title="Hide from screen share"
-            description="Stay invisible in screenshots, recordings, and shared screens."
-            hint={hint(shortcuts.toggleHideFromCapture)}
-            checked={settings.hideFromCapture}
-            onCheckedChange={(value) => void setSettings({ hideFromCapture: value })}
-          />
+          {hideAllowed ? (
+            <PrivacyToggle
+              title="Hide from screen share"
+              description="Stay invisible in screenshots, recordings, and shared screens."
+              hint={hint(shortcuts.toggleHideFromCapture)}
+              checked={settings.hideFromCapture}
+              onCheckedChange={(value) => void setSettings({ hideFromCapture: value })}
+            />
+          ) : null}
           <PrivacyToggle
             title="Privacy mode"
             description="Hide message text if someone can see your display."
@@ -1002,16 +1161,6 @@ function PrivacySection() {
               void deleteLocalData()
             }}
           />
-          {settings.lockEnabled ? (
-            <PrivacyAction
-              title="PIN lock"
-              description="Tudso currently asks for a PIN when it opens."
-              action="Turn off"
-              onAction={() => {
-                void setSettings({ lockEnabled: false }).then(() => setStatus('PIN lock turned off.'))
-              }}
-            />
-          ) : null}
         </div>
       </section>
 
@@ -1025,12 +1174,14 @@ function PrivacyToggle({
   description,
   hint,
   checked,
+  disabled,
   onCheckedChange,
 }: {
   title: string
   description: string
   hint?: string
   checked: boolean
+  disabled?: boolean
   onCheckedChange: (value: boolean) => void
 }) {
   const visible = useSettingVisible(title, description)
@@ -1043,7 +1194,7 @@ function PrivacyToggle({
       </div>
       <div className="flex shrink-0 items-center gap-2 pt-0.5">
         {hint ? <Kbd>{hint}</Kbd> : null}
-        <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={title} />
+        <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} aria-label={title} />
       </div>
     </div>
   )
@@ -1060,9 +1211,10 @@ function PrivacyAction({
   description: string
   action: string
   danger?: boolean
-  onAction: () => void
+  onAction: () => void | Promise<void>
 }) {
   const visible = useSettingVisible(title, description, action)
+  const [loading, setLoading] = useState(false)
   if (!visible) return null
   return (
     <div data-setting className="flex items-start justify-between gap-3 px-3 py-2.5">
@@ -1074,7 +1226,11 @@ function PrivacyAction({
         variant={danger ? 'danger' : 'outline'}
         size="sm"
         className="shrink-0"
-        onClick={onAction}
+        loading={loading}
+        onClick={() => {
+          setLoading(true)
+          void Promise.resolve(onAction()).finally(() => setLoading(false))
+        }}
       >
         {action}
       </Button>

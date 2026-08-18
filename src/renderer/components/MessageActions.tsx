@@ -12,6 +12,7 @@ export function MessageActions({
   disabled?: boolean
 }) {
   const [copied, setCopied] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
 
   return (
     <div className="mt-2 flex items-center justify-end gap-1">
@@ -29,7 +30,17 @@ export function MessageActions({
         {copied ? 'Copied' : 'Copy'}
       </Button>
       {onRegenerate ? (
-        <Button variant="ghost" size="sm" className="h-7 text-muted hover:bg-lift hover:text-fg" disabled={disabled} onClick={onRegenerate}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-muted hover:bg-lift hover:text-fg"
+          disabled={disabled}
+          loading={regenerating}
+          onClick={() => {
+            setRegenerating(true)
+            onRegenerate()
+          }}
+        >
           <RefreshCw className="h-3.5 w-3.5" />
           Regenerate
         </Button>

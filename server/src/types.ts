@@ -120,6 +120,7 @@ export interface DesktopSession {
   userId: string
   token: string
   expiresAt: number
+  deviceId?: string
 }
 
 export interface AuthState {
