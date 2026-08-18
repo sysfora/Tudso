@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { getMainWindow, restoreTaskbarPresence } from './windows'
+import { excludeWindowFromCapture, restoreOverlayAfterCapture, restoreWindowAfterCapture } from './windows'
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -27,31 +27,24 @@ export async function captureScreen(): Promise<string | null> {
       types: ['screen'],
       thumbnailSize: { width, height },
     })
-    restoreTaskbarPresence()
+    restoreOverlayAfterCapture()
     const source =
       sources.find((item) => item.display_id && item.display_id === String(display.id)) ?? sources[0]
     if (!source) return null
     return source.thumbnail.toDataURL()
   } catch {
-    restoreTaskbarPresence()
+    restoreOverlayAfterCapture()
     return null
   }
 }
 
-export async function captureScreenWithoutApp(): Promise<string | null> {
-  const win = getMainWindow()
-  const usable = Boolean(win && !win.isDestroyed())
-  const wasVisible = Boolean(usable && win!.isVisible())
-  if (usable && wasVisible) {
-    win!.hide()
-    await delay(120)
-  }
+export async function captureScreenWithoutApp(keepExcluded = false): Promise<string | null> {
+  excludeWindowFromCapture(keepExcluded)
+  await delay(50)
   try {
     return await captureScreen()
   } finally {
-    if (usable && wasVisible && win && !win.isDestroyed()) {
-      win.showInactive()
-    }
+    restoreWindowAfterCapture()
   }
 }
 
@@ -62,12 +55,12 @@ export async function captureActiveWindow(): Promise<string | null> {
       types: ['window'],
       thumbnailSize: { width, height },
     })
-    restoreTaskbarPresence()
+    restoreOverlayAfterCapture()
     const source = sources[0]
     if (!source) return null
     return source.thumbnail.toDataURL()
   } catch {
-    restoreTaskbarPresence()
+    restoreOverlayAfterCapture()
     return null
   }
 }

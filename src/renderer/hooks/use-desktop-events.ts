@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { desktop } from '@/lib/desktop'
 import { runAppCommand } from '@/lib/commands'
+import { applyOverlayKey, applyOverlayPointer } from '@/lib/overlay-input'
 import { useAppStore } from '@/store/app-store'
 
 export function useDesktopEvents() {
@@ -17,12 +18,16 @@ export function useDesktopEvents() {
     const offShortcuts = desktop.shortcuts.onChange(replaceShortcuts)
     const offFailed = desktop.shortcuts.onFailed(setBlockedShortcuts)
     const offCollapsed = desktop.window.onCollapsed(setWindowCollapsed)
+    const offOverlayKey = desktop.window.onOverlayKey(applyOverlayKey)
+    const offOverlayPointer = desktop.window.onOverlayPointer(applyOverlayPointer)
     return () => {
       offCommand()
       offSettings()
       offShortcuts()
       offFailed()
       offCollapsed()
+      offOverlayKey()
+      offOverlayPointer()
     }
   }, [replaceSettings, replaceShortcuts, setBlockedShortcuts, setWindowCollapsed])
 }

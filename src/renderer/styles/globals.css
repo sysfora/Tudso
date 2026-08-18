@@ -169,7 +169,14 @@ body,
   select {
     appearance: none;
     font: inherit;
-    background: none;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
   }
 
   button {
@@ -212,6 +219,8 @@ body,
   background: color-mix(in srgb, var(--bg) calc(100% - var(--transparency, 0%)), transparent);
   color: var(--fg);
   user-select: none;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .markdown,

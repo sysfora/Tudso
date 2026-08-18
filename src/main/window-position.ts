@@ -1,4 +1,5 @@
 import { screen } from 'electron'
+import { setWindowBoundsNoActivate, setWindowPositionNoActivate } from './overlay'
 import { getMainWindow } from './windows'
 
 const NUDGE = 80
@@ -16,9 +17,7 @@ export function moveToPreset(position: number) {
   const row = Math.floor((position - 1) / 3)
   const x = work.x + Math.round((col * (work.width - width)) / 2)
   const y = work.y + Math.round((row * (work.height - height)) / 2)
-  const wasVisible = win.isVisible()
-  win.setBounds({ x, y, width, height }, wasVisible)
-  if (!wasVisible && win.isVisible()) win.hide()
+  setWindowBoundsNoActivate(win, { x, y, width, height })
 }
 
 export function moveBy(deltaX: number, deltaY: number) {
@@ -30,9 +29,7 @@ export function moveBy(deltaX: number, deltaY: number) {
   const maxY = work.y + Math.max(0, work.height - bounds.height)
   const x = Math.min(Math.max(bounds.x + deltaX, work.x), maxX)
   const y = Math.min(Math.max(bounds.y + deltaY, work.y), maxY)
-  const wasVisible = win.isVisible()
-  win.setPosition(x, y, wasVisible)
-  if (!wasVisible && win.isVisible()) win.hide()
+  setWindowPositionNoActivate(win, x, y)
 }
 
 export function nudgeWindow(direction: 'left' | 'right' | 'up' | 'down') {

@@ -7,6 +7,8 @@ import type {
   LocalProfile,
   LocalResumeMeta,
   LocalUserData,
+  OverlayKeyEvent,
+  OverlayPointerEvent,
   PickedFile,
   Settings,
   ShortcutId,
@@ -42,6 +44,10 @@ export interface ElectronAPI {
     setSignedInReady: (ready: boolean) => Promise<void>
     setHideFromCaptureAllowed: (allowed: boolean) => Promise<void>
     onCollapsed: (callback: (collapsed: boolean) => void) => () => void
+    onOverlayKey: (callback: (event: OverlayKeyEvent) => void) => () => void
+    onOverlayPointer: (callback: (event: OverlayPointerEvent) => void) => () => void
+    beginOverlayDrag: () => void
+    cancelOverlayDrag: () => void
   }
   settings: {
     get: () => Promise<Settings>

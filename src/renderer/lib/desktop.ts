@@ -84,6 +84,10 @@ function createMock(): ElectronAPI {
         }
       },
       onCollapsed: () => () => undefined,
+      onOverlayKey: () => () => undefined,
+      onOverlayPointer: () => () => undefined,
+      beginOverlayDrag: () => undefined,
+      cancelOverlayDrag: () => undefined,
     },
     settings: {
       get: async () => memory.settings,

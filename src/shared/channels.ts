@@ -18,6 +18,10 @@ export const CHANNELS = {
   windowRestoreTaskbar: 'window:restore-taskbar',
   windowSetSignedInReady: 'window:set-signed-in-ready',
   windowCollapsed: 'window:collapsed',
+  overlayKey: 'overlay:key',
+  overlayPointer: 'overlay:pointer',
+  overlayDragStart: 'overlay:drag-start',
+  overlayDragCancel: 'overlay:drag-cancel',
 
   captureScreen: 'capture:screen',
   captureActiveWindow: 'capture:active-window',

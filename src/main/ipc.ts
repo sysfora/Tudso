@@ -39,6 +39,7 @@ import {
   setHideFromCapture,
   setWindowMode,
 } from './windows'
+import { beginOverlayDrag, cancelOverlayDrag } from './overlay'
 
 let abortController: AbortController | null = null
 let locked = false
@@ -87,11 +88,17 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.handle(CHANNELS.windowSetSignedInReady, (_event, ready: boolean) => {
     setSignedInReady(Boolean(ready))
   })
+  ipcMain.on(CHANNELS.overlayDragStart, () => {
+    beginOverlayDrag()
+  })
+  ipcMain.on(CHANNELS.overlayDragCancel, () => {
+    cancelOverlayDrag()
+  })
   ipcMain.handle(CHANNELS.planVisibility, (_event, allowed: boolean) => {
     void setHideFromCaptureAllowed(Boolean(allowed), store)
   })
 
-  ipcMain.handle(CHANNELS.captureScreen, async () => captureScreenWithoutApp())
+  ipcMain.handle(CHANNELS.captureScreen, async () => captureScreenWithoutApp(store.getSettings().hideFromCapture))
   ipcMain.handle(CHANNELS.captureActiveWindow, async () => captureActiveWindow())
   ipcMain.handle(CHANNELS.captureRegion, async () => captureRegion())
 

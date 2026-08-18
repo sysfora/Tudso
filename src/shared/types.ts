@@ -20,6 +20,28 @@ export interface WindowBounds {
   height: number
 }
 
+export interface OverlayKeyEvent {
+  down: boolean
+  key: string
+  code: string
+  text: string
+  ctrl: boolean
+  alt: boolean
+  shift: boolean
+  meta: boolean
+  paste?: string
+}
+
+export interface OverlayPointerEvent {
+  type: 'down' | 'up' | 'wheel'
+  button: number
+  x: number
+  y: number
+  screenX: number
+  screenY: number
+  deltaY?: number
+}
+
 export interface AuthSession {
   token: string
   userId: string

@@ -8,6 +8,9 @@ import { appIconPath, loadAppIcon } from './icon'
 import {
   applyOverlayWindowStyle,
   clearOverlayWindowStyle,
+  ensureNoActivate,
+  setWindowBoundsNoActivate,
+  setWindowPositionNoActivate,
   showWithoutActivating,
   startOverlayKeyboard,
 } from './overlay'
@@ -151,7 +154,7 @@ export function createMainWindow(store: AppStore) {
   })
   win.on('blur', () => {
     if (!floatingEnabled || !win?.isVisible()) return
-    applyOverlayWindowStyle(win)
+    ensureNoActivate(win)
   })
   screen.on('display-metrics-changed', () => {
     if (!floatingEnabled || !win || win.isDestroyed() || !win.isVisible()) return
@@ -264,11 +267,50 @@ export function restoreTaskbarPresence() {
   setTimeout(apply, 250)
 }
 
-function applyFloatingChrome() {
+export function restoreOverlayAfterCapture() {
   if (!win || win.isDestroyed()) return
   if (floatingEnabled) {
     applyOverlayWindowStyle(win)
+    return
+  }
+  restoreTaskbarPresence()
+}
+
+let capturePark: { protect: boolean } | null = null
+
+export function excludeWindowFromCapture(keepExcluded: boolean) {
+  if (!win || win.isDestroyed()) return false
+  capturePark = { protect: keepExcluded }
+  try {
+    win.setContentProtection(true)
+  } catch {
+    undefined
+  }
+  return true
+}
+
+export function restoreWindowAfterCapture() {
+  if (!win || win.isDestroyed()) {
+    capturePark = null
+    return
+  }
+  const parked = capturePark
+  capturePark = null
+  if (parked) {
+    try {
+      win.setContentProtection(parked.protect)
+    } catch {
+      undefined
+    }
+  }
+  restoreOverlayAfterCapture()
+}
+
+function applyFloatingChrome() {
+  if (!win || win.isDestroyed()) return
+  if (floatingEnabled) {
     startOverlayKeyboard(win)
+    applyOverlayWindowStyle(win)
     return
   }
   clearOverlayWindowStyle(win)
@@ -307,21 +349,18 @@ export function setWindowMode(mode: WindowMode) {
   const bounds = win.getBounds()
   const display = screen.getDisplayMatching(bounds)
   expandedHeight = size.height
-  const wasVisible = win.isVisible()
 
   if (collapsed) {
     const x = Math.round(bounds.x + (bounds.width - size.width) / 2)
     const next = clampToDisplay({ x, y: bounds.y, width: size.width, height: TITLEBAR_HEIGHT }, display.workArea)
-    win.setBounds({ ...next, height: TITLEBAR_HEIGHT }, wasVisible)
-    if (!wasVisible && win.isVisible()) win.hide()
+    setWindowBoundsNoActivate(win, { ...next, height: TITLEBAR_HEIGHT })
     return
   }
 
   const x = Math.round(bounds.x + (bounds.width - size.width) / 2)
   const y = Math.round(bounds.y + (bounds.height - size.height) / 2)
   const next = clampToDisplay({ x, y, width: size.width, height: size.height }, display.workArea)
-  win.setBounds(next, wasVisible)
-  if (!wasVisible && win.isVisible()) win.hide()
+  setWindowBoundsNoActivate(win, next)
 }
 
 export function getWindowBounds(): WindowBounds | null {
@@ -334,9 +373,7 @@ export function moveMainWindow(position: { x: number; y: number }) {
   const bounds = win.getBounds()
   const display = screen.getDisplayMatching(bounds)
   const next = clampToDisplay({ ...bounds, x: position.x, y: position.y }, display.workArea)
-  const wasVisible = win.isVisible()
-  win.setPosition(next.x, next.y, wasVisible)
-  if (!wasVisible && win.isVisible()) win.hide()
+  setWindowPositionNoActivate(win, next.x, next.y)
 }
 
 export function sendToRenderer(channel: string, payload?: unknown) {

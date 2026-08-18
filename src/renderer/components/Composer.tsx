@@ -111,7 +111,7 @@ export function Composer() {
           Screen
         </button>
       </div>
-      <div className="relative rounded-xl bg-surface-2 transition-colors duration-150 hover:bg-raised">
+      <div className="relative no-drag rounded-xl bg-surface-2 transition-colors duration-150 hover:bg-raised">
         {attachments.length ? (
           <ul className="flex flex-wrap gap-1.5 px-3 pt-3">
             {attachments.map((file) => (
@@ -142,7 +142,8 @@ export function Composer() {
           rows={3}
           value={composer}
           placeholder={listening ? 'Listening… speak now' : 'Ask anything...'}
-          className="block max-h-[180px] min-h-[88px] w-full resize-none bg-transparent px-3 pt-3 pb-12 text-[14px] leading-relaxed text-fg outline-none placeholder:text-muted"
+          className="block max-h-[180px] min-h-[88px] w-full resize-none bg-surface-2 px-3 pt-3 pb-12 text-[14px] leading-relaxed text-fg outline-none placeholder:text-muted select-text no-drag"
+          onPointerDown={() => textareaRef.current?.focus()}
           onChange={(event) => setComposer(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
