@@ -77,16 +77,6 @@ export interface EntitlementRecord {
   user: string
   plan: Plan
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid'
-  aiAccess: boolean
-  realtimeAccess: boolean
-  screenAnalysis: boolean
-  audioAccess: boolean
-  usageLimits: {
-    requestsPerDay?: number
-    screenAnalysesPerDay?: number
-    realtimeMinutesPerDay?: number
-    audioMinutesPerDay?: number
-  }
   expiresAt: string
   created: string
   updated: string

@@ -4,7 +4,7 @@
     "listRule": "id = @request.auth.id",
     "viewRule": "id = @request.auth.id",
     "createRule": "",
-    "updateRule": "id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.aiAccess:isset = false && @request.body.realtimeAccess:isset = false && @request.body.screenAnalysis:isset = false && @request.body.audioAccess:isset = false && @request.body.usageLimits:isset = false && @request.body.expiresAt:isset = false",
+    "updateRule": "id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false",
     "deleteRule": "id = @request.auth.id",
     "name": "users",
     "type": "auth",
@@ -173,52 +173,6 @@
         "required": false,
         "system": false,
         "type": "text"
-      },
-      {
-        "hidden": false,
-        "id": "bool4100000905",
-        "name": "aiAccess",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
-      },
-      {
-        "hidden": false,
-        "id": "bool4100000906",
-        "name": "realtimeAccess",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
-      },
-      {
-        "hidden": false,
-        "id": "bool4100000907",
-        "name": "screenAnalysis",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
-      },
-      {
-        "hidden": false,
-        "id": "bool4100000908",
-        "name": "audioAccess",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
-      },
-      {
-        "hidden": false,
-        "id": "json4100000909",
-        "maxSize": 2000000,
-        "name": "usageLimits",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "json"
       },
       {
         "hidden": false,
@@ -1115,52 +1069,6 @@
           "canceled",
           "unpaid"
         ]
-      },
-      {
-        "hidden": false,
-        "id": "bool4100000040",
-        "name": "aiAccess",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
-      },
-      {
-        "hidden": false,
-        "id": "bool4100000041",
-        "name": "realtimeAccess",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
-      },
-      {
-        "hidden": false,
-        "id": "bool4100000042",
-        "name": "screenAnalysis",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
-      },
-      {
-        "hidden": false,
-        "id": "bool4100000043",
-        "name": "audioAccess",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
-      },
-      {
-        "hidden": false,
-        "id": "json4100000044",
-        "maxSize": 2000000,
-        "name": "usageLimits",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "json"
       },
       {
         "hidden": false,

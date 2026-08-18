@@ -1,6 +1,7 @@
 import { modifierCount } from '@shared/accelerator'
 import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap, REALTIME_ASK_PROMPT, REALTIME_SCREEN_ASK_PROMPT, SCREEN_ASK_PROMPT, SHORTCUT_LABELS, resolveChatModel } from '@shared/defaults'
 import { isActionableTranscript } from '@shared/transcript'
+import { isPaidPlan } from '@shared/plans'
 import type {
   Attachment,
   ChatMessage,
@@ -308,8 +309,9 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   askFromScreen: async () => {
     if (get().generatingId) return
-    if (!useAuthStore.getState().entitlement?.screenAnalysis) {
-      desktop.app.notify('Answer from screen', 'Screen analysis is not available on your plan.')
+    const entitlement = useAuthStore.getState().entitlement
+    if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
+      desktop.app.notify('Answer from screen', 'Screen answers require an active Pro or Premium subscription.')
       return
     }
     await get().sendMessage(undefined, { fromScreen: true })
@@ -318,6 +320,11 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   sendMessage: async (text, options) => {
     const state = get()
     if (state.generatingId) return
+    const entitlement = useAuthStore.getState().entitlement
+    if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
+      desktop.app.notify('Subscription required', 'This feature needs an active Pro or Premium subscription.')
+      return
+    }
     const fromScreen = options?.fromScreen === true
     const fromRealtime = options?.fromRealtime === true
     const withScreen = options?.withScreen === true

@@ -1,8 +1,11 @@
 import Stripe from 'stripe'
 import { config } from './config.js'
+import { log } from './log.js'
 import { getSubscription, upsertEntitlement, upsertSubscription } from './pocketbase.js'
-import { PLAN_FEATURES } from './plans.js'
 import type { EntitlementRecord, Plan, SubscriptionRecord } from './types.js'
+
+const LIVE_PLAN_TTL_MS = 8_000
+const liveEntitlementCache = new Map<string, { at: number; value: EntitlementRecord }>()
 
 export const stripe = new Stripe(config.stripe.secretKey, { apiVersion: '2025-02-24.acacia' })
 
@@ -10,6 +13,155 @@ export function priceIdToPlan(priceId: string): Plan {
   if (priceId === config.stripe.priceIds.pro) return 'pro'
   if (priceId === config.stripe.priceIds.premium) return 'premium'
   return 'free'
+}
+
+export function invalidateLiveEntitlement(userId: string): void {
+  liveEntitlementCache.delete(userId)
+}
+
+function unixToIso(seconds?: number | null): string {
+  if (!seconds) return ''
+  return new Date(seconds * 1000).toISOString()
+}
+
+function subscriptionPeriod(sub: Stripe.Subscription): { start: string; end: string } {
+  const item = sub.items.data[0] as { current_period_start?: number; current_period_end?: number } | undefined
+  const start = ('current_period_start' in sub && typeof sub.current_period_start === 'number'
+    ? sub.current_period_start
+    : item?.current_period_start) ?? 0
+  const end = ('current_period_end' in sub && typeof sub.current_period_end === 'number'
+    ? sub.current_period_end
+    : item?.current_period_end) ?? 0
+  return { start: unixToIso(start), end: unixToIso(end) }
+}
+
+function subscriptionStatusFromStripe(status: Stripe.Subscription.Status): SubscriptionRecord['status'] {
+  if (status === 'paused') return 'unpaid'
+  return status as SubscriptionRecord['status']
+}
+
+export function entitlementStatusFromStripe(status: Stripe.Subscription.Status): EntitlementRecord['status'] {
+  if (status === 'incomplete' || status === 'incomplete_expired' || status === 'paused') return 'unpaid'
+  if (status === 'active' || status === 'trialing' || status === 'past_due' || status === 'canceled' || status === 'unpaid') {
+    return status
+  }
+  return 'unpaid'
+}
+
+export function planFromStripeSubscription(sub: Stripe.Subscription): {
+  plan: Plan
+  planStatus: EntitlementRecord['status']
+  priceId: string
+  status: SubscriptionRecord['status']
+  currentPeriodStart: string
+  currentPeriodEnd: string
+  cancelAtPeriodEnd: boolean
+  stripeCustomerId: string
+  stripeSubscriptionId: string
+} {
+  const priceId = sub.items.data[0]?.price.id ?? ''
+  const period = subscriptionPeriod(sub)
+  return {
+    plan: priceIdToPlan(priceId),
+    planStatus: entitlementStatusFromStripe(sub.status),
+    priceId,
+    status: subscriptionStatusFromStripe(sub.status),
+    currentPeriodStart: period.start,
+    currentPeriodEnd: period.end,
+    cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+    stripeCustomerId: typeof sub.customer === 'string' ? sub.customer : sub.customer.id,
+    stripeSubscriptionId: sub.id,
+  }
+}
+
+function rankStripeSubscription(sub: Stripe.Subscription): number {
+  switch (sub.status) {
+    case 'active': return 0
+    case 'trialing': return 1
+    case 'past_due': return 2
+    case 'unpaid': return 3
+    default: return 9
+  }
+}
+
+function pickStripeSubscription(subs: Stripe.Subscription[]): Stripe.Subscription | null {
+  if (!subs.length) return null
+  return [...subs].sort((a, b) => rankStripeSubscription(a) - rankStripeSubscription(b) || b.created - a.created)[0] ?? null
+}
+
+function isStripeMissing(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'resource_missing')
+}
+
+async function fetchStripeSubscription(subscriptionId?: string, customerId?: string): Promise<Stripe.Subscription | null> {
+  if (subscriptionId) {
+    try {
+      return await stripe.subscriptions.retrieve(subscriptionId)
+    } catch (error) {
+      if (!isStripeMissing(error)) throw error
+      log.warn('Stripe subscription no longer exists', { subscriptionId })
+    }
+  }
+  if (!customerId) return null
+  const listed = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 10 })
+  return pickStripeSubscription(listed.data)
+}
+
+export async function resolveLiveEntitlement(userId: string): Promise<EntitlementRecord> {
+  const cached = liveEntitlementCache.get(userId)
+  if (cached && Date.now() - cached.at < LIVE_PLAN_TTL_MS) return cached.value
+
+  const { entitlementFromBilling, getUserBilling, persistLiveBilling, unpaidEntitlement, syncUserBilling } = await import('./pocketbase.js')
+  const [subscription, billing] = await Promise.all([getSubscription(userId), getUserBilling(userId)])
+  const subscriptionId = subscription?.stripeSubscriptionId || billing?.stripeSubscriptionId
+  const customerId = subscription?.stripeCustomerId || billing?.stripeCustomerId
+
+  let stripeSub: Stripe.Subscription | null = null
+  let stripeReachable = !subscriptionId && !customerId
+  try {
+    if (subscriptionId || customerId) {
+      stripeSub = await fetchStripeSubscription(subscriptionId, customerId)
+      stripeReachable = true
+    }
+  } catch (error) {
+    stripeReachable = false
+    log.warn('Stripe live plan lookup failed', { user: userId, err: String(error) })
+  }
+
+  if (stripeSub) {
+    const mapped = planFromStripeSubscription(stripeSub)
+    const entitlement: EntitlementRecord = {
+      id: billing?.id ?? userId,
+      user: userId,
+      plan: mapped.plan,
+      status: mapped.planStatus,
+      expiresAt: mapped.currentPeriodEnd,
+      created: billing?.created ?? '',
+      updated: new Date().toISOString(),
+    }
+    liveEntitlementCache.set(userId, { at: Date.now(), value: entitlement })
+    void persistLiveBilling(userId, mapped).catch((error) => {
+      log.warn('Could not persist live Stripe plan', { user: userId, err: String(error) })
+    })
+    return entitlement
+  }
+
+  if (stripeReachable && (subscriptionId || customerId)) {
+    const unpaid = unpaidEntitlement(userId, {
+      id: billing?.id,
+      created: billing?.created,
+      updated: new Date().toISOString(),
+    })
+    liveEntitlementCache.set(userId, { at: Date.now(), value: unpaid })
+    void syncUserBilling(userId, { plan: 'free', planStatus: 'unpaid' }).catch((error) => {
+      log.warn('Could not persist unpaid plan', { user: userId, err: String(error) })
+    })
+    return unpaid
+  }
+
+  const fallback = entitlementFromBilling(billing, userId)
+  liveEntitlementCache.set(userId, { at: Date.now(), value: fallback })
+  return fallback
 }
 
 export async function createCheckoutSession(
@@ -144,29 +296,22 @@ export async function syncSubscriptionFromStripe(stripeSubscription: Stripe.Subs
     userId = subs.data[0]?.metadata?.userId
   }
   if (!userId) return
-  const priceId = stripeSubscription.items.data[0]?.price.id ?? ''
-  const plan = priceIdToPlan(priceId)
-  const subStatus = stripeSubscription.status as SubscriptionRecord['status']
-  const entitlementStatus: EntitlementRecord['status'] =
-    subStatus === 'incomplete' || subStatus === 'incomplete_expired' ? 'unpaid' : subStatus
-  const subscription = await upsertSubscription(userId, {
-    stripeCustomerId: typeof stripeSubscription.customer === 'string'
-      ? stripeSubscription.customer
-      : stripeSubscription.customer.id,
-    stripeSubscriptionId: stripeSubscription.id,
-    priceId,
-    status: subStatus,
-    currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000).toISOString(),
-    currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000).toISOString(),
-    cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
+  const mapped = planFromStripeSubscription(stripeSubscription)
+  await upsertSubscription(userId, {
+    stripeCustomerId: mapped.stripeCustomerId,
+    stripeSubscriptionId: mapped.stripeSubscriptionId,
+    priceId: mapped.priceId,
+    status: mapped.status,
+    currentPeriodStart: mapped.currentPeriodStart,
+    currentPeriodEnd: mapped.currentPeriodEnd,
+    cancelAtPeriodEnd: mapped.cancelAtPeriodEnd,
   })
-  const features = PLAN_FEATURES[plan]
   await upsertEntitlement(userId, {
-    plan,
-    status: entitlementStatus,
-    ...features,
-    expiresAt: subscription.currentPeriodEnd,
+    plan: mapped.plan,
+    status: mapped.planStatus,
+    expiresAt: mapped.currentPeriodEnd,
   })
+  invalidateLiveEntitlement(userId)
 }
 
 export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {

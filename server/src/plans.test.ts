@@ -1,34 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { applyPlanFeatures, featuresForPlan, isPlan } from './plans.js'
+import { isPaidPlan, isPlan } from './plans.js'
 
 describe('plans', () => {
-  it('treats pro as a paid plan with AI access', () => {
+  it('treats active pro and premium as paid', () => {
     expect(isPlan('pro')).toBe(true)
-    expect(featuresForPlan('pro').aiAccess).toBe(true)
-    expect(featuresForPlan('pro').realtimeAccess).toBe(true)
+    expect(isPaidPlan('pro', 'active')).toBe(true)
+    expect(isPaidPlan('premium', 'trialing')).toBe(true)
+    expect(isPaidPlan('premium', 'past_due')).toBe(true)
   })
 
-  it('applies plan features even when stored flags are false', () => {
-    const resolved = applyPlanFeatures({
-      id: '1',
-      user: '1',
-      plan: 'pro',
-      status: 'active',
-      aiAccess: false,
-      realtimeAccess: false,
-      screenAnalysis: false,
-      audioAccess: false,
-      usageLimits: {},
-      expiresAt: '',
-      created: '',
-      updated: '',
-    })
-    expect(resolved.aiAccess).toBe(true)
-    expect(resolved.usageLimits).toEqual({})
-  })
-
-  it('downgrades canceled paid plans to free features', () => {
-    expect(featuresForPlan('pro', 'canceled').aiAccess).toBe(true)
-    expect(featuresForPlan('pro', 'canceled').realtimeAccess).toBe(false)
+  it('does not grant access without a current paid Stripe status', () => {
+    expect(isPaidPlan('pro', 'canceled')).toBe(false)
+    expect(isPaidPlan('premium', 'unpaid')).toBe(false)
+    expect(isPaidPlan('free', 'active')).toBe(false)
+    expect(isPaidPlan('pro', undefined)).toBe(false)
   })
 })

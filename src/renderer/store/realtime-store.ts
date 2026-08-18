@@ -13,6 +13,7 @@ import {
 } from '@/lib/media-audio'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
+import { isPaidPlan } from '@shared/plans'
 import { cleanTranscript, isActionableTranscript } from '@shared/transcript'
 
 export type AudioMode = 'mic' | 'system'
@@ -262,14 +263,12 @@ async function startSystemStream(): Promise<MediaStream> {
   return captureSystemAudio(source.id)
 }
 
-function liveAllowed(withScreen: boolean): boolean {
+function liveAllowed(_withScreen: boolean): boolean {
   const entitlement = useAuthStore.getState().entitlement
-  if (!entitlement?.audioAccess) return false
-  if (withScreen && !entitlement.screenAnalysis) return false
-  return true
+  return isPaidPlan(entitlement?.plan, entitlement?.status)
 }
 
 function liveError(withScreen: boolean): string {
-  if (withScreen) return 'Live copilot with screen needs screen analysis and audio on Pro or Premium.'
-  return 'Live copilot needs audio on Pro or Premium.'
+  if (withScreen) return 'Live copilot with screen needs an active Pro or Premium subscription.'
+  return 'Live copilot needs an active Pro or Premium subscription.'
 }

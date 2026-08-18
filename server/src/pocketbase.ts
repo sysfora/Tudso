@@ -1,7 +1,7 @@
 import PocketBase from 'pocketbase'
 import { config } from './config.js'
 import { log, logError } from './log.js'
-import { applyPlanFeatures, isPlan, PLAN_FEATURES } from './plans.js'
+import { isPlan } from './plans.js'
 import { pbQuote } from './pb-filter.js'
 import { deleteStoredObject, type StorageBackend } from './storage.js'
 import { parseUserContext, serializeUserContext, type MemoryEntry } from './memory.js'
@@ -57,13 +57,38 @@ export async function getUserByEmail(email: string): Promise<{ id: string; email
 
 export const DEFAULT_USER_BILLING = {
   plan: 'free' as const,
-  planStatus: 'active' as const,
-  aiAccess: true,
-  realtimeAccess: false,
-  screenAnalysis: false,
-  audioAccess: false,
-  usageLimits: {},
+  planStatus: 'unpaid' as const,
   onboardingComplete: false,
+}
+
+export interface UserBilling {
+  id: string
+  plan?: Plan
+  planStatus?: EntitlementRecord['status']
+  stripeCustomerId?: string
+  stripeSubscriptionId?: string
+  expiresAt?: string
+  created?: string
+  updated?: string
+}
+
+export async function getUserBilling(userId: string): Promise<UserBilling | null> {
+  const pb = await getAdminPb()
+  try {
+    const user = await pb.collection('users').getOne(userId)
+    return {
+      id: user.id,
+      plan: isPlan(user.plan) ? user.plan : undefined,
+      planStatus: typeof user.planStatus === 'string' ? user.planStatus as EntitlementRecord['status'] : undefined,
+      stripeCustomerId: typeof user.stripeCustomerId === 'string' ? user.stripeCustomerId : undefined,
+      stripeSubscriptionId: typeof user.stripeSubscriptionId === 'string' ? user.stripeSubscriptionId : undefined,
+      expiresAt: typeof user.expiresAt === 'string' ? user.expiresAt : undefined,
+      created: typeof user.created === 'string' ? user.created : undefined,
+      updated: typeof user.updated === 'string' ? user.updated : undefined,
+    }
+  } catch {
+    return null
+  }
 }
 
 export async function syncUserBilling(
@@ -73,11 +98,6 @@ export async function syncUserBilling(
     planStatus?: EntitlementRecord['status']
     stripeCustomerId?: string
     stripeSubscriptionId?: string
-    aiAccess?: boolean
-    realtimeAccess?: boolean
-    screenAnalysis?: boolean
-    audioAccess?: boolean
-    usageLimits?: EntitlementRecord['usageLimits']
     expiresAt?: string
     onboardingComplete?: boolean
   },
@@ -88,11 +108,6 @@ export async function syncUserBilling(
   if (data.planStatus !== undefined) payload.planStatus = data.planStatus
   if (data.stripeCustomerId !== undefined) payload.stripeCustomerId = data.stripeCustomerId
   if (data.stripeSubscriptionId !== undefined) payload.stripeSubscriptionId = data.stripeSubscriptionId
-  if (data.aiAccess !== undefined) payload.aiAccess = data.aiAccess
-  if (data.realtimeAccess !== undefined) payload.realtimeAccess = data.realtimeAccess
-  if (data.screenAnalysis !== undefined) payload.screenAnalysis = data.screenAnalysis
-  if (data.audioAccess !== undefined) payload.audioAccess = data.audioAccess
-  if (data.usageLimits !== undefined) payload.usageLimits = data.usageLimits
   if (data.expiresAt !== undefined) payload.expiresAt = data.expiresAt
   if (data.onboardingComplete !== undefined) payload.onboardingComplete = data.onboardingComplete
   if (!Object.keys(payload).length) return
@@ -302,54 +317,88 @@ export async function getEntitlement(userId: string): Promise<EntitlementRecord 
   }
 }
 
-export function entitlementFromUser(user: Record<string, unknown>): EntitlementRecord | null {
-  if (!isPlan(user.plan)) return null
-  const features = PLAN_FEATURES[user.plan]
-  const storedLimits = user.usageLimits && typeof user.usageLimits === 'object'
-    ? user.usageLimits as EntitlementRecord['usageLimits']
-    : {}
-  return applyPlanFeatures({
-    id: String(user.id ?? ''),
-    user: String(user.id ?? ''),
-    plan: user.plan,
-    status: (user.planStatus as EntitlementRecord['status']) || 'active',
-    aiAccess: features.aiAccess,
-    realtimeAccess: features.realtimeAccess,
-    screenAnalysis: features.screenAnalysis,
-    audioAccess: features.audioAccess,
-    usageLimits: storedLimits ?? {},
-    expiresAt: String(user.expiresAt ?? ''),
-    created: String(user.created ?? ''),
-    updated: String(user.updated ?? ''),
-  })
+export function unpaidEntitlement(userId: string, extra?: Partial<EntitlementRecord>): EntitlementRecord {
+  return {
+    id: extra?.id ?? userId,
+    user: userId,
+    plan: extra?.plan && isPlan(extra.plan) ? extra.plan : 'free',
+    status: extra?.status ?? 'unpaid',
+    expiresAt: extra?.expiresAt ?? '',
+    created: extra?.created ?? '',
+    updated: extra?.updated ?? '',
+  }
 }
 
-export async function getEntitlementForUser(userId: string): Promise<EntitlementRecord | null> {
-  const pb = await getAdminPb()
-  let fromUser: EntitlementRecord | null = null
-  try {
-    const user = await pb.collection('users').getOne(userId)
-    fromUser = entitlementFromUser(user as unknown as Record<string, unknown>)
-  } catch {
-    // users collection may not have billing fields yet
+export function entitlementFromBilling(billing: UserBilling | null, fallbackUserId: string): EntitlementRecord {
+  if (!billing?.plan || !isPlan(billing.plan)) {
+    return unpaidEntitlement(fallbackUserId, {
+      id: billing?.id,
+      expiresAt: billing?.expiresAt,
+      created: billing?.created,
+      updated: billing?.updated,
+    })
   }
-  const fromEntitlements = await getEntitlement(userId)
-  const resolvedEntitlements = fromEntitlements ? applyPlanFeatures(fromEntitlements) : null
-  if (fromUser && resolvedEntitlements) {
-    const userTime = Date.parse(fromUser.updated) || 0
-    const entTime = Date.parse(resolvedEntitlements.updated) || 0
-    return userTime >= entTime ? fromUser : resolvedEntitlements
+  return {
+    id: billing.id || fallbackUserId,
+    user: fallbackUserId,
+    plan: billing.plan,
+    status: billing.planStatus ?? 'unpaid',
+    expiresAt: billing.expiresAt ?? '',
+    created: billing.created ?? '',
+    updated: billing.updated ?? '',
   }
-  return fromUser ?? resolvedEntitlements ?? applyPlanFeatures({
-    id: userId,
-    user: userId,
-    plan: 'free',
-    status: 'active',
-    ...PLAN_FEATURES.free,
-    usageLimits: {},
-    expiresAt: '',
-    created: '',
-    updated: '',
+}
+
+export async function getEntitlementForUser(userId: string): Promise<EntitlementRecord> {
+  const { resolveLiveEntitlement } = await import('./stripe.js')
+  return resolveLiveEntitlement(userId)
+}
+
+export async function persistLiveBilling(
+  userId: string,
+  data: {
+    plan: Plan
+    planStatus: EntitlementRecord['status']
+    stripeCustomerId: string
+    stripeSubscriptionId: string
+    priceId: string
+    status: SubscriptionRecord['status']
+    currentPeriodStart: string
+    currentPeriodEnd: string
+    cancelAtPeriodEnd: boolean
+  },
+): Promise<void> {
+  const [subscription, billing] = await Promise.all([getSubscription(userId), getUserBilling(userId)])
+  const sameSubscription = Boolean(
+    subscription
+    && subscription.stripeCustomerId === data.stripeCustomerId
+    && subscription.stripeSubscriptionId === data.stripeSubscriptionId
+    && subscription.priceId === data.priceId
+    && subscription.status === data.status
+    && subscription.cancelAtPeriodEnd === data.cancelAtPeriodEnd,
+  )
+  const sameUser = Boolean(
+    billing?.plan === data.plan
+    && billing?.planStatus === data.planStatus
+    && (billing.stripeCustomerId || '') === data.stripeCustomerId
+    && (billing.stripeSubscriptionId || '') === data.stripeSubscriptionId,
+  )
+  if (sameSubscription && sameUser) return
+  if (!sameSubscription) {
+    await upsertSubscription(userId, {
+      stripeCustomerId: data.stripeCustomerId,
+      stripeSubscriptionId: data.stripeSubscriptionId,
+      priceId: data.priceId,
+      status: data.status,
+      currentPeriodStart: data.currentPeriodStart,
+      currentPeriodEnd: data.currentPeriodEnd,
+      cancelAtPeriodEnd: data.cancelAtPeriodEnd,
+    })
+  }
+  await upsertEntitlement(userId, {
+    plan: data.plan,
+    status: data.planStatus,
+    expiresAt: data.currentPeriodEnd,
   })
 }
 
@@ -406,17 +455,16 @@ export async function watchEntitlement(
 export async function upsertEntitlement(userId: string, data: Partial<EntitlementRecord>): Promise<EntitlementRecord> {
   const pb = await getAdminPb()
   const existing = await getEntitlement(userId)
+  const payload: Record<string, unknown> = {}
+  if (data.plan !== undefined) payload.plan = data.plan
+  if (data.status !== undefined) payload.status = data.status
+  if (data.expiresAt !== undefined) payload.expiresAt = data.expiresAt
   const record = existing
-    ? await pb.collection('entitlements').update(existing.id, data)
-    : await pb.collection('entitlements').create({ user: userId, ...data })
+    ? await pb.collection('entitlements').update(existing.id, payload)
+    : await pb.collection('entitlements').create({ user: userId, ...payload })
   await syncUserBilling(userId, {
     plan: data.plan ?? (record as unknown as EntitlementRecord).plan,
     planStatus: data.status ?? (record as unknown as EntitlementRecord).status,
-    aiAccess: data.aiAccess ?? (record as unknown as EntitlementRecord).aiAccess,
-    realtimeAccess: data.realtimeAccess ?? (record as unknown as EntitlementRecord).realtimeAccess,
-    screenAnalysis: data.screenAnalysis ?? (record as unknown as EntitlementRecord).screenAnalysis,
-    audioAccess: data.audioAccess ?? (record as unknown as EntitlementRecord).audioAccess,
-    usageLimits: data.usageLimits ?? (record as unknown as EntitlementRecord).usageLimits,
     expiresAt: data.expiresAt ?? (record as unknown as EntitlementRecord).expiresAt,
   })
   return record as unknown as EntitlementRecord

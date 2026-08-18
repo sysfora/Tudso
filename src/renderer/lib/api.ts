@@ -153,7 +153,7 @@ export const api = {
       subscribeSse<Entitlement | null>('/entitlements/stream', onUpdate, signal),
   },
   usage: {
-    get: () => fetchJson<{ usage: unknown; limits: unknown }>('/usage'),
+    get: () => fetchJson<{ usage: unknown }>('/usage'),
   },
   billing: {
     checkout: (plan: Plan) => fetchJson<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),

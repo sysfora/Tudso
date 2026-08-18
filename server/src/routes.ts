@@ -695,8 +695,8 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
     includeHistory && conversationId ? getMessages(req.userId!, conversationId) : Promise.resolve([]),
     includeProfile ? getProfileContext(req.userId!) : Promise.resolve({ profile: undefined, resume: undefined, contextEntries: undefined }),
   ])
-  if (!entitlement?.aiAccess) {
-    res.status(403).json({ error: 'AI access not available on your plan' })
+  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
+    res.status(403).json({ error: 'Chat requires an active Pro or Premium subscription' })
     return
   }
 
@@ -765,8 +765,8 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
     getEntitlementForUser(req.userId!),
     getProfileContext(req.userId!),
   ])
-  if (!entitlement?.screenAnalysis) {
-    res.status(403).json({ error: 'Screen analysis not available on your plan' })
+  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
+    res.status(403).json({ error: 'Screen answers require an active Pro or Premium subscription' })
     return
   }
 
@@ -798,6 +798,11 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
 })
 
 router.post('/ai/transcribe', requireAuth, aiRateLimiter, upload.single('audio'), async (req: Request, res: Response) => {
+  const entitlement = await getEntitlementForUser(req.userId!)
+  if (!isPaidPlan(entitlement.plan, entitlement.status)) {
+    res.status(403).json({ error: 'Voice input requires an active Pro or Premium subscription' })
+    return
+  }
   if (!req.file) {
     res.status(400).json({ error: 'No audio uploaded' })
     return
@@ -822,8 +827,8 @@ router.post('/ai/transcribe', requireAuth, aiRateLimiter, upload.single('audio')
 
 router.get('/ai/realtime/session', requireAuth, async (req: Request, res: Response) => {
   const entitlement = await getEntitlementForUser(req.userId!)
-  if (!entitlement?.realtimeAccess) {
-    res.status(403).json({ error: 'Realtime not available on your plan' })
+  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
+    res.status(403).json({ error: 'Live copilot requires an active Pro or Premium subscription' })
     return
   }
   // For production, create a short-lived ephemeral session token from the provider
@@ -867,8 +872,7 @@ router.get('/entitlements/stream', requireAuth, async (req: Request, res: Respon
 
 router.get('/usage', requireAuth, async (req: Request, res: Response) => {
   const usage = await getUsageToday(req.userId!)
-  const entitlement = await getEntitlementForUser(req.userId!)
-  res.json({ usage, limits: entitlement?.usageLimits ?? {} })
+  res.json({ usage })
 })
 
 // Billing
