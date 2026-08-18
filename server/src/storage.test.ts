@@ -1,12 +1,8 @@
 import { sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { assertResumeKey, createResumeKey, deleteStoredObject, isR2Configured, localObjectPath, putResumeFile, readStoredObject } from './storage.js'
+import { assertResumeKey, createResumeKey, deleteStoredObject, localObjectPath, putResumeFile, readStoredObject } from './storage.js'
 
 describe('resume storage', () => {
-  it('is local when R2 is not configured', () => {
-    expect(isR2Configured()).toBe(false)
-  })
-
   it('builds a safe object key from the user id and file name', () => {
     const key = createResumeKey('abc123_user!', 'My Resume.PDF')
     expect(key).toMatch(/^resumes\/abc123user\/[0-9a-f-]{36}\.pdf$/)
@@ -18,7 +14,7 @@ describe('resume storage', () => {
     expect(() => assertResumeKey('/etc/passwd')).toThrow('Invalid resume storage key')
   })
 
-  it('stores and reads a resume locally when R2 is unset', async () => {
+  it('stores and reads a leftover local resume file', async () => {
     const stored = await putResumeFile({
       userId: 'user1234567890a',
       buffer: Buffer.from('resume-bytes'),

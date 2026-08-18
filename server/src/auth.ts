@@ -190,7 +190,7 @@ export async function exchangeOAuthCallback(provider: 'google', code: string, st
   const redirectUrl = `${config.app.url}/auth/desktop/oauth/callback`
   try {
     const result = await pb.collection('users').authWithOAuth2Code(provider, code, pending.codeVerifier, redirectUrl)
-    const record = result.record as { id: string; email: string; plan?: string; verified?: boolean }
+    const record = result.record as unknown as { id: string; email: string; plan?: string; verified?: boolean }
     if (result.meta?.isNew || !record.plan) {
       await ensureUserBilling(record.id)
     }

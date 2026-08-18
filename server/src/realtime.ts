@@ -3,10 +3,9 @@ import type { Server } from 'node:http'
 import { transcription } from './ai.js'
 import { resolveAccessToken } from './auth.js'
 import { log, logError } from './log.js'
-import { getOrCreateProfile, incrementUsage, getEntitlementForUser } from './pocketbase.js'
+import { incrementUsage, getEntitlementForUser } from './pocketbase.js'
 import { isPaidPlan } from './plans.js'
 import { isActionableTranscript } from './transcript.js'
-import type { UserProfile } from './types.js'
 
 interface RealtimeSession {
   userId: string
@@ -99,8 +98,7 @@ async function processAudio(ws: WebSocket, session: RealtimeSession): Promise<vo
     if (minutesAfter > minutesBefore) {
       await incrementUsage(session.userId, { audioMinutes: minutesAfter - minutesBefore }).catch(() => undefined)
     }
-    const profile = await getOrCreateProfile(session.userId)
-    send(ws, { type: 'transcript', transcript, context: buildContext(profile, transcript) })
+    send(ws, { type: 'transcript', transcript })
   } catch (error) {
     logError('Realtime transcription failed', error, { user: session.userId })
     send(ws, { type: 'error', message: (error as Error).message })
@@ -108,15 +106,6 @@ async function processAudio(ws: WebSocket, session: RealtimeSession): Promise<vo
     session.transcribing = false
     if (session.chunks.length) void processAudio(ws, session)
   }
-}
-
-function buildContext(profile: UserProfile, transcript: string): string {
-  const parts: string[] = []
-  if (profile.preferredName) parts.push(`User: ${profile.preferredName}`)
-  if (profile.profession) parts.push(`Profession: ${profile.profession}`)
-  if (profile.skills?.length) parts.push(`Skills: ${profile.skills.join(', ')}`)
-  parts.push(`Realtime transcript: ${transcript}`)
-  return parts.join('\n')
 }
 
 function send(ws: WebSocket, message: unknown): void {

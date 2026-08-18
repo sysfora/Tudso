@@ -1,5 +1,6 @@
 import { config } from '@/config'
 import type { BillingPlanPrice, Entitlement, MemoryEntry, Plan, Subscription, UserProfile } from '@/types/api'
+import { toPromptProfile } from '@/types/api'
 
 const API_BASE = config.serverUrl
 
@@ -91,18 +92,6 @@ export const api = {
     delete: (deviceId: string) => fetchJson<{ ok: true; current?: boolean }>(`/me/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),
     revokeOthers: () => fetchJson<{ ok: true; revoked: number }>('/me/sessions/revoke-others', { method: 'POST' }),
   },
-  resume: {
-    upload: (file: File) => {
-      const form = new FormData()
-      form.append('resume', file)
-      return fetchJson<{ id: string; parsed: unknown; skills: string[]; filePath: string; storage: 'r2' | 'local'; fileName: string }>('/me/resume', {
-        method: 'POST',
-        body: form,
-      })
-    },
-    get: () => fetchJson<{ id: string; filePath: string; storage: string; fileName: string; parsedData: unknown; extractedText: string }>('/me/resume'),
-    delete: () => fetchJson<void>('/me/resume', { method: 'DELETE' }),
-  },
   context: {
     get: () => fetchJson<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean }>('/me/context'),
     update: (patch: { entries?: MemoryEntry[]; enabled?: boolean }) =>
@@ -119,22 +108,22 @@ export const api = {
     delete: (id: string) => fetchJson<void>(`/conversations/${id}`, { method: 'DELETE' }),
   },
   ai: {
-    chat: async (message: string, conversationId?: string, signal?: AbortSignal, model?: string) => {
+    chat: async (message: string, conversationId?: string, signal?: AbortSignal, model?: string, profile?: ReturnType<typeof toPromptProfile>) => {
       const response = await fetch(`${API_BASE}/ai/chat`, {
         method: 'POST',
         headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ message, conversationId, stream: true, model }),
+        body: JSON.stringify({ message, conversationId, stream: true, model, profile }),
         signal,
         cache: 'no-store',
       })
       if (!response.ok) throw new Error(await response.text())
       return response.body as ReadableStream<Uint8Array> | null
     },
-    vision: async (image: string, message: string, conversationId?: string, signal?: AbortSignal, model?: string) => {
+    vision: async (image: string, message: string, conversationId?: string, signal?: AbortSignal, model?: string, profile?: ReturnType<typeof toPromptProfile>) => {
       const response = await fetch(`${API_BASE}/ai/vision`, {
         method: 'POST',
         headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ image, message, conversationId, model }),
+        body: JSON.stringify({ image, message, conversationId, model, profile }),
         signal,
         cache: 'no-store',
       })

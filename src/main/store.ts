@@ -4,15 +4,19 @@ import path from 'node:path'
 import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap } from '../shared/defaults'
 import type {
   Conversation,
+  LocalProfile,
+  LocalUserData,
   Settings,
   ShortcutMap,
   WindowBounds,
 } from '../shared/types'
+import { emptyLocalProfile, emptyLocalUser, removeAllProfiles, removeResumeFile, writeResumeFile } from './local-profile'
 
 interface PersistedState {
   settings: Settings
   shortcuts: ShortcutMap
   conversations: Conversation[]
+  users: Record<string, LocalUserData>
   bounds: WindowBounds | null
 }
 
@@ -20,6 +24,7 @@ const EMPTY_STATE: PersistedState = {
   settings: { ...DEFAULT_SETTINGS },
   shortcuts: { ...DEFAULT_SHORTCUTS },
   conversations: [],
+  users: {},
   bounds: null,
 }
 
@@ -93,7 +98,62 @@ export class AppStore {
 
   async deleteLocalData() {
     this.state = structuredClone(EMPTY_STATE)
+    await removeAllProfiles()
     await this.flush()
+  }
+
+  getUserData(userId: string): LocalUserData {
+    const existing = this.state.users[userId]
+    return existing ? structuredClone(existing) : emptyLocalUser()
+  }
+
+  setUserProfile(userId: string, partial: Partial<LocalProfile>): LocalUserData {
+    const current = this.getUserData(userId)
+    const next: LocalUserData = {
+      ...current,
+      profile: {
+        ...emptyLocalProfile(),
+        ...current.profile,
+        ...partial,
+        skills: partial.skills ?? current.profile.skills ?? [],
+        goals: partial.goals ?? current.profile.goals ?? [],
+      },
+    }
+    this.state.users[userId] = next
+    this.queueWrite()
+    return structuredClone(next)
+  }
+
+  completeUserOnboarding(userId: string): LocalUserData {
+    const current = this.getUserData(userId)
+    const next: LocalUserData = { ...current, complete: true }
+    this.state.users[userId] = next
+    this.queueWrite()
+    return structuredClone(next)
+  }
+
+  async saveUserResume(
+    userId: string,
+    file: { fileName: string; mimeType: string; data: ArrayBuffer },
+  ): Promise<LocalUserData> {
+    const current = this.getUserData(userId)
+    if (current.resume?.storedName) await removeResumeFile(userId, current.resume.storedName)
+    const bytes = Buffer.isBuffer(file.data) ? file.data : Buffer.from(new Uint8Array(file.data))
+    const resume = await writeResumeFile(userId, file.fileName, file.mimeType, bytes)
+    const next: LocalUserData = { ...current, resume }
+    this.state.users[userId] = next
+    this.queueWrite()
+    return structuredClone(next)
+  }
+
+  async deleteUserResume(userId: string): Promise<LocalUserData> {
+    const current = this.getUserData(userId)
+    if (current.resume?.storedName) await removeResumeFile(userId, current.resume.storedName)
+    const next: LocalUserData = { ...current }
+    delete next.resume
+    this.state.users[userId] = next
+    this.queueWrite()
+    return structuredClone(next)
   }
 
   private pruneConversations() {
@@ -166,6 +226,7 @@ export class AppStore {
         settings: parsedSettings,
         shortcuts,
         conversations: Array.isArray(parsed.conversations) ? parsed.conversations : [],
+        users: parsed.users && typeof parsed.users === 'object' && !Array.isArray(parsed.users) ? parsed.users : {},
         bounds: parsed.bounds ?? null,
       }
       if (needsDefaults) this.queueWrite()

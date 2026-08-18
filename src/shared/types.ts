@@ -27,6 +27,35 @@ export interface AuthSession {
   deviceId?: string
 }
 
+export interface LocalProfile {
+  preferredName?: string
+  profession?: string
+  role?: string
+  industry?: string
+  education?: string
+  skills: string[]
+  goals: string[]
+  communicationStyle?: 'concise' | 'balanced' | 'detailed'
+  technicalLevel?: 'beginner' | 'intermediate' | 'advanced'
+  formal?: boolean
+  stepByStep?: boolean
+  examples?: boolean
+  explainTerms?: boolean
+  customContext?: string
+}
+
+export interface LocalResumeMeta {
+  fileName: string
+  mimeType: string
+  storedName: string
+}
+
+export interface LocalUserData {
+  complete: boolean
+  profile: LocalProfile
+  resume?: LocalResumeMeta
+}
+
 export type OnboardingStep =
   | 'welcome'
   | 'name'

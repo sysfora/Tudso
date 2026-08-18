@@ -1,7 +1,6 @@
 import OpenAI from 'openai'
 import { config } from './config.js'
 import { logError } from './log.js'
-import { getOrCreateProfile, getResume } from './pocketbase.js'
 import { cleanTranscript } from './transcript.js'
 import type { AIRequest, AIResponse, AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
 import { DEFAULT_PROFILE_PREFERENCES } from './types.js'
@@ -112,25 +111,27 @@ export function buildSystemPrompt(options: {
 const PROFILE_CONTEXT_TTL_MS = 20_000
 const profileContextCache = new Map<string, {
   at: number
-  value: { profile?: UserProfile; resume?: ParsedResume; contextEntries?: string[] }
+  value: { contextEntries?: string[] }
 }>()
 
-export async function getProfileContext(userId: string): Promise<{ profile?: UserProfile; resume?: ParsedResume; contextEntries?: string[] }> {
+export async function getProfileContext(
+  userId: string,
+  profile?: UserProfile,
+): Promise<{ profile?: UserProfile; resume?: ParsedResume; contextEntries?: string[] }> {
   const hit = profileContextCache.get(userId)
-  if (hit && Date.now() - hit.at < PROFILE_CONTEXT_TTL_MS) return hit.value
-  const { getContext } = await import('./pocketbase.js')
-  const [profile, resumeRecord, context] = await Promise.all([
-    getOrCreateProfile(userId),
-    getResume(userId),
-    getContext(userId),
-  ])
-  const value = {
-    profile,
-    resume: resumeRecord?.parsedData,
-    contextEntries: context?.enabled === false ? undefined : context?.entries?.map((entry) => entry.text).filter(Boolean),
+  const contextEntries = hit && Date.now() - hit.at < PROFILE_CONTEXT_TTL_MS
+    ? hit.value.contextEntries
+    : await loadMemoryEntries(userId)
+  if (!hit || Date.now() - hit.at >= PROFILE_CONTEXT_TTL_MS) {
+    profileContextCache.set(userId, { at: Date.now(), value: { contextEntries } })
   }
-  profileContextCache.set(userId, { at: Date.now(), value })
-  return value
+  return { profile, resume: undefined, contextEntries }
+}
+
+async function loadMemoryEntries(userId: string): Promise<string[] | undefined> {
+  const { getContext } = await import('./pocketbase.js')
+  const context = await getContext(userId)
+  return context?.enabled === false ? undefined : context?.entries?.map((entry) => entry.text).filter(Boolean)
 }
 
 export function invalidateProfileContext(userId?: string) {

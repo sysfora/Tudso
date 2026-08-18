@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { api, clearToken, setToken } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
-import type { AuthSession } from '@shared/types'
+import type { AuthSession, LocalProfile } from '@shared/types'
 import type { Entitlement, MemoryEntry, Plan, UserProfile } from '@/types/api'
+import { toUserProfile } from '@/types/api'
 import { canHideFromCapture } from '@shared/plans'
 
 let entitlementStream: AbortController | null = null
@@ -139,15 +140,16 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     await api.auth.logout().catch(() => undefined)
     await desktop.auth.clearSession()
     clearToken()
-    localStorage.removeItem('tudso.onboardingComplete')
     void desktop.window.setHideFromCaptureAllowed(false)
     set({ session: null, profile: null, entitlement: null, memories: [], memoriesLoaded: false, memoryEnabled: true, onboardingComplete: false, loginStatus: 'idle', loginError: null })
   },
 
   loadProfile: async () => {
+    const userId = get().session?.userId
+    if (!userId) return
     try {
-      const profile = await api.me.getProfile()
-      set({ profile })
+      const local = await desktop.profile.get(userId)
+      set({ profile: toUserProfile(userId, local.profile), onboardingComplete: local.complete === true })
     } catch {
       // ignore
     }
@@ -155,16 +157,17 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
   hydrateSignedIn: async (session: AuthSession) => {
     setToken(session.token)
-    const [me] = await Promise.all([
+    const [, local] = await Promise.all([
       api.me.get(),
+      desktop.profile.get(session.userId),
       get().loadEntitlement(),
       get().loadMemories(),
     ])
     startEntitlementStream((entitlement) => set({ entitlement }))
     set({
       session,
-      profile: me.profile,
-      onboardingComplete: me.onboardingComplete === true,
+      profile: toUserProfile(session.userId, local.profile),
+      onboardingComplete: local.complete === true,
       loading: false,
       loginStatus: 'idle',
       loginError: null,
@@ -172,15 +175,24 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   },
 
   updateProfile: async (partial) => {
-    const profile = await api.me.updateProfile(partial)
+    const userId = get().session?.userId
+    if (!userId) throw new Error('Not signed in')
+    const local = await desktop.profile.set(userId, partial as Partial<LocalProfile>)
+    const profile = toUserProfile(userId, local.profile)
     set({ profile })
   },
 
   setOnboardingStep: (step) => set({ onboardingStep: step }),
 
   completeOnboarding: async () => {
-    await api.me.completeOnboarding()
-    set({ onboardingComplete: true, onboardingStep: 0 })
+    const userId = get().session?.userId
+    if (!userId) throw new Error('Not signed in')
+    const local = await desktop.profile.complete(userId)
+    set({
+      profile: toUserProfile(userId, local.profile),
+      onboardingComplete: true,
+      onboardingStep: 0,
+    })
   },
 
   loadEntitlement: async () => {

@@ -70,6 +70,13 @@ const api: ElectronAPI = {
     delete: (id: string) => ipcRenderer.invoke(CHANNELS.conversationsDelete, id),
     clear: () => ipcRenderer.invoke(CHANNELS.conversationsClear),
   },
+  profile: {
+    get: (userId: string) => ipcRenderer.invoke(CHANNELS.profileGet, userId),
+    set: (userId: string, profile) => ipcRenderer.invoke(CHANNELS.profileSet, userId, profile),
+    complete: (userId: string) => ipcRenderer.invoke(CHANNELS.profileComplete, userId),
+    saveResume: (userId: string, file) => ipcRenderer.invoke(CHANNELS.profileSaveResume, userId, file),
+    deleteResume: (userId: string) => ipcRenderer.invoke(CHANNELS.profileDeleteResume, userId),
+  },
   ai: {
     chat: (request: ChatRequest) => ipcRenderer.send(CHANNELS.aiChat, request),
     stop: () => ipcRenderer.send(CHANNELS.aiStop),

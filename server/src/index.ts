@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
 import routes from './routes.js'
 import { attachRealtimeAudio } from './realtime.js'
-import { isR2Configured, localStorageRoot } from './storage.js'
 import { log, requestLogger } from './log.js'
 
 const app = express()
@@ -84,7 +83,6 @@ server.listen(config.app.port, () => {
     port: config.app.port,
     env: config.app.env,
   })
-  log.info('Resume storage', { backend: isR2Configured() ? 'r2' : 'local', path: isR2Configured() ? undefined : localStorageRoot() })
 })
 
 process.on('unhandledRejection', (reason) => {

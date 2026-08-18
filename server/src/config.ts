@@ -56,14 +56,6 @@ export const config = {
     jwtSecret: required('JWT_SECRET'),
     encryptionKey: required('ENCRYPTION_KEY'),
   },
-  r2: {
-    accountId: optional('R2_ACCOUNT_ID', ''),
-    accessKeyId: optional('R2_ACCESS_KEY_ID', ''),
-    secretAccessKey: optional('R2_SECRET_ACCESS_KEY', ''),
-    bucket: optional('R2_BUCKET', ''),
-    endpoint: optional('R2_ENDPOINT', ''),
-    publicUrl: optional('R2_PUBLIC_URL', ''),
-  },
   storage: {
     localDir: optional('RESUME_STORAGE_DIR', 'data'),
   },

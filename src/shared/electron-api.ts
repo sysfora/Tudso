@@ -4,6 +4,9 @@ import type {
   AuthSession,
   ChatRequest,
   Conversation,
+  LocalProfile,
+  LocalResumeMeta,
+  LocalUserData,
   PickedFile,
   Settings,
   ShortcutId,
@@ -60,6 +63,13 @@ export interface ElectronAPI {
     save: (conversation: Conversation) => Promise<void>
     delete: (id: string) => Promise<void>
     clear: () => Promise<void>
+  }
+  profile: {
+    get: (userId: string) => Promise<LocalUserData>
+    set: (userId: string, profile: Partial<LocalProfile>) => Promise<LocalUserData>
+    complete: (userId: string) => Promise<LocalUserData>
+    saveResume: (userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalResumeMeta>
+    deleteResume: (userId: string) => Promise<LocalUserData>
   }
   ai: {
     chat: (request: ChatRequest) => void

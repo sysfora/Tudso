@@ -16,6 +16,7 @@ import { create } from 'zustand'
 import { api } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import { useAuthStore } from '@/store/auth-store'
+import { toPromptProfile } from '@/types/api'
 import { codeFromAnswer, markdownToPlain } from '@/lib/clipboard-format'
 import { createId, makeTitle } from '@/lib/format'
 
@@ -428,9 +429,10 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
     try {
       const model = resolveChatModel(get().settings.model)
+      const profile = toPromptProfile(useAuthStore.getState().profile)
       const stream = image
-        ? await api.ai.vision(image, apiMessage, next.id, abortController.signal, model)
-        : await api.ai.chat(apiMessage, next.id, abortController.signal, model)
+        ? await api.ai.vision(image, apiMessage, next.id, abortController.signal, model, profile)
+        : await api.ai.chat(apiMessage, next.id, abortController.signal, model, profile)
       if (!stream) throw new Error('No response stream')
       const reader = stream.getReader()
       const decoder = new TextDecoder()
@@ -515,7 +517,13 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       generatingId: assistantMessage.id,
     })
     try {
-      const stream = await api.ai.chat(lastUser.content, next.id, abortController.signal, resolveChatModel(get().settings.model))
+      const stream = await api.ai.chat(
+        lastUser.content,
+        next.id,
+        abortController.signal,
+        resolveChatModel(get().settings.model),
+        toPromptProfile(useAuthStore.getState().profile),
+      )
       if (!stream) throw new Error('No response stream')
       const reader = stream.getReader()
       const decoder = new TextDecoder()
@@ -595,6 +603,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   deleteLocalData: async () => {
     await desktop.app.deleteLocalData()
+    useAuthStore.setState({ profile: null, onboardingComplete: false })
     set({
       settings: DEFAULT_SETTINGS,
       shortcuts: DEFAULT_SHORTCUTS,

@@ -1,6 +1,5 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
-import path from 'node:path'
 import express, { type Request, type Response, type Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
@@ -12,12 +11,11 @@ import { config } from './config.js'
 import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
 import { aiRateLimiter, rateLimiter, requireAuth, sensitiveRateLimiter } from './middleware.js'
-import { createConversation, createMessage, deleteConversation, deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteResume, deleteUserData, getConversations, getContext, getDevices, getEntitlementForUser, getMessages, getOrCreateProfile, getResume, getSubscription, getUsageToday, getUserBilling, incrementUsage, resumeStorageRef, syncUserBilling, updateContext, updateProfile, upsertResume, watchEntitlement } from './pocketbase.js'
+import { createConversation, createMessage, deleteConversation, deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getConversations, getContext, getDevices, getEntitlementForUser, getMessages, getOrCreateProfile, getResume, getSubscription, getUsageToday, getUserBilling, incrementUsage, syncUserBilling, updateContext, updateProfile, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS, normalizeMemoryEntries } from './memory.js'
-import { deleteStoredObject, putResumeFile, readStoredObject } from './storage.js'
 import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
 import { isPaidPlan } from './plans.js'
-import type { AIStreamHandler, ChatMessage, Plan } from './types.js'
+import type { AIStreamHandler, ChatMessage, Plan, UserProfile } from './types.js'
 
 const DEVICE_ID = z.string().min(1).max(128).regex(/^[a-zA-Z0-9._:-]+$/)
 
@@ -27,6 +25,47 @@ function bearerToken(req: Request): string {
 }
 
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 10 * 1024 * 1024 } })
+
+const clientProfileSchema = z.object({
+  preferredName: z.string().max(120).optional(),
+  profession: z.string().max(160).optional(),
+  role: z.string().max(160).optional(),
+  industry: z.string().max(160).optional(),
+  education: z.string().max(200).optional(),
+  skills: z.array(z.string().max(80)).max(50).optional(),
+  goals: z.array(z.string().max(200)).max(30).optional(),
+  communicationStyle: z.enum(['concise', 'balanced', 'detailed']).optional(),
+  technicalLevel: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
+  formal: z.boolean().optional(),
+  stepByStep: z.boolean().optional(),
+  examples: z.boolean().optional(),
+  explainTerms: z.boolean().optional(),
+  customContext: z.string().max(2000).optional(),
+}).optional()
+
+function clientProfile(userId: string, body?: z.infer<typeof clientProfileSchema>): UserProfile | undefined {
+  if (!body) return undefined
+  return {
+    id: userId,
+    user: userId,
+    preferredName: body.preferredName,
+    profession: body.profession,
+    role: body.role,
+    industry: body.industry,
+    education: body.education,
+    skills: body.skills ?? [],
+    goals: body.goals ?? [],
+    communicationStyle: body.communicationStyle,
+    technicalLevel: body.technicalLevel,
+    formal: body.formal,
+    stepByStep: body.stepByStep,
+    examples: body.examples,
+    explainTerms: body.explainTerms,
+    customContext: body.customContext,
+    created: '',
+    updated: '',
+  }
+}
 
 const router: Router = express.Router()
 
@@ -577,97 +616,14 @@ router.patch('/me/profile', requireAuth, rateLimiter, async (req: Request, res: 
   res.json(profile)
 })
 
-// Resume
-router.post('/me/resume', requireAuth, upload.single('resume'), async (req: Request, res: Response) => {
-  if (!req.file) {
-    res.status(400).json({ error: 'No file uploaded' })
-    return
-  }
-  const tempPath = req.file.path
-  let storedKey: { backend?: 'r2' | 'local'; key?: string } | undefined
-  try {
-    const mimeType = resumeMimeType(req.file)
-    const fileBuffer = await fs.readFile(tempPath)
-    const text = await extractText(tempPath, mimeType)
-    const parsed = parseResume(text)
-    const existing = await getResume(req.userId!)
-    const stored = await putResumeFile({
-      userId: req.userId!,
-      buffer: fileBuffer,
-      fileName: req.file.originalname || `resume${path.extname(req.file.originalname || '.pdf')}`,
-      mimeType,
-    })
-    storedKey = stored
-    const resume = await upsertResume(req.userId!, {
-      extractedText: text,
-      parsedData: parsed,
-      filePath: stored.key,
-      storage: stored.backend,
-      fileName: stored.fileName,
-      mimeType: stored.mimeType,
-    })
-    await deleteStoredObject(resumeStorageRef(existing)).catch(() => undefined)
-    res.json({
-      id: resume.id,
-      parsed,
-      skills: parsed.skills,
-      filePath: stored.key,
-      storage: stored.backend,
-      fileName: stored.fileName,
-    })
-  } catch (error) {
-    if (storedKey) await deleteStoredObject(storedKey).catch(() => undefined)
-    logError('Failed to save resume', error, { user: req.userId })
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Could not save resume' })
-  } finally {
-    await fs.unlink(tempPath).catch(() => undefined)
-  }
-})
-
-router.get('/me/resume', requireAuth, async (req: Request, res: Response) => {
-  const resume = await getResume(req.userId!)
-  if (!resume) {
-    res.status(404).json({ error: 'No resume found' })
-    return
-  }
-  const stored = resumeStorageRef(resume)
-  res.json({
-    id: resume.id,
-    parsedData: resume.parsedData,
-    extractedText: resume.extractedText,
-    filePath: stored.key ?? '',
-    storage: stored.backend ?? '',
-    fileName: resume.parsedData?.fileName ?? '',
-  })
-})
-
-router.get('/me/resume/file', requireAuth, async (req: Request, res: Response) => {
-  const resume = await getResume(req.userId!)
-  if (!resume) {
-    res.status(404).json({ error: 'No resume found' })
-    return
-  }
-  const stored = resumeStorageRef(resume)
-  if (!stored.key) {
-    res.status(404).json({ error: 'Resume file is not stored' })
-    return
-  }
-  try {
-    const file = await readStoredObject(stored)
-    const fileName = resume.parsedData?.fileName || path.basename(stored.key)
-    res.setHeader('Content-Type', file.mimeType || resume.parsedData?.mimeType || 'application/octet-stream')
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName.replace(/"/g, '')}"`)
-    res.send(file.buffer)
-  } catch (error) {
-    logError('Failed to read resume file', error, { user: req.userId })
-    res.status(404).json({ error: 'Resume file not found' })
-  }
-})
-
-router.delete('/me/resume', requireAuth, async (req: Request, res: Response) => {
-  await deleteResume(req.userId!)
-  res.json({ ok: true })
-})
+// Resume files stay on the device. These routes remain so old clients fail clearly.
+function resumeGone(_req: Request, res: Response) {
+  res.status(410).json({ error: 'Resumes are stored on the device, not the server' })
+}
+router.post('/me/resume', requireAuth, resumeGone)
+router.get('/me/resume', requireAuth, resumeGone)
+router.get('/me/resume/file', requireAuth, resumeGone)
+router.delete('/me/resume', requireAuth, resumeGone)
 
 // Conversations
 router.get('/conversations', requireAuth, async (req: Request, res: Response) => {
@@ -700,13 +656,16 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
     includeProfile: z.boolean().default(true),
     includeHistory: z.boolean().default(true),
     model: z.enum(['gpt-4.1-nano', 'gpt-4.1']).optional(),
+    profile: clientProfileSchema,
   })
-  const { conversationId, message, stream, includeProfile, includeHistory, model } = schema.parse(req.body)
+  const { conversationId, message, stream, includeProfile, includeHistory, model, profile: profileBody } = schema.parse(req.body)
 
   const [entitlement, historyRecords, profileContext] = await Promise.all([
     getEntitlementForUser(req.userId!),
     includeHistory && conversationId ? getMessages(req.userId!, conversationId) : Promise.resolve([]),
-    includeProfile ? getProfileContext(req.userId!) : Promise.resolve({ profile: undefined, resume: undefined, contextEntries: undefined }),
+    includeProfile
+      ? getProfileContext(req.userId!, clientProfile(req.userId!, profileBody))
+      : Promise.resolve({ profile: undefined, resume: undefined, contextEntries: undefined }),
   ])
   if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
     res.status(403).json({ error: 'Chat requires an active Pro or Premium subscription' })
@@ -771,12 +730,13 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
     message: z.string().min(1),
     conversationId: z.string().optional(),
     model: z.enum(['gpt-4.1-nano', 'gpt-4.1']).optional(),
+    profile: clientProfileSchema,
   })
-  const { image, message, conversationId, model } = schema.parse(req.body)
+  const { image, message, conversationId, model, profile: profileBody } = schema.parse(req.body)
 
   const [entitlement, profileContext] = await Promise.all([
     getEntitlementForUser(req.userId!),
-    getProfileContext(req.userId!),
+    getProfileContext(req.userId!, clientProfile(req.userId!, profileBody)),
   ])
   if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
     res.status(403).json({ error: 'Screen answers require an active Pro or Premium subscription' })
@@ -1093,15 +1053,6 @@ function storedUserContent(message: string): string {
 function pocketbaseError(error: unknown): unknown {
   const err = error as { data?: unknown; response?: unknown; message?: string }
   return err.data ?? err.response ?? err.message ?? error
-}
-
-function resumeMimeType(file: Express.Multer.File): string {
-  const name = (file.originalname || '').toLowerCase()
-  if (name.endsWith('.pdf')) return 'application/pdf'
-  if (name.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  if (name.endsWith('.txt') || name.endsWith('.md')) return 'text/plain'
-  if (file.mimetype && file.mimetype !== 'application/octet-stream') return file.mimetype
-  return 'application/pdf'
 }
 
 function compareVersions(a: string, b: string): number {

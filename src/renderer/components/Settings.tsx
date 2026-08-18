@@ -16,7 +16,6 @@ import { MAX_MEMORIES, MAX_MEMORY_CHARS, resolveProfilePreferences } from '@/typ
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
-import { api } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import { cn } from '@/lib/cn'
 import { createId, formatMemoryDate } from '@/lib/format'
@@ -415,21 +414,10 @@ function parseLines(value: string) {
     .filter(Boolean)
 }
 
-function uniqueStrings(values: string[]) {
-  const seen = new Set<string>()
-  const next: string[] = []
-  for (const value of values) {
-    const key = value.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    next.push(value)
-  }
-  return next
-}
-
 function ProfileSection() {
   const query = useContext(SettingsSearchContext)
   const searching = Boolean(normalizeSearch(query))
+  const session = useAuthStore((state) => state.session)
   const profile = useAuthStore((state) => state.profile)
   const updateProfile = useAuthStore((state) => state.updateProfile)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -454,13 +442,12 @@ function ProfileSection() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Data fetch on mount; resume filename is needed for the row.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void api.resume
-      .get()
-      .then((resume) => setResumeName(resume.fileName || 'Resume'))
-      .catch(() => setResumeName(null))
-  }, [])
+    const userId = session?.userId
+    if (!userId) return
+    void desktop.profile.get(userId).then((local) => {
+      setResumeName(local.resume?.fileName ?? null)
+    })
+  }, [session?.userId])
 
   const payload = (overrides: Partial<UserProfile> = {}): Partial<UserProfile> => ({
     preferredName: preferredName.trim(),
@@ -491,28 +478,36 @@ function ProfileSection() {
   }
 
   const uploadResume = async (file: File) => {
+    const userId = session?.userId
+    if (!userId) {
+      setError('Sign in to save a resume on this device.')
+      return
+    }
     setResumeBusy(true)
     setError(null)
     try {
-      const result = await api.resume.upload(file)
-      const mergedSkills = uniqueStrings([...parseCommaList(skills), ...result.skills])
-      setResumeName(result.fileName || file.name)
-      setSkills(mergedSkills.join(', '))
-      await updateProfile(payload({ skills: mergedSkills }))
-      setStatus(result.skills.length ? 'Resume saved. Skills were updated from the file.' : 'Resume saved.')
+      const saved = await desktop.profile.saveResume(userId, {
+        fileName: file.name,
+        mimeType: file.type,
+        data: await file.arrayBuffer(),
+      })
+      setResumeName(saved.fileName || file.name)
+      setStatus('Resume saved on this device.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not upload resume.')
+      setError(err instanceof Error ? err.message : 'Could not save resume.')
     } finally {
       setResumeBusy(false)
     }
   }
 
   const removeResume = async () => {
-    if (!window.confirm('Remove the uploaded resume?')) return
+    const userId = session?.userId
+    if (!userId) return
+    if (!window.confirm('Remove the resume stored on this device?')) return
     setResumeBusy(true)
     setError(null)
     try {
-      await api.resume.delete()
+      await desktop.profile.deleteResume(userId)
       setResumeName(null)
       setStatus('Resume removed.')
     } catch (err) {
@@ -526,7 +521,7 @@ function ProfileSection() {
     <div className="space-y-6">
       {searching ? null : (
         <p className="text-[12px] leading-relaxed text-muted">
-          Tudso uses this to personalize answers. You can leave anything blank.
+          Tudso uses this to personalize answers on this device. You can leave anything blank.
         </p>
       )}
 
@@ -726,8 +721,8 @@ function ProfileSection() {
             title="Resume"
             description={
               resumeName
-                ? `${resumeName}. Used for career, skills, and background questions.`
-                : 'Optional. Helps with career, skills, and background questions.'
+                ? `${resumeName}. Kept on this device.`
+                : 'Optional. Kept on this device, not uploaded to the server.'
             }
           >
             <input

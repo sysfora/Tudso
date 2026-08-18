@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
 import { useAuthStore } from '@/store/auth-store'
-import { api } from '@/lib/api'
+import { desktop } from '@/lib/desktop'
 import { cn } from '@/lib/cn'
 import { DEFAULT_PROFILE_PREFERENCES } from '@/types/api'
 
@@ -13,7 +13,7 @@ const STEPS = [
   },
   {
     title: 'Add your resume',
-    description: 'Optional. We can pull skills from it, or you can skip.',
+    description: 'Optional. Saved on this device. You can skip.',
   },
   {
     title: 'Skills and goals',
@@ -26,6 +26,7 @@ const STEPS = [
 ] as const
 
 export function OnboardingFlow() {
+  const session = useAuthStore((state) => state.session)
   const profile = useAuthStore((state) => state.profile)
   const updateProfile = useAuthStore((state) => state.updateProfile)
   const completeOnboarding = useAuthStore((state) => state.completeOnboarding)
@@ -42,6 +43,7 @@ export function OnboardingFlow() {
     profile?.technicalLevel ?? DEFAULT_PROFILE_PREFERENCES.technicalLevel,
   )
   const [resumeUploading, setResumeUploading] = useState(false)
+  const [resumeName, setResumeName] = useState('')
   const [saving, setSaving] = useState(false)
   const [resumeError, setResumeError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -58,6 +60,14 @@ export function OnboardingFlow() {
     if (profile.communicationStyle) setCommunicationStyle(profile.communicationStyle)
     if (profile.technicalLevel) setTechnicalLevel(profile.technicalLevel)
   }, [profile])
+
+  useEffect(() => {
+    const userId = session?.userId
+    if (!userId) return
+    void desktop.profile.get(userId).then((local) => {
+      if (local.resume?.fileName) setResumeName(local.resume.fileName)
+    })
+  }, [session?.userId])
 
   const last = step === STEPS.length - 1
   const busy = saving || resumeUploading
@@ -99,15 +109,22 @@ export function OnboardingFlow() {
   }
 
   const uploadResume = async (file: File) => {
+    const userId = session?.userId
+    if (!userId) {
+      setResumeError('Sign in to save a resume on this device.')
+      return
+    }
     setResumeUploading(true)
     setResumeError('')
     try {
-      const result = await api.resume.upload(file)
-      await updateProfile({ skills: result.skills })
-      setSkills(result.skills.join(', '))
-      setStep(step + 1)
+      const saved = await desktop.profile.saveResume(userId, {
+        fileName: file.name,
+        mimeType: file.type,
+        data: await file.arrayBuffer(),
+      })
+      setResumeName(saved.fileName || file.name)
     } catch (error) {
-      setResumeError(error instanceof Error ? error.message : 'Could not upload resume')
+      setResumeError(error instanceof Error ? error.message : 'Could not save resume')
     } finally {
       setResumeUploading(false)
     }
@@ -178,6 +195,7 @@ export function OnboardingFlow() {
               >
                 Upload resume (PDF, DOCX, TXT)
               </Button>
+              {resumeName ? <p className="text-[12px] text-muted">{resumeName} saved on this device.</p> : null}
               {resumeError ? <p className="text-[12px] text-danger">{resumeError}</p> : null}
             </div>
           )}
@@ -232,7 +250,7 @@ export function OnboardingFlow() {
           ) : null}
           {step === 1 ? (
             <Button variant="outline" className="flex-1" onClick={() => setStep(step + 1)} disabled={resumeUploading}>
-              Skip
+              {resumeName ? 'Continue' : 'Skip'}
             </Button>
           ) : (
             <Button className="flex-1" onClick={() => void next()} loading={saving}>

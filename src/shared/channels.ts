@@ -47,6 +47,12 @@ export const CHANNELS = {
   conversationsDelete: 'conversations:delete',
   conversationsClear: 'conversations:clear',
 
+  profileGet: 'profile:get',
+  profileSet: 'profile:set',
+  profileComplete: 'profile:complete',
+  profileSaveResume: 'profile:save-resume',
+  profileDeleteResume: 'profile:delete-resume',
+
   aiChat: 'ai:chat',
   aiStop: 'ai:stop',
   aiChunk: 'ai:chunk',

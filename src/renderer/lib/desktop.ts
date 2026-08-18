@@ -1,15 +1,33 @@
 import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap } from '@shared/defaults'
 import type { ElectronAPI } from '@shared/electron-api'
-import type { AppCommand, Conversation, Settings, ShortcutMap } from '@shared/types'
+import type { AppCommand, Conversation, LocalProfile, LocalUserData, Settings, ShortcutMap } from '@shared/types'
+
+function emptyLocalUser(): LocalUserData {
+  return {
+    complete: false,
+    profile: {
+      skills: [],
+      goals: [],
+      communicationStyle: 'balanced',
+      technicalLevel: 'intermediate',
+      formal: false,
+      stepByStep: true,
+      examples: true,
+      explainTerms: true,
+    },
+  }
+}
 
 let memory: {
   settings: Settings
   shortcuts: ShortcutMap
   conversations: Conversation[]
+  users: Record<string, LocalUserData>
 } = {
   settings: { ...DEFAULT_SETTINGS },
   shortcuts: { ...DEFAULT_SHORTCUTS },
   conversations: [],
+  users: {},
 }
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -25,6 +43,7 @@ function createMock(): ElectronAPI {
   memory.settings = readStorage('tudso.settings', { ...DEFAULT_SETTINGS })
   memory.shortcuts = normalizeShortcutMap(readStorage('tudso.shortcuts', { ...DEFAULT_SHORTCUTS }))
   memory.conversations = readStorage('tudso.conversations', [])
+  memory.users = readStorage('tudso.users', {})
 
   const listeners = {
     settings: new Set<(value: Settings) => void>(),
@@ -119,6 +138,47 @@ function createMock(): ElectronAPI {
         localStorage.setItem('tudso.conversations', JSON.stringify(memory.conversations))
       },
     },
+    profile: {
+      get: async (userId) => structuredClone(memory.users[userId] ?? emptyLocalUser()),
+      set: async (userId, profile: Partial<LocalProfile>) => {
+        const current = memory.users[userId] ?? emptyLocalUser()
+        const next: LocalUserData = {
+          ...current,
+          profile: {
+            ...emptyLocalUser().profile,
+            ...current.profile,
+            ...profile,
+            skills: profile.skills ?? current.profile.skills ?? [],
+            goals: profile.goals ?? current.profile.goals ?? [],
+          },
+        }
+        memory.users[userId] = next
+        localStorage.setItem('tudso.users', JSON.stringify(memory.users))
+        return structuredClone(next)
+      },
+      complete: async (userId) => {
+        const current = memory.users[userId] ?? emptyLocalUser()
+        const next: LocalUserData = { ...current, complete: true }
+        memory.users[userId] = next
+        localStorage.setItem('tudso.users', JSON.stringify(memory.users))
+        return structuredClone(next)
+      },
+      saveResume: async (userId, file) => {
+        const current = memory.users[userId] ?? emptyLocalUser()
+        const resume = { fileName: file.fileName, mimeType: file.mimeType, storedName: 'resume.bin' }
+        memory.users[userId] = { ...current, resume }
+        localStorage.setItem('tudso.users', JSON.stringify(memory.users))
+        return resume
+      },
+      deleteResume: async (userId) => {
+        const current = memory.users[userId] ?? emptyLocalUser()
+        const next: LocalUserData = { ...current }
+        delete next.resume
+        memory.users[userId] = next
+        localStorage.setItem('tudso.users', JSON.stringify(memory.users))
+        return structuredClone(next)
+      },
+    },
     ai: {
       chat: (request) => {
         const text = [
@@ -178,6 +238,7 @@ function createMock(): ElectronAPI {
           settings: { ...DEFAULT_SETTINGS },
           shortcuts: { ...DEFAULT_SHORTCUTS },
           conversations: [],
+          users: {},
         }
         localStorage.clear()
       },

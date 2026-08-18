@@ -28,6 +28,62 @@ export const DEFAULT_PROFILE_PREFERENCES = {
   explainTerms: true,
 } as const
 
+export function toUserProfile(userId: string, profile: {
+  preferredName?: string
+  profession?: string
+  role?: string
+  industry?: string
+  education?: string
+  skills?: string[]
+  goals?: string[]
+  communicationStyle?: UserProfile['communicationStyle']
+  technicalLevel?: UserProfile['technicalLevel']
+  formal?: boolean
+  stepByStep?: boolean
+  examples?: boolean
+  explainTerms?: boolean
+  customContext?: string
+}): UserProfile {
+  return {
+    id: userId,
+    user: userId,
+    preferredName: profile.preferredName,
+    profession: profile.profession,
+    role: profile.role,
+    industry: profile.industry,
+    education: profile.education,
+    skills: profile.skills ?? [],
+    goals: profile.goals ?? [],
+    communicationStyle: profile.communicationStyle,
+    technicalLevel: profile.technicalLevel,
+    formal: profile.formal,
+    stepByStep: profile.stepByStep,
+    examples: profile.examples,
+    explainTerms: profile.explainTerms,
+    customContext: profile.customContext,
+  }
+}
+
+export function toPromptProfile(profile?: UserProfile | null) {
+  if (!profile) return undefined
+  return {
+    preferredName: profile.preferredName,
+    profession: profile.profession,
+    role: profile.role,
+    industry: profile.industry,
+    education: profile.education,
+    skills: profile.skills ?? [],
+    goals: profile.goals ?? [],
+    communicationStyle: profile.communicationStyle,
+    technicalLevel: profile.technicalLevel,
+    formal: profile.formal,
+    stepByStep: profile.stepByStep,
+    examples: profile.examples,
+    explainTerms: profile.explainTerms,
+    customContext: profile.customContext,
+  }
+}
+
 export function resolveProfilePreferences(profile?: UserProfile | null) {
   const unset =
     !profile ||
