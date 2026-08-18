@@ -152,7 +152,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       }))
       set({
         ready: true,
-        settings,
+        settings: { ...settings, privacyMode: false },
         shortcuts: normalizeShortcutMap(shortcuts),
         blockedShortcuts,
         conversations,
@@ -165,7 +165,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     } catch {
       set({
         ready: true,
-        settings,
+        settings: { ...settings, privacyMode: false },
         shortcuts: normalizeShortcutMap(shortcuts),
         blockedShortcuts,
         conversations: [],
@@ -201,8 +201,11 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   setSettings: async (partial) => {
-    const settings = await desktop.settings.set(partial)
-    set({ settings })
+    const current = get().settings
+    const nextPrivacy = partial.privacyMode ?? current.privacyMode
+    const persisted = { ...partial, privacyMode: false }
+    const settings = await desktop.settings.set(persisted)
+    set({ settings: { ...settings, privacyMode: Boolean(nextPrivacy) } })
   },
 
   setShortcut: async (id, accelerator) => {
@@ -223,7 +226,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   resetSettings: async () => {
     const settings = await desktop.settings.set({ ...DEFAULT_SETTINGS })
-    set({ settings })
+    set({ settings: { ...settings, privacyMode: false } })
   },
 
   setComposer: (composer) => set({ composer }),
@@ -256,7 +259,9 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
   setLocked: (locked) => set({ locked }),
   setApiKeyConfigured: (apiKeyConfigured) => set({ apiKeyConfigured }),
-  replaceSettings: (settings) => set({ settings }),
+  replaceSettings: (settings) => set((state) => ({
+    settings: { ...settings, privacyMode: state.settings.privacyMode },
+  })),
   replaceShortcuts: (shortcuts) => set({ shortcuts: normalizeShortcutMap(shortcuts) }),
   setBlockedShortcuts: (blockedShortcuts) => set({ blockedShortcuts }),
 

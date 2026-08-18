@@ -176,7 +176,7 @@
     "listRule": "id = @request.auth.id",
     "viewRule": "id = @request.auth.id",
     "createRule": "",
-    "updateRule": "id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false",
+    "updateRule": "id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.freeAccess:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false && @request.body.onboardingComplete:isset = false",
     "deleteRule": "id = @request.auth.id",
     "name": "users",
     "type": "auth",
@@ -315,6 +315,20 @@
           "past_due",
           "canceled",
           "unpaid"
+        ]
+      },
+      {
+        "hidden": false,
+        "id": "select4100000912",
+        "maxSelect": 1,
+        "name": "freeAccess",
+        "presentable": true,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "pro",
+          "premium"
         ]
       },
       {

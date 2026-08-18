@@ -77,6 +77,7 @@ export interface EntitlementRecord {
   user: string
   plan: Plan
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid'
+  freeAccess?: 'pro' | 'premium'
   expiresAt: string
   created: string
   updated: string

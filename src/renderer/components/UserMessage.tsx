@@ -24,7 +24,7 @@ export function UserMessage({
         <article className="anim-rise rounded-lg px-5 py-4 transition-colors duration-150 hover:bg-raised" data-role="user" data-message-id={message.id}>
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">User</p>
           {hidden ? (
-            <p className="mt-1 whitespace-pre-wrap text-[14.5px] leading-relaxed">Hidden by privacy mode</p>
+            <p className="mt-1 text-[14.5px] leading-relaxed text-muted">Message hidden</p>
           ) : message.content ? (
             <p className="mt-1 whitespace-pre-wrap text-[14.5px] leading-relaxed">{message.content}</p>
           ) : null}

@@ -1,7 +1,7 @@
 import Stripe from 'stripe'
 import { config } from './config.js'
 import { log } from './log.js'
-import { getSubscription, upsertEntitlement, upsertSubscription } from './pocketbase.js'
+import { getSubscription, upsertEntitlement, upsertSubscription, type UserBilling } from './pocketbase.js'
 import type { EntitlementRecord, Plan, SubscriptionRecord } from './types.js'
 
 const LIVE_PLAN_TTL_MS = 8_000
@@ -107,12 +107,15 @@ async function fetchStripeSubscription(subscriptionId?: string, customerId?: str
   return pickStripeSubscription(listed.data)
 }
 
-export async function resolveLiveEntitlement(userId: string): Promise<EntitlementRecord> {
+export async function resolveLiveEntitlement(userId: string, billingHint?: UserBilling | null): Promise<EntitlementRecord> {
   const cached = liveEntitlementCache.get(userId)
   if (cached && Date.now() - cached.at < LIVE_PLAN_TTL_MS) return cached.value
 
   const { entitlementFromBilling, getUserBilling, persistLiveBilling, unpaidEntitlement, syncUserBilling } = await import('./pocketbase.js')
-  const [subscription, billing] = await Promise.all([getSubscription(userId), getUserBilling(userId)])
+  const [subscription, billing] = await Promise.all([
+    getSubscription(userId),
+    billingHint !== undefined ? Promise.resolve(billingHint) : getUserBilling(userId),
+  ])
   const subscriptionId = subscription?.stripeSubscriptionId || billing?.stripeSubscriptionId
   const customerId = subscription?.stripeCustomerId || billing?.stripeCustomerId
 

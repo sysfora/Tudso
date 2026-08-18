@@ -109,7 +109,7 @@ export class AppStore {
       const parsed = JSON.parse(raw) as Partial<PersistedState>
       const parsedSettings = { ...DEFAULT_SETTINGS, ...parsed.settings }
       const savedRevision = parsed.settings?.defaultsRevision ?? 0
-      const needsDefaults = savedRevision < 10
+      const needsDefaults = savedRevision < 11
       if (savedRevision < 1) {
         parsedSettings.rememberPosition = true
         parsedSettings.rememberSize = true
@@ -157,6 +157,10 @@ export class AppStore {
           shortcuts.scrollDown = DEFAULT_SHORTCUTS.scrollDown
         }
         parsedSettings.defaultsRevision = 10
+      }
+      if (savedRevision < 11) {
+        parsedSettings.privacyMode = false
+        parsedSettings.defaultsRevision = 11
       }
       this.state = {
         settings: parsedSettings,

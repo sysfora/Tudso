@@ -77,8 +77,10 @@ export const api = {
     logout: () => fetchJson<void>('/auth/logout', { method: 'POST' }),
   },
   me: {
-    get: () => fetchJson<{ userId: string; email: string; profile: UserProfile }>('/me'),
+    get: () => fetchJson<{ userId: string; email: string; profile: UserProfile; onboardingComplete: boolean }>('/me'),
     getProfile: () => fetchJson<UserProfile>('/me/profile'),
+    completeOnboarding: () =>
+      fetchJson<{ onboardingComplete: boolean }>('/me/onboarding/complete', { method: 'POST' }),
     updateProfile: (profile: Partial<UserProfile>) =>
       fetchJson<UserProfile>('/me/profile', { method: 'PATCH', body: JSON.stringify(profile) }),
     deleteAccount: (confirm: string) => fetchJson<void>('/me/account', { method: 'DELETE', body: JSON.stringify({ confirm }) }),

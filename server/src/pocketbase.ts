@@ -1,7 +1,7 @@
 import PocketBase from 'pocketbase'
 import { config } from './config.js'
 import { log, logError } from './log.js'
-import { isPlan } from './plans.js'
+import { isFreeAccessPlan, isPlan } from './plans.js'
 import { pbQuote } from './pb-filter.js'
 import { deleteStoredObject, type StorageBackend } from './storage.js'
 import { parseUserContext, serializeUserContext, type MemoryEntry } from './memory.js'
@@ -65,6 +65,8 @@ export interface UserBilling {
   id: string
   plan?: Plan
   planStatus?: EntitlementRecord['status']
+  freeAccess?: 'pro' | 'premium'
+  onboardingComplete?: boolean
   stripeCustomerId?: string
   stripeSubscriptionId?: string
   expiresAt?: string
@@ -80,6 +82,8 @@ export async function getUserBilling(userId: string): Promise<UserBilling | null
       id: user.id,
       plan: isPlan(user.plan) ? user.plan : undefined,
       planStatus: typeof user.planStatus === 'string' ? user.planStatus as EntitlementRecord['status'] : undefined,
+      freeAccess: isFreeAccessPlan(user.freeAccess) ? user.freeAccess : undefined,
+      onboardingComplete: user.onboardingComplete === true,
       stripeCustomerId: typeof user.stripeCustomerId === 'string' ? user.stripeCustomerId : undefined,
       stripeSubscriptionId: typeof user.stripeSubscriptionId === 'string' ? user.stripeSubscriptionId : undefined,
       expiresAt: typeof user.expiresAt === 'string' ? user.expiresAt : undefined,
@@ -349,9 +353,25 @@ export function entitlementFromBilling(billing: UserBilling | null, fallbackUser
   }
 }
 
+export function entitlementFromFreeAccess(userId: string, billing: UserBilling): EntitlementRecord {
+  const plan = billing.freeAccess === 'premium' ? 'premium' : 'pro'
+  return {
+    id: billing.id || userId,
+    user: userId,
+    plan,
+    status: 'active',
+    freeAccess: plan,
+    expiresAt: '',
+    created: billing.created ?? '',
+    updated: billing.updated ?? '',
+  }
+}
+
 export async function getEntitlementForUser(userId: string): Promise<EntitlementRecord> {
+  const billing = await getUserBilling(userId)
+  if (billing?.freeAccess) return entitlementFromFreeAccess(userId, billing)
   const { resolveLiveEntitlement } = await import('./stripe.js')
-  return resolveLiveEntitlement(userId)
+  return resolveLiveEntitlement(userId, billing)
 }
 
 export async function persistLiveBilling(
@@ -377,6 +397,20 @@ export async function persistLiveBilling(
     && subscription.status === data.status
     && subscription.cancelAtPeriodEnd === data.cancelAtPeriodEnd,
   )
+  if (billing?.freeAccess) {
+    if (!sameSubscription) {
+      await upsertSubscription(userId, {
+        stripeCustomerId: data.stripeCustomerId,
+        stripeSubscriptionId: data.stripeSubscriptionId,
+        priceId: data.priceId,
+        status: data.status,
+        currentPeriodStart: data.currentPeriodStart,
+        currentPeriodEnd: data.currentPeriodEnd,
+        cancelAtPeriodEnd: data.cancelAtPeriodEnd,
+      })
+    }
+    return
+  }
   const sameUser = Boolean(
     billing?.plan === data.plan
     && billing?.planStatus === data.planStatus
@@ -462,6 +496,8 @@ export async function upsertEntitlement(userId: string, data: Partial<Entitlemen
   const record = existing
     ? await pb.collection('entitlements').update(existing.id, payload)
     : await pb.collection('entitlements').create({ user: userId, ...payload })
+  const billing = await getUserBilling(userId)
+  if (billing?.freeAccess) return record as unknown as EntitlementRecord
   await syncUserBilling(userId, {
     plan: data.plan ?? (record as unknown as EntitlementRecord).plan,
     planStatus: data.status ?? (record as unknown as EntitlementRecord).status,

@@ -47,7 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   retentionDays: null,
   apiBaseUrl: 'https://api.openai.com/v1',
   releaseChannel: 'stable',
-  defaultsRevision: 10,
+  defaultsRevision: 11,
 }
 
 export const SHORTCUT_TAKEN_MESSAGE =

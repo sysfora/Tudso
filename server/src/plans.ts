@@ -13,3 +13,9 @@ export function isPaidStatus(status?: string | null): boolean {
 export function isPaidPlan(plan?: string | null, status?: string | null): boolean {
   return (plan === 'pro' || plan === 'premium') && isPaidStatus(status)
 }
+
+export type FreeAccessPlan = 'pro' | 'premium'
+
+export function isFreeAccessPlan(value: unknown): value is FreeAccessPlan {
+  return value === 'pro' || value === 'premium'
+}

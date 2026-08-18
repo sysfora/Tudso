@@ -12,7 +12,7 @@ import { config } from './config.js'
 import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
 import { aiRateLimiter, rateLimiter, requireAuth, sensitiveRateLimiter } from './middleware.js'
-import { createConversation, createMessage, deleteConversation, deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteResume, deleteUserData, getConversations, getContext, getDevices, getEntitlementForUser, getMessages, getOrCreateProfile, getResume, getSubscription, getUsageToday, incrementUsage, resumeStorageRef, updateContext, updateProfile, upsertResume, watchEntitlement } from './pocketbase.js'
+import { createConversation, createMessage, deleteConversation, deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteResume, deleteUserData, getConversations, getContext, getDevices, getEntitlementForUser, getMessages, getOrCreateProfile, getResume, getSubscription, getUsageToday, getUserBilling, incrementUsage, resumeStorageRef, syncUserBilling, updateContext, updateProfile, upsertResume, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS, normalizeMemoryEntries } from './memory.js'
 import { deleteStoredObject, putResumeFile, readStoredObject } from './storage.js'
 import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
@@ -534,8 +534,21 @@ router.post('/auth/logout', requireAuth, async (req: Request, res: Response) => 
 
 // Me
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
-  const profile = await getOrCreateProfile(req.userId!)
-  res.json({ userId: req.userId, email: req.email, profile })
+  const [profile, billing] = await Promise.all([
+    getOrCreateProfile(req.userId!),
+    getUserBilling(req.userId!),
+  ])
+  res.json({
+    userId: req.userId,
+    email: req.email,
+    profile,
+    onboardingComplete: Boolean(billing?.onboardingComplete),
+  })
+})
+
+router.post('/me/onboarding/complete', requireAuth, rateLimiter, async (req: Request, res: Response) => {
+  await syncUserBilling(req.userId!, { onboardingComplete: true })
+  res.json({ onboardingComplete: true })
 })
 
 router.get('/me/profile', requireAuth, async (req: Request, res: Response) => {

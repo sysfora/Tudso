@@ -9,6 +9,7 @@ export function MessageList() {
   const conversation = useAppStore(activeConversation)
   const generatingId = useAppStore((state) => state.generatingId)
   const privacyMode = useAppStore((state) => state.settings.privacyMode)
+  const setSettings = useAppStore((state) => state.setSettings)
   const deleteMessage = useAppStore((state) => state.deleteMessage)
   const regenerate = useAppStore((state) => state.regenerate)
   const key = conversation?.messages.map((item) => item.content.length).join(':')
@@ -25,6 +26,17 @@ export function MessageList() {
   return (
     <ScrollArea className="min-h-0 flex-1" viewportId="message-list" viewportRef={scrollerRef}>
       <div className="mx-auto w-full max-w-[720px]">
+        {privacyMode ? (
+          <div className="px-5 pt-3">
+            <button
+              type="button"
+              className="w-full rounded-md bg-surface-2 px-3 py-2 text-left text-[12px] text-muted hover:bg-lift hover:text-fg"
+              onClick={() => void setSettings({ privacyMode: false })}
+            >
+              Privacy mode is hiding messages. Click to show them.
+            </button>
+          </div>
+        ) : null}
         {conversation.messages.map((message) =>
           message.role === 'user' ? (
             <UserMessage

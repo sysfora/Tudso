@@ -64,7 +64,9 @@ export function Subscription() {
   const canceling = Boolean(paid && billing?.cancelAtPeriodEnd)
   const hasCustomer = Boolean(billing?.stripeCustomerId)
   const currentName = paid ? (plan === 'premium' ? 'Premium' : 'Pro') : 'No plan'
-  const currentDetail = !paid
+  const currentDetail = entitlement?.freeAccess
+    ? 'Complimentary access'
+    : !paid
     ? 'Subscribe in the browser to start a plan.'
     : canceling && period
       ? `Cancels ${period}`

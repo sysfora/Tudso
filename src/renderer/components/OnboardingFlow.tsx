@@ -1,9 +1,29 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Input, Textarea } from '@/components/ui/input'
 import { useAuthStore } from '@/store/auth-store'
 import { api } from '@/lib/api'
+import { cn } from '@/lib/cn'
 import { DEFAULT_PROFILE_PREFERENCES } from '@/types/api'
+
+const STEPS = [
+  {
+    title: 'About you',
+    description: 'A name and what you do help Tudso sound like it knows you.',
+  },
+  {
+    title: 'Add your resume',
+    description: 'Optional. We can pull skills from it, or you can skip.',
+  },
+  {
+    title: 'Skills and goals',
+    description: 'A few skills and what you are working toward.',
+  },
+  {
+    title: 'How should answers sound?',
+    description: 'Pick a style and how technical to be.',
+  },
+] as const
 
 export function OnboardingFlow() {
   const profile = useAuthStore((state) => state.profile)
@@ -12,36 +32,67 @@ export function OnboardingFlow() {
   const [step, setStep] = useState(0)
   const [preferredName, setPreferredName] = useState(profile?.preferredName ?? '')
   const [profession, setProfession] = useState(profile?.profession ?? '')
+  const [role, setRole] = useState(profile?.role ?? '')
   const [skills, setSkills] = useState(profile?.skills?.join(', ') ?? '')
   const [goals, setGoals] = useState(profile?.goals?.join('\n') ?? '')
-  const [communicationStyle, setCommunicationStyle] = useState<'concise' | 'balanced' | 'detailed'>(profile?.communicationStyle ?? 'balanced')
+  const [communicationStyle, setCommunicationStyle] = useState<'concise' | 'balanced' | 'detailed'>(
+    profile?.communicationStyle ?? DEFAULT_PROFILE_PREFERENCES.communicationStyle,
+  )
+  const [technicalLevel, setTechnicalLevel] = useState<'beginner' | 'intermediate' | 'advanced'>(
+    profile?.technicalLevel ?? DEFAULT_PROFILE_PREFERENCES.technicalLevel,
+  )
   const [resumeUploading, setResumeUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [resumeError, setResumeError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const hydrated = useRef(false)
 
-  const steps = ['name', 'profession', 'resume', 'skills', 'goals', 'preferences']
+  useEffect(() => {
+    if (!profile || hydrated.current) return
+    hydrated.current = true
+    setPreferredName(profile.preferredName ?? '')
+    setProfession(profile.profession ?? '')
+    setRole(profile.role ?? '')
+    setSkills(profile.skills?.join(', ') ?? '')
+    setGoals(profile.goals?.join('\n') ?? '')
+    if (profile.communicationStyle) setCommunicationStyle(profile.communicationStyle)
+    if (profile.technicalLevel) setTechnicalLevel(profile.technicalLevel)
+  }, [profile])
+
+  const last = step === STEPS.length - 1
+  const busy = saving || resumeUploading
+
+  const splitList = (value: string, separator: string) =>
+    value.split(separator).map((item) => item.trim()).filter(Boolean)
 
   const next = async () => {
-    if (saving || resumeUploading) return
+    if (busy) return
     setSaving(true)
     try {
       if (step === 0) {
-        await updateProfile({ preferredName: preferredName || undefined })
-      } else if (step === 1) {
-        await updateProfile({ profession: profession || undefined })
-      }
-      if (step < steps.length - 1) {
-        setStep(step + 1)
-      } else {
         await updateProfile({
-          skills: skills.split(',').map((s) => s.trim()).filter(Boolean),
-          goals: goals.split('\n').map((s) => s.trim()).filter(Boolean),
-          ...DEFAULT_PROFILE_PREFERENCES,
-          communicationStyle,
+          preferredName: preferredName.trim() || undefined,
+          profession: profession.trim() || undefined,
+          role: role.trim() || undefined,
         })
-        await completeOnboarding()
+      } else if (step === 2) {
+        await updateProfile({
+          skills: splitList(skills, ','),
+          goals: splitList(goals, '\n'),
+        })
       }
+      if (!last) {
+        setStep(step + 1)
+        return
+      }
+      await updateProfile({
+        skills: splitList(skills, ','),
+        goals: splitList(goals, '\n'),
+        ...DEFAULT_PROFILE_PREFERENCES,
+        communicationStyle,
+        technicalLevel,
+      })
+      await completeOnboarding()
     } finally {
       setSaving(false)
     }
@@ -62,71 +113,171 @@ export function OnboardingFlow() {
     }
   }
 
-  const titles = [
-    'What should we call you?',
-    'What do you do?',
-    'Add your resume',
-    'What are your skills?',
-    'What are your goals?',
-    'How should the assistant answer?',
-  ]
-  const descriptions = [
-    'This helps the assistant personalize its responses.',
-    'Add your role or industry.',
-    'Uploading a resume helps the assistant understand your background. You can skip this step.',
-    'Comma-separated skills, e.g. React, TypeScript, Design.',
-    'Short-term or long-term goals, one per line.',
-    'Choose your preferred communication style.',
-  ]
+  const onEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey || step === 1) return
+    event.preventDefault()
+    void next()
+  }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-      <div className="w-full max-w-[320px]">
-        <p className="mb-1 text-[12px] font-medium text-muted">Step {step + 1} of {steps.length}</p>
-        <h1 className="text-[18px] font-semibold tracking-tight">{titles[step]}</h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted">{descriptions[step]}</p>
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-5">
+      <div className="w-full max-w-[340px]">
+        <p className="text-[12px] font-medium text-muted">Step {step + 1} of {STEPS.length}</p>
+        <h1 className="mt-1 text-[18px] font-semibold tracking-tight">{STEPS[step].title}</h1>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{STEPS[step].description}</p>
+
         <div className="mt-4 space-y-3">
-          {step === 0 && <Input value={preferredName} onChange={(e) => setPreferredName(e.target.value)} placeholder="Preferred name" />}
-          {step === 1 && <Input value={profession} onChange={(e) => setProfession(e.target.value)} placeholder="Profession or role" />}
-          {step === 2 && (
+          {step === 0 && (
+            <>
+              <Field label="Preferred name">
+                <Input
+                  value={preferredName}
+                  onChange={(event) => setPreferredName(event.target.value)}
+                  onKeyDown={onEnter}
+                  placeholder="Alex"
+                  autoFocus
+                />
+              </Field>
+              <Field label="Profession">
+                <Input
+                  value={profession}
+                  onChange={(event) => setProfession(event.target.value)}
+                  onKeyDown={onEnter}
+                  placeholder="Product designer"
+                />
+              </Field>
+              <Field label="Role">
+                <Input
+                  value={role}
+                  onChange={(event) => setRole(event.target.value)}
+                  onKeyDown={onEnter}
+                  placeholder="Lead, intern, founder…"
+                />
+              </Field>
+            </>
+          )}
+
+          {step === 1 && (
             <div className="space-y-2">
-              <input ref={fileRef} type="file" accept=".pdf,.docx,.txt" className="hidden" onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) void uploadResume(file)
-              }} />
-              <Button variant="outline" className="w-full" onClick={() => fileRef.current?.click()} disabled={resumeUploading} loading={resumeUploading}>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.docx,.txt"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) void uploadResume(file)
+                }}
+              />
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => fileRef.current?.click()}
+                disabled={resumeUploading}
+                loading={resumeUploading}
+              >
                 Upload resume (PDF, DOCX, TXT)
               </Button>
               {resumeError ? <p className="text-[12px] text-danger">{resumeError}</p> : null}
-              <Button variant="ghost" className="w-full" onClick={() => setStep(step + 1)} disabled={resumeUploading}>
-                Skip
-              </Button>
             </div>
           )}
-          {step === 3 && <Input value={skills} onChange={(e) => setSkills(e.target.value)} placeholder="Skills" />}
-          {step === 4 && <textarea value={goals} onChange={(e) => setGoals(e.target.value)} placeholder="Goals" className="h-24 w-full rounded-md bg-surface-2 px-2.5 py-2 text-[13px] outline-none placeholder:text-muted" />}
-          {step === 5 && (
-            <div className="flex justify-center gap-2">
-              {(['concise', 'balanced', 'detailed'] as const).map((style) => (
-                <button
-                  key={style}
-                  type="button"
-                  onClick={() => setCommunicationStyle(style)}
-                  className={`rounded-md px-3 py-1.5 text-[13px] capitalize ${communicationStyle === style ? 'bg-accent-fill text-accent-fill-fg' : 'bg-surface-2 text-fg'}`}
-                >
-                  {style}
-                </button>
-              ))}
-            </div>
+
+          {step === 2 && (
+            <>
+              <Field label="Skills">
+                <Input
+                  value={skills}
+                  onChange={(event) => setSkills(event.target.value)}
+                  onKeyDown={onEnter}
+                  placeholder="React, TypeScript, design"
+                  autoFocus
+                />
+              </Field>
+              <Field label="Goals">
+                <Textarea
+                  value={goals}
+                  onChange={(event) => setGoals(event.target.value)}
+                  placeholder="One per line"
+                  className="h-20"
+                />
+              </Field>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <Field label="Style">
+                <Choice
+                  value={communicationStyle}
+                  options={['concise', 'balanced', 'detailed']}
+                  onChange={setCommunicationStyle}
+                />
+              </Field>
+              <Field label="Technical level">
+                <Choice
+                  value={technicalLevel}
+                  options={['beginner', 'intermediate', 'advanced']}
+                  onChange={setTechnicalLevel}
+                />
+              </Field>
+            </>
           )}
         </div>
-        {step !== 2 && (
-          <div className="mt-6 flex gap-2">
-            {step > 0 && <Button variant="outline" className="flex-1" onClick={() => setStep(step - 1)} disabled={saving}>Back</Button>}
-            <Button className="flex-1" onClick={() => void next()} loading={saving}>{step === steps.length - 1 ? 'Finish' : 'Next'}</Button>
-          </div>
-        )}
+
+        <div className="mt-4 flex gap-2">
+          {step > 0 ? (
+            <Button variant="outline" className="flex-1" onClick={() => setStep(step - 1)} disabled={busy}>
+              Back
+            </Button>
+          ) : null}
+          {step === 1 ? (
+            <Button variant="outline" className="flex-1" onClick={() => setStep(step + 1)} disabled={resumeUploading}>
+              Skip
+            </Button>
+          ) : (
+            <Button className="flex-1" onClick={() => void next()} loading={saving}>
+              {last ? 'Finish' : 'Next'}
+            </Button>
+          )}
+        </div>
       </div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block text-left">
+      <span className="mb-1 block text-[12px] font-medium text-muted">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function Choice<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T
+  options: readonly T[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(option)}
+          className={cn(
+            'rounded-md px-3 py-1.5 text-[13px] capitalize',
+            value === option ? 'bg-accent-fill text-accent-fill-fg' : 'bg-surface-2 text-fg hover:bg-lift',
+          )}
+        >
+          {option}
+        </button>
+      ))}
     </div>
   )
 }

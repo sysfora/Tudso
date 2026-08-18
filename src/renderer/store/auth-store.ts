@@ -57,6 +57,7 @@ interface AuthActions {
   completeLogin: (session: AuthSession) => Promise<void>
   logout: () => Promise<void>
   loadProfile: () => Promise<void>
+  hydrateSignedIn: (session: AuthSession) => Promise<void>
   updateProfile: (profile: Partial<UserProfile>) => Promise<void>
   setOnboardingStep: (step: number) => void
   completeOnboarding: () => Promise<void>
@@ -83,20 +84,19 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   memoryEnabled: true,
 
   init: async () => {
-    const complete = localStorage.getItem('tudso.onboardingComplete') === 'true'
     desktop.auth.onAuthCallback((session) => {
       set({ loginStatus: 'completing', loginError: null })
       void get().completeLogin(session)
     })
     const session = await desktop.auth.getSession()
     if (session?.token) {
-      setToken(session.token)
-      set({ session, onboardingComplete: complete, loading: false, loginStatus: 'idle' })
-      await get().loadProfile()
-      await Promise.all([get().loadEntitlement(), get().loadMemories()])
-      startEntitlementStream((entitlement) => set({ entitlement }))
+      try {
+        await get().hydrateSignedIn(session)
+      } catch {
+        set({ loading: false, session: null, onboardingComplete: false })
+      }
     } else {
-      set({ loading: false, onboardingComplete: complete })
+      set({ loading: false, onboardingComplete: false })
     }
   },
 
@@ -125,11 +125,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     set({ loginStatus: 'completing', loginError: null })
     try {
       await desktop.auth.setSession(session)
-      setToken(session.token)
-      await get().loadProfile()
-      await Promise.all([get().loadEntitlement(), get().loadMemories()])
-      startEntitlementStream((entitlement) => set({ entitlement }))
-      set({ session, loading: false, loginStatus: 'idle' })
+      await get().hydrateSignedIn(session)
     } catch (error) {
       set({
         loginStatus: 'idle',
@@ -143,6 +139,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     await api.auth.logout().catch(() => undefined)
     await desktop.auth.clearSession()
     clearToken()
+    localStorage.removeItem('tudso.onboardingComplete')
     void desktop.window.setHideFromCaptureAllowed(false)
     set({ session: null, profile: null, entitlement: null, memories: [], memoriesLoaded: false, memoryEnabled: true, onboardingComplete: false, loginStatus: 'idle', loginError: null })
   },
@@ -156,6 +153,24 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     }
   },
 
+  hydrateSignedIn: async (session: AuthSession) => {
+    setToken(session.token)
+    const [me] = await Promise.all([
+      api.me.get(),
+      get().loadEntitlement(),
+      get().loadMemories(),
+    ])
+    startEntitlementStream((entitlement) => set({ entitlement }))
+    set({
+      session,
+      profile: me.profile,
+      onboardingComplete: me.onboardingComplete === true,
+      loading: false,
+      loginStatus: 'idle',
+      loginError: null,
+    })
+  },
+
   updateProfile: async (partial) => {
     const profile = await api.me.updateProfile(partial)
     set({ profile })
@@ -164,7 +179,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   setOnboardingStep: (step) => set({ onboardingStep: step }),
 
   completeOnboarding: async () => {
-    localStorage.setItem('tudso.onboardingComplete', 'true')
+    await api.me.completeOnboarding()
     set({ onboardingComplete: true, onboardingStep: 0 })
   },
 

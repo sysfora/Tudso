@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isPaidPlan, isPlan } from './plans.js'
+import { entitlementFromFreeAccess } from './pocketbase.js'
+import { isFreeAccessPlan, isPaidPlan, isPlan } from './plans.js'
 
 describe('plans', () => {
   it('treats active pro and premium as paid', () => {
@@ -14,5 +15,19 @@ describe('plans', () => {
     expect(isPaidPlan('premium', 'unpaid')).toBe(false)
     expect(isPaidPlan('free', 'active')).toBe(false)
     expect(isPaidPlan('pro', undefined)).toBe(false)
+  })
+
+  it('grants complimentary pro or premium from freeAccess without Stripe', () => {
+    expect(isFreeAccessPlan('pro')).toBe(true)
+    expect(isFreeAccessPlan('premium')).toBe(true)
+    expect(isFreeAccessPlan('free')).toBe(false)
+    const granted = entitlementFromFreeAccess('user1', {
+      id: 'user1',
+      freeAccess: 'premium',
+    })
+    expect(granted.plan).toBe('premium')
+    expect(granted.status).toBe('active')
+    expect(granted.freeAccess).toBe('premium')
+    expect(isPaidPlan(granted.plan, granted.status)).toBe(true)
   })
 })

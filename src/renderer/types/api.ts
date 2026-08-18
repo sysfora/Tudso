@@ -50,6 +50,7 @@ export interface Entitlement {
   user: string
   plan: Plan
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid'
+  freeAccess?: 'pro' | 'premium'
   expiresAt: string
 }
 

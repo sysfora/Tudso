@@ -33,7 +33,7 @@ export function AssistantMessage({
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">AI</p>
           <div className="mt-1 text-[14.5px] leading-relaxed">
             {hidden ? (
-              <p className="text-muted">Hidden by privacy mode</p>
+              <p className="text-muted">Message hidden</p>
             ) : message.error && !message.content.includes('\n') ? (
               <ErrorState message={message.content} onRetry={onRegenerate} />
             ) : (
