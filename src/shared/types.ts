@@ -33,7 +33,7 @@ export interface OverlayKeyEvent {
 }
 
 export interface OverlayPointerEvent {
-  type: 'down' | 'up' | 'wheel'
+  type: 'down' | 'up' | 'move' | 'wheel'
   button: number
   x: number
   y: number

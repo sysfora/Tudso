@@ -135,6 +135,7 @@ function applyEdit(el: HTMLInputElement | HTMLTextAreaElement, event: OverlayKey
     return
   }
   if (event.text && event.text !== '\u0000') insertText(el, event.text)
+  else if (!event.ctrl && !event.alt && !event.meta && event.key.length === 1) insertText(el, event.key)
 }
 
 function runOverlayCommand(event: OverlayKeyEvent) {
@@ -174,7 +175,7 @@ export function applyOverlayKey(event: OverlayKeyEvent) {
   applyEdit(el, event)
 }
 
-function mouseInit(event: OverlayPointerEvent): MouseEventInit {
+function mouseInit(event: OverlayPointerEvent, extra?: MouseEventInit): MouseEventInit {
   return {
     bubbles: true,
     cancelable: true,
@@ -184,30 +185,191 @@ function mouseInit(event: OverlayPointerEvent): MouseEventInit {
     screenX: event.screenX,
     screenY: event.screenY,
     button: event.button,
-    buttons: event.type === 'down' ? 1 << event.button : 0,
+    buttons: event.type === 'up' ? 0 : 1 << event.button,
+    ...extra,
   }
 }
 
-function setCaretFromPoint(el: HTMLInputElement | HTMLTextAreaElement, x: number, y: number) {
-  const doc = document as Document & {
-    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
-    caretRangeFromPoint?: (x: number, y: number) => Range | null
+function offsetFromPoint(el: HTMLInputElement | HTMLTextAreaElement, x: number, y: number) {
+  return estimateOffset(el, x, y)
+}
+
+let measureCtx: CanvasRenderingContext2D | null = null
+
+function textContext(el: HTMLElement) {
+  if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d')
+  if (!measureCtx) return null
+  const style = getComputedStyle(el)
+  measureCtx.font = style.font || `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+  return { ctx: measureCtx, style }
+}
+
+function indexOnLine(text: string, x: number, ctx: CanvasRenderingContext2D) {
+  if (x <= 0 || !text) return 0
+  let lo = 0
+  let hi = text.length
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2)
+    if (ctx.measureText(text.slice(0, mid)).width <= x) lo = mid
+    else hi = mid - 1
   }
-  const position = doc.caretPositionFromPoint?.(x, y)
-  if (position && el.contains(position.offsetNode)) {
-    el.setSelectionRange(position.offset, position.offset)
+  if (lo >= text.length) return text.length
+  const left = ctx.measureText(text.slice(0, lo)).width
+  const right = ctx.measureText(text.slice(0, lo + 1)).width
+  return x - left > right - x ? lo + 1 : lo
+}
+
+function estimateOffset(el: HTMLInputElement | HTMLTextAreaElement, clientX: number, clientY: number) {
+  const measured = textContext(el)
+  if (!measured) return el.selectionStart ?? 0
+  const { ctx, style } = measured
+  const rect = el.getBoundingClientRect()
+  const x = clientX - rect.left - parseFloat(style.paddingLeft) - parseFloat(style.borderLeftWidth) + el.scrollLeft
+  const y = clientY - rect.top - parseFloat(style.paddingTop) - parseFloat(style.borderTopWidth) + el.scrollTop
+  const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.4 || 20
+  if (el instanceof HTMLInputElement) return indexOnLine(el.value, x, ctx)
+  const lines = el.value.split('\n')
+  const line = Math.min(lines.length - 1, Math.max(0, Math.floor(y / lineHeight)))
+  let index = 0
+  for (let i = 0; i < line; i++) index += (lines[i]?.length ?? 0) + 1
+  return index + indexOnLine(lines[line] ?? '', x, ctx)
+}
+
+function isWordChar(ch: string) {
+  return /[A-Za-z0-9_\u00C0-\u024F]/.test(ch)
+}
+
+function wordRange(value: string, index: number) {
+  const at = Math.min(Math.max(index, 0), value.length)
+  if (!value) return [0, 0] as const
+  let start = at
+  let end = at
+  if (at < value.length && isWordChar(value[at] ?? '')) {
+    while (start > 0 && isWordChar(value[start - 1] ?? '')) start -= 1
+    while (end < value.length && isWordChar(value[end] ?? '')) end += 1
+    return [start, end] as const
+  }
+  if (at > 0 && isWordChar(value[at - 1] ?? '')) {
+    start = at
+    while (start > 0 && isWordChar(value[start - 1] ?? '')) start -= 1
+    return [start, at] as const
+  }
+  while (start > 0 && /\s/.test(value[start - 1] ?? '')) start -= 1
+  while (end < value.length && /\s/.test(value[end] ?? '')) end += 1
+  if (start === end) {
+    start = Math.max(0, at - 1)
+    end = Math.min(value.length, at + 1)
+  }
+  return [start, end] as const
+}
+
+function lineRange(value: string, index: number) {
+  const start = value.lastIndexOf('\n', Math.max(0, index - 1)) + 1
+  const next = value.indexOf('\n', index)
+  const end = next < 0 ? value.length : next + 1
+  return [start, end] as const
+}
+
+function selectEditable(
+  el: HTMLInputElement | HTMLTextAreaElement,
+  index: number,
+  count: number,
+  anchor: number,
+) {
+  const value = el.value
+  if (count >= 3) {
+    const range = lineRange(value, index)
+    const from = lineRange(value, anchor)
+    el.setSelectionRange(Math.min(from[0], range[0]), Math.max(from[1], range[1]))
     return
   }
-  const range = doc.caretRangeFromPoint?.(x, y)
-  if (range && el.contains(range.startContainer)) {
-    el.setSelectionRange(range.startOffset, range.startOffset)
+  if (count === 2) {
+    const range = wordRange(value, index)
+    const from = wordRange(value, anchor)
+    el.setSelectionRange(Math.min(from[0], range[0]), Math.max(from[1], range[1]))
+    return
   }
+  el.setSelectionRange(Math.min(anchor, index), Math.max(anchor, index))
 }
 
+function selectableRoot(el: Element | null) {
+  return el?.closest('.markdown, article, .select-text') ?? null
+}
+
+function applyDomSelection(x: number, y: number, count: number, anchor: Range | null) {
+  const sel = window.getSelection()
+  if (!sel) return
+  const range = document.caretRangeFromPoint?.(x, y)
+  if (!range) return
+  if (count >= 3) {
+    const block = range.startContainer.parentElement?.closest('p, li, pre, h1, h2, h3, h4, blockquote, div')
+    if (block) {
+      const next = document.createRange()
+      next.selectNodeContents(block)
+      sel.removeAllRanges()
+      sel.addRange(next)
+    }
+    return
+  }
+  if (count === 2) {
+    const word = range.cloneRange()
+    try {
+      ;(word as Range & { expand?: (unit: string) => void }).expand?.('word')
+    } catch {
+      undefined
+    }
+    sel.removeAllRanges()
+    sel.addRange(word)
+    return
+  }
+  if (anchor) {
+    try {
+      sel.setBaseAndExtent(anchor.startContainer, anchor.startOffset, range.startContainer, range.startOffset)
+    } catch {
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    return
+  }
+  sel.removeAllRanges()
+  sel.addRange(range)
+}
+
+const DOUBLE_CLICK_MS = 500
+const DOUBLE_CLICK_PX = 6
+
 let pointerDownTarget: Element | null = null
+let clickCount = 0
+let lastClickAt = 0
+let lastClickX = 0
+let lastClickY = 0
+let dragAnchor = 0
+let dragCount = 1
+let domAnchor: Range | null = null
+let selecting = false
+
+function nextClickCount(x: number, y: number) {
+  const now = Date.now()
+  const chained =
+    now - lastClickAt <= DOUBLE_CLICK_MS && Math.hypot(x - lastClickX, y - lastClickY) <= DOUBLE_CLICK_PX
+  clickCount = chained ? (clickCount % 3) + 1 : 1
+  lastClickAt = now
+  lastClickX = x
+  lastClickY = y
+  return clickCount
+}
 
 export function applyOverlayPointer(event: OverlayPointerEvent) {
   const hit = document.elementFromPoint(event.x, event.y)
+  if (event.type === 'move') {
+    if (!selecting) return
+    if (pointerDownTarget instanceof Element && isEditable(pointerDownTarget)) {
+      selectEditable(pointerDownTarget, offsetFromPoint(pointerDownTarget, event.x, event.y), dragCount, dragAnchor)
+      return
+    }
+    applyDomSelection(event.x, event.y, dragCount, domAnchor)
+    return
+  }
   if (event.type === 'down') {
     const interactive = hit?.closest(
       'button, a, input, textarea, select, [role="button"], [role="menuitem"], [role="switch"]',
@@ -217,31 +379,50 @@ export function applyOverlayPointer(event: OverlayPointerEvent) {
     } else if (hit?.closest('.drag-region')) {
       desktop.window.beginOverlayDrag()
       pointerDownTarget = null
+      selecting = false
       return
     } else {
       desktop.window.cancelOverlayDrag()
     }
     const target = hit ?? document.body
     pointerDownTarget = target
+    const count = event.button === 0 ? nextClickCount(event.x, event.y) : 1
+    dragCount = count
+    selecting = event.button === 0
     if (target instanceof Element && isEditable(target)) {
       lastEditable = target
       target.focus()
-      setCaretFromPoint(target, event.x, event.y)
+      const index = offsetFromPoint(target, event.x, event.y)
+      dragAnchor = count === 1 ? index : index
+      if (count === 1) target.setSelectionRange(index, index)
+      else selectEditable(target, index, count, index)
+      domAnchor = null
+    } else if (selectableRoot(target instanceof Element ? target : null)) {
+      const range = document.caretRangeFromPoint?.(event.x, event.y)
+      domAnchor = range ? range.cloneRange() : null
+      applyDomSelection(event.x, event.y, count, count === 1 ? null : domAnchor)
     } else if (target instanceof HTMLElement && target.tabIndex >= 0) {
       target.focus()
+      selecting = false
+    } else {
+      selecting = false
     }
-    const init = mouseInit(event)
+    const init = mouseInit(event, { detail: count })
     target.dispatchEvent(new PointerEvent('pointerdown', { ...init, pointerId: 1, pointerType: 'mouse' }))
     target.dispatchEvent(new MouseEvent('mousedown', init))
     return
   }
   if (event.type === 'up') {
     const target = pointerDownTarget ?? hit ?? document.body
-    const init = mouseInit(event)
+    const init = mouseInit(event, { detail: dragCount })
     target.dispatchEvent(new PointerEvent('pointerup', { ...init, pointerId: 1, pointerType: 'mouse' }))
     target.dispatchEvent(new MouseEvent('mouseup', init))
-    if (event.button === 0) target.dispatchEvent(new MouseEvent('click', init))
+    if (event.button === 0) {
+      target.dispatchEvent(new MouseEvent('click', init))
+      if (dragCount === 2) target.dispatchEvent(new MouseEvent('dblclick', init))
+    }
     pointerDownTarget = null
+    selecting = false
     return
   }
   if (event.type === 'wheel') {

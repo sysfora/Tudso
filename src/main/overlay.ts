@@ -59,6 +59,12 @@ const VK_DOWN = 0x28
 const VK_DELETE = 0x2e
 const VK_LWIN = 0x5b
 const VK_RWIN = 0x5c
+const VK_LSHIFT = 0xa0
+const VK_RSHIFT = 0xa1
+const VK_LCONTROL = 0xa2
+const VK_RCONTROL = 0xa3
+const VK_LMENU = 0xa4
+const VK_RMENU = 0xa5
 
 type Koffi = {
   load: (name: string) => { func: (sig: string) => (...args: never[]) => unknown }
@@ -102,7 +108,10 @@ let pendingDrag: { dx: number; dy: number; x: number; y: number } | null = null
 let titleBarPending = false
 let dragMoved = false
 let dragCancelled = false
+let overlayPointerDown = false
 let overlayDragCssKey: string | null = null
+let overlayTyping = false
+const mods = { shift: false, ctrl: false, alt: false, meta: false, caps: false }
 
 function loadNative(): NativeApi | null {
   if (process.platform !== 'win32') return null
@@ -269,8 +278,15 @@ function cursorInWindow(win: BrowserWindow, cursor?: { x: number; y: number } | 
   return dip.x >= bounds.x && dip.x < bounds.x + bounds.width && dip.y >= bounds.y && dip.y < bounds.y + bounds.height
 }
 
-function keyDown(vk: number): boolean {
-  return Boolean(native && native.GetAsyncKeyState(vk) & 0x8000)
+function updateModifiers(vk: number, down: boolean) {
+  if (vk === VK_SHIFT || vk === VK_LSHIFT || vk === VK_RSHIFT) mods.shift = down
+  else if (vk === VK_CONTROL || vk === VK_LCONTROL || vk === VK_RCONTROL) mods.ctrl = down
+  else if (vk === VK_MENU || vk === VK_LMENU || vk === VK_RMENU) mods.alt = down
+  else if (vk === VK_LWIN || vk === VK_RWIN) mods.meta = down
+}
+
+function syncCapsFromOs() {
+  mods.caps = Boolean(native && native.GetAsyncKeyState(VK_CAPITAL) & 1)
 }
 
 function namedKey(vk: number): { key: string; code: string } | null {
@@ -279,8 +295,14 @@ function namedKey(vk: number): { key: string; code: string } | null {
     [VK_TAB]: { key: 'Tab', code: 'Tab' },
     [VK_RETURN]: { key: 'Enter', code: 'Enter' },
     [VK_SHIFT]: { key: 'Shift', code: 'ShiftLeft' },
+    [VK_LSHIFT]: { key: 'Shift', code: 'ShiftLeft' },
+    [VK_RSHIFT]: { key: 'Shift', code: 'ShiftRight' },
     [VK_CONTROL]: { key: 'Control', code: 'ControlLeft' },
+    [VK_LCONTROL]: { key: 'Control', code: 'ControlLeft' },
+    [VK_RCONTROL]: { key: 'Control', code: 'ControlRight' },
     [VK_MENU]: { key: 'Alt', code: 'AltLeft' },
+    [VK_LMENU]: { key: 'Alt', code: 'AltLeft' },
+    [VK_RMENU]: { key: 'Alt', code: 'AltRight' },
     [VK_CAPITAL]: { key: 'CapsLock', code: 'CapsLock' },
     [VK_ESCAPE]: { key: 'Escape', code: 'Escape' },
     [VK_SPACE]: { key: ' ', code: 'Space' },
@@ -311,8 +333,7 @@ function fallbackChar(vk: number, shift: boolean): string {
   if (vk === VK_SPACE) return ' '
   if (vk >= 0x41 && vk <= 0x5a) {
     const letter = String.fromCharCode(vk)
-    const caps = Boolean(native && native.GetAsyncKeyState(VK_CAPITAL) & 1)
-    return shift !== caps ? letter : letter.toLowerCase()
+    return shift !== mods.caps ? letter : letter.toLowerCase()
   }
   if (vk >= 0x30 && vk <= 0x39) {
     if (!shift) return String.fromCharCode(vk)
@@ -344,10 +365,22 @@ function fallbackChar(vk: number, shift: boolean): string {
 
 function unicodeChar(vk: number, scan: number): string {
   const api = native
-  if (!api) return fallbackChar(vk, keyDown(VK_SHIFT))
+  if (!api) return fallbackChar(vk, mods.shift)
   try {
     const state = Buffer.alloc(256)
-    api.GetKeyboardState(state)
+    if (mods.shift) {
+      state[VK_SHIFT] = 0x80
+      state[VK_LSHIFT] = 0x80
+    }
+    if (mods.ctrl) {
+      state[VK_CONTROL] = 0x80
+      state[VK_LCONTROL] = 0x80
+    }
+    if (mods.alt) {
+      state[VK_MENU] = 0x80
+      state[VK_LMENU] = 0x80
+    }
+    if (mods.caps) state[VK_CAPITAL] = 0x01
     state[vk] = state[vk] | 0x80
     const out = Buffer.alloc(16)
     const n = api.ToUnicode(vk, scan, state, out, 8, 0)
@@ -355,16 +388,16 @@ function unicodeChar(vk: number, scan: number): string {
   } catch {
     undefined
   }
-  return fallbackChar(vk, keyDown(VK_SHIFT))
+  return fallbackChar(vk, mods.shift)
 }
 
 function buildOverlayKey(vk: number, scan: number, down: boolean): OverlayKeyEvent | null {
   const named = namedKey(vk)
   if (!named && vk < 0x20) return null
-  const ctrl = keyDown(VK_CONTROL)
-  const alt = keyDown(VK_MENU)
-  const shift = keyDown(VK_SHIFT)
-  const meta = keyDown(VK_LWIN) || keyDown(VK_RWIN)
+  const ctrl = mods.ctrl
+  const alt = mods.alt
+  const shift = mods.shift
+  const meta = mods.meta
   const key = named?.key ?? fallbackChar(vk, shift) ?? ''
   const code = named?.code ?? ''
   const printable = down && !ctrl && !alt && !meta && vk !== VK_BACK && vk !== VK_TAB && vk !== VK_RETURN && vk !== VK_ESCAPE && vk !== VK_DELETE
@@ -406,9 +439,22 @@ function lowLevelKeyboardProc(nCode: number, wParam: number, lParam: unknown): n
     }
     const info = api.koffi.decode(lParam, api.kbdStruct) as { vkCode: number; scanCode: number; flags: number }
     if (info.flags & LLKHF_INJECTED) return api.CallNextHookEx(null, nCode, wParam, lParam)
-    if (!cursorInWindow(win)) return api.CallNextHookEx(null, nCode, wParam, lParam)
     const down = wParam === WM_KEYDOWN || wParam === WM_SYSKEYDOWN
     const up = wParam === WM_KEYUP || wParam === WM_SYSKEYUP
+    if (down || up) {
+      updateModifiers(info.vkCode, down)
+      if (info.vkCode === VK_CAPITAL && down && (overlayTyping || cursorInWindow(win))) {
+        mods.caps = !mods.caps
+      }
+    }
+    if (info.vkCode === VK_LWIN || info.vkCode === VK_RWIN || mods.meta) {
+      return api.CallNextHookEx(null, nCode, wParam, lParam)
+    }
+    if (cursorInWindow(win)) overlayTyping = true
+    if (!cursorInWindow(win) && !overlayTyping) {
+      syncCapsFromOs()
+      return api.CallNextHookEx(null, nCode, wParam, lParam)
+    }
     if (down || up) injectKey(win, info.vkCode, info.scanCode, down)
     return 1
   } catch (error) {
@@ -493,13 +539,17 @@ function lowLevelMouseProc(nCode: number, wParam: number, lParam: unknown): numb
       }
       if (wParam === WM_LBUTTONUP) {
         const moved = dragMoved
+        overlayPointerDown = false
         clearDrag()
         if (!moved) injectPointer(win, { type: 'up', button: 0, ...localPoint(win) })
         return 1
       }
     }
 
-    if (!cursorInWindow(win, cursor)) return api.CallNextHookEx(null, nCode, wParam, lParam)
+    if (!cursorInWindow(win, cursor)) {
+      if (wParam === WM_LBUTTONDOWN || wParam === WM_RBUTTONDOWN) overlayTyping = false
+      return api.CallNextHookEx(null, nCode, wParam, lParam)
+    }
     const point = localPoint(win)
     if (onResizeEdge(win, point.x, point.y) && !overlayDrag) {
       return api.CallNextHookEx(null, nCode, wParam, lParam)
@@ -513,13 +563,19 @@ function lowLevelMouseProc(nCode: number, wParam: number, lParam: unknown): numb
           pendingDrag = null
           titleBarPending = false
           dragMoved = true
+          overlayPointerDown = false
           moveWindowPhysical(win, cursor.x - overlayDrag.dx, cursor.y - overlayDrag.dy)
           return api.CallNextHookEx(null, nCode, wParam, lParam)
         }
       }
+      if (overlayPointerDown && !overlayDrag) {
+        injectPointer(win, { type: 'move', button: 0, ...point })
+      }
       return api.CallNextHookEx(null, nCode, wParam, lParam)
     }
     if (wParam === WM_LBUTTONDOWN) {
+      overlayTyping = true
+      overlayPointerDown = true
       dragCancelled = false
       dragMoved = false
       pendingDrag = captureDragOffset(win, cursor)
@@ -529,6 +585,7 @@ function lowLevelMouseProc(nCode: number, wParam: number, lParam: unknown): numb
     }
     if (wParam === WM_LBUTTONUP) {
       const moved = dragMoved
+      overlayPointerDown = false
       clearDrag()
       if (!moved) injectPointer(win, { type: 'up', button: 0, ...point })
       return 1
@@ -562,6 +619,7 @@ function lowLevelMouseProc(nCode: number, wParam: number, lParam: unknown): numb
 
 export function beginOverlayDrag() {
   if (dragCancelled) return
+  overlayPointerDown = false
   const win = hookedWindow
   if (!win || win.isDestroyed()) return
   if (overlayDrag) return
@@ -708,6 +766,12 @@ export function stopOverlayKeyboard() {
   pendingDrag = null
   titleBarPending = false
   dragMoved = false
+  overlayTyping = false
+  overlayPointerDown = false
+  mods.shift = false
+  mods.ctrl = false
+  mods.alt = false
+  mods.meta = false
   if (api && hookHandle) {
     try {
       api.UnhookWindowsHookEx(hookHandle)
