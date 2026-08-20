@@ -6,12 +6,13 @@ import http from 'node:http'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
-import { attachFrontend } from './frontend.js'
+import { attachFrontend, isFrontendDev } from './frontend.js'
 import routes from './routes.js'
 import { attachRealtimeAudio } from './realtime.js'
 import { log, requestLogger } from './log.js'
 
-const isProduction = config.app.env === 'production'
+const frontendDev = isFrontendDev()
+if (!frontendDev) process.env.NODE_ENV ??= 'production'
 const app = express()
 app.set('trust proxy', 1)
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public')
@@ -23,13 +24,13 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       baseUri: ["'self'"],
-      connectSrc: ["'self'", ...(isProduction ? [] : ['ws:', 'wss:'])],
+      connectSrc: ["'self'", ...(frontendDev ? ['ws:', 'wss:'] : [])],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       formAction: ["'self'", `${config.auth.callbackScheme}:`, 'https://accounts.google.com'],
       frameAncestors: ["'none'"],
       imgSrc: ["'self'", 'data:', 'https://cdn.simpleicons.org'],
       objectSrc: ["'none'"],
-      scriptSrc: isProduction ? ["'self'"] : ["'self'", "'unsafe-inline'"],
+      scriptSrc: frontendDev ? ["'self'", "'unsafe-inline'"] : ["'self'"],
       scriptSrcAttr: ["'none'"],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       upgradeInsecureRequests: null,

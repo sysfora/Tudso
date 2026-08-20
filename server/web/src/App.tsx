@@ -16,6 +16,13 @@ const displayFont = { fontFamily: 'Fraunces, Georgia, serif' }
 
 type OpenSignup = () => void
 
+function ClientToaster() {
+  const [ready, setReady] = React.useState(false)
+  React.useEffect(() => setReady(true), [])
+  if (!ready) return null
+  return <Toaster />
+}
+
 function NavActions({ onSignup }: { onSignup: OpenSignup }) {
   return (
     <div className="flex items-center gap-2 sm:gap-3">
@@ -162,7 +169,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <Toaster />
+      <ClientToaster />
       <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:px-5 sm:py-6">
         <div className="text-xl font-black tracking-tight sm:text-2xl" style={displayFont}>Tudso</div>
         <NavActions onSignup={openSignup} />

@@ -6,7 +6,7 @@ import { defineConfig } from 'vite'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   plugins: [react(), tailwindcss()],
   root,
   resolve: {
@@ -15,7 +15,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
-    emptyOutDir: true,
+    outDir: isSsrBuild ? 'dist/server' : 'dist/client',
+    emptyOutDir: !isSsrBuild,
+    ssrManifest: !isSsrBuild,
   },
-})
+}))
