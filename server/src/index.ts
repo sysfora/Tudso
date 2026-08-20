@@ -6,10 +6,12 @@ import http from 'node:http'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
+import { attachFrontend } from './frontend.js'
 import routes from './routes.js'
 import { attachRealtimeAudio } from './realtime.js'
 import { log, requestLogger } from './log.js'
 
+const isProduction = config.app.env === 'production'
 const app = express()
 app.set('trust proxy', 1)
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public')
@@ -21,14 +23,15 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       baseUri: ["'self'"],
-      fontSrc: ["'self'"],
+      connectSrc: ["'self'", ...(isProduction ? [] : ['ws:', 'wss:'])],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       formAction: ["'self'", `${config.auth.callbackScheme}:`, 'https://accounts.google.com'],
       frameAncestors: ["'none'"],
-      imgSrc: ["'self'", 'data:'],
+      imgSrc: ["'self'", 'data:', 'https://cdn.simpleicons.org'],
       objectSrc: ["'none'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: isProduction ? ["'self'"] : ["'self'", "'unsafe-inline'"],
       scriptSrcAttr: ["'none'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       upgradeInsecureRequests: null,
     },
   },
@@ -51,6 +54,13 @@ app.use(requestLogger)
 
 app.use(routes)
 
+const server = http.createServer(app)
+server.on('connection', (socket) => {
+  socket.setNoDelay(true)
+})
+
+await attachFrontend(app, server)
+
 app.use((error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (res.headersSent) {
     next(error)
@@ -71,10 +81,6 @@ app.use((error: unknown, req: express.Request, res: express.Response, next: expr
   res.status(500).json({ error: 'Internal server error' })
 })
 
-const server = http.createServer(app)
-server.on('connection', (socket) => {
-  socket.setNoDelay(true)
-})
 attachRealtimeAudio(server)
 
 server.listen(config.app.port, () => {
