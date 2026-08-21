@@ -22,14 +22,13 @@ interface RealtimeState {
   listening: boolean
   speaking: boolean
   mode: AudioMode
-  withScreen: boolean
   transcript: string
   error: string | null
 }
 
 interface RealtimeActions {
-  start: (mode?: AudioMode, options?: { withScreen?: boolean }) => Promise<void>
-  toggle: (withScreen: boolean) => Promise<void>
+  start: (mode?: AudioMode) => Promise<void>
+  toggle: () => Promise<void>
   stop: () => void
   clear: () => void
 }
@@ -110,7 +109,6 @@ async function answerIfQuiet(force = false) {
       fromRealtime: true,
       audioText: text,
       audioSource: mode,
-      withScreen: useRealtimeStore.getState().withScreen,
     })
   } finally {
     sending = false
@@ -125,32 +123,22 @@ async function answerIfQuiet(force = false) {
 export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, get) => ({
   listening: false,
   speaking: false,
-  mode: 'mic',
-  withScreen: true,
+  mode: 'system',
   transcript: '',
   error: null,
 
-  toggle: async (withScreen) => {
+  toggle: async () => {
     if (get().listening) {
-      if (get().withScreen === withScreen) {
-        get().stop()
-        return
-      }
-      if (!liveAllowed(withScreen)) {
-        set({ error: liveError(withScreen) })
-        return
-      }
-      set({ withScreen, error: null })
+      get().stop()
       return
     }
-    await get().start(get().mode, { withScreen })
+    await get().start(get().mode)
   },
 
-  start: async (mode = 'mic', options) => {
+  start: async (mode = 'system') => {
     if (get().listening) return
-    const withScreen = options?.withScreen ?? get().withScreen
-    if (!liveAllowed(withScreen)) {
-      set({ error: liveError(withScreen) })
+    if (!liveAllowed()) {
+      set({ error: liveError() })
       return
     }
     const token = getToken()
@@ -166,7 +154,7 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, ge
     unsent = ''
     lastSent = ''
     clearIdleTimer()
-    set({ listening: true, speaking: false, mode, withScreen, error: null, transcript: '' })
+    set({ listening: true, speaking: false, mode, error: null, transcript: '' })
 
     try {
       await primeAudioContext()
@@ -263,12 +251,11 @@ async function startSystemStream(): Promise<MediaStream> {
   return captureSystemAudio(source.id)
 }
 
-function liveAllowed(_withScreen: boolean): boolean {
+function liveAllowed(): boolean {
   const entitlement = useAuthStore.getState().entitlement
   return isPaidPlan(entitlement?.plan, entitlement?.status)
 }
 
-function liveError(withScreen: boolean): string {
-  if (withScreen) return 'Live copilot with screen needs an active Pro or Premium subscription.'
-  return 'Live copilot needs an active Pro or Premium subscription.'
+function liveError(): string {
+  return 'Live copilot needs an active subscription.'
 }

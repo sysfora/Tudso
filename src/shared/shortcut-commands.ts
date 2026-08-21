@@ -7,7 +7,6 @@ export const SHORTCUT_COMMANDS: Partial<Record<ShortcutId, AppCommand>> = {
   nextConversation: 'next-conversation',
   previousConversation: 'previous-conversation',
   askScreen: 'ask-screen',
-  liveCopilotScreen: 'live-copilot-screen',
   liveCopilotAudio: 'live-copilot-audio',
   stopGeneration: 'stop-generation',
   copyLastAnswer: 'copy-last-answer',

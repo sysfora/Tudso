@@ -1,4 +1,4 @@
-export type Plan = 'free' | 'pro' | 'premium'
+export type Plan = 'free' | 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
 
 export interface UserProfile {
   id: string
@@ -77,7 +77,7 @@ export interface EntitlementRecord {
   user: string
   plan: Plan
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid'
-  freeAccess?: 'pro' | 'premium'
+  freeAccess?: 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
   expiresAt: string
   created: string
   updated: string
@@ -92,6 +92,7 @@ export interface UsageRecord {
   screenAnalyses: number
   realtimeMinutes: number
   audioMinutes: number
+  sessions: number
   created: string
   updated: string
 }
@@ -118,6 +119,7 @@ export interface AuthState {
   state: string
   codeVerifier: string
   createdAt: number
+  kind: 'desktop' | 'web'
 }
 
 export interface ChatMessage {

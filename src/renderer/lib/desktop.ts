@@ -1,6 +1,6 @@
 import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap } from '@shared/defaults'
 import type { ElectronAPI } from '@shared/electron-api'
-import type { AppCommand, Conversation, LocalProfile, LocalUserData, Settings, ShortcutMap } from '@shared/types'
+import type { AppCommand, Conversation, LocalProfile, LocalUserData, MemoryEntry, Settings, ShortcutMap } from '@shared/types'
 
 function emptyLocalUser(): LocalUserData {
   return {
@@ -15,6 +15,8 @@ function emptyLocalUser(): LocalUserData {
       examples: true,
       explainTerms: true,
     },
+    memories: [],
+    memoryEnabled: true,
   }
 }
 
@@ -163,6 +165,18 @@ function createMock(): ElectronAPI {
       complete: async (userId) => {
         const current = memory.users[userId] ?? emptyLocalUser()
         const next: LocalUserData = { ...current, complete: true }
+        memory.users[userId] = next
+        localStorage.setItem('tudso.users', JSON.stringify(memory.users))
+        return structuredClone(next)
+      },
+      setMemory: async (userId, patch: { entries?: MemoryEntry[]; enabled?: boolean }) => {
+        const current = memory.users[userId] ?? emptyLocalUser()
+        const next: LocalUserData = {
+          ...emptyLocalUser(),
+          ...current,
+          memories: patch.entries ?? current.memories ?? [],
+          memoryEnabled: patch.enabled ?? current.memoryEnabled ?? true,
+        }
         memory.users[userId] = next
         localStorage.setItem('tudso.users', JSON.stringify(memory.users))
         return structuredClone(next)

@@ -11,7 +11,7 @@ import {
   User,
 } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
-import { MODEL_OPTIONS, SHORTCUT_LABELS, resolveChatModel } from '@shared/defaults'
+import { SHORTCUT_LABELS } from '@shared/defaults'
 import { canHideFromCapture } from '@shared/plans'
 import type { ShortcutId, WindowMode } from '@shared/types'
 import {
@@ -60,7 +60,12 @@ export function TitleBarMenu() {
           </IconButton>
         </span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[252px] p-1.5">
+      <DropdownMenuContent
+        side="bottom"
+        align="end"
+        collisionPadding={8}
+        className="w-[min(252px,calc(100vw-16px))] p-1.5"
+      >
         {email ? (
           <>
             <DropdownMenuItem onSelect={() => setSettingsOpen(true, 'account')}>
@@ -92,26 +97,6 @@ export function TitleBarMenu() {
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuLabel>Model</DropdownMenuLabel>
-        {MODEL_OPTIONS.map((option) => (
-          <DropdownMenuCheckboxItem
-            key={option.value}
-            className="justify-between gap-3"
-            checked={resolveChatModel(settings.model) === option.value}
-            onCheckedChange={(checked) => {
-              if (checked) void useAppStore.getState().setSettings({ model: option.value })
-            }}
-          >
-            <span>{option.label}</span>
-            <span className="text-[11px] text-muted">{option.detail}</span>
-          </DropdownMenuCheckboxItem>
-        ))}
-        <DropdownMenuItem onSelect={() => runAppCommand('toggle-model')}>
-          Switch model
-          <MenuHint>{hint(shortcuts.toggleModel)}</MenuHint>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
         <DropdownMenuLabel>Session</DropdownMenuLabel>
         {runningSessionId ? (
           <DropdownMenuItem

@@ -1,4 +1,4 @@
-export type Plan = 'free' | 'pro' | 'premium'
+export type Plan = 'free' | 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
 
 export interface UserProfile {
   id: string
@@ -106,7 +106,7 @@ export interface Entitlement {
   user: string
   plan: Plan
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid'
-  freeAccess?: 'pro' | 'premium'
+  freeAccess?: 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
   expiresAt: string
 }
 
@@ -122,21 +122,12 @@ export interface Subscription {
 }
 
 export interface BillingPlanPrice {
-  id: 'pro' | 'premium'
+  id: 'weekly' | 'monthly' | 'yearly'
   priceId: string
   amount: number | null
   currency: string
   interval: string
 }
 
-export type MemorySource = 'auto' | 'manual'
-
-export interface MemoryEntry {
-  id: string
-  text: string
-  created: string
-  source?: MemorySource
-}
-
-export const MAX_MEMORIES = 80
-export const MAX_MEMORY_CHARS = 400
+export type { MemoryEntry, MemorySource } from '@shared/types'
+export { MAX_MEMORIES, MAX_MEMORY_CHARS } from '@shared/memory'

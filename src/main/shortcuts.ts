@@ -17,7 +17,6 @@ const SHOW_FIRST = new Set<ShortcutId>([
   'endSession',
   'nextConversation',
   'previousConversation',
-  'liveCopilotScreen',
   'liveCopilotAudio',
   'focusComposer',
   'openSettings',

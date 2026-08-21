@@ -2,15 +2,39 @@ import { create } from 'zustand'
 import { api, clearToken, setToken } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import type { AuthSession, LocalProfile } from '@shared/types'
-import type { Entitlement, MemoryEntry, Plan, UserProfile } from '@/types/api'
+import type { Entitlement, MemoryEntry, UserProfile } from '@/types/api'
 import { toUserProfile } from '@/types/api'
-import { canHideFromCapture } from '@shared/plans'
+import { MAX_MEMORIES, normalizeMemoryEntries } from '@shared/memory'
+import { canHideFromCapture, type PaidPlan } from '@shared/plans'
 
 let entitlementStream: AbortController | null = null
 
 function stopEntitlementStream() {
   entitlementStream?.abort()
   entitlementStream = null
+}
+
+function profileLooksEmpty(profile: {
+  preferredName?: string
+  profession?: string
+  role?: string
+  industry?: string
+  education?: string
+  skills?: string[]
+  goals?: string[]
+  customContext?: string
+} | null | undefined) {
+  if (!profile) return true
+  return (
+    !profile.preferredName &&
+    !profile.profession &&
+    !profile.role &&
+    !profile.industry &&
+    !profile.education &&
+    !profile.customContext &&
+    !(profile.skills?.length) &&
+    !(profile.goals?.length)
+  )
 }
 
 function startEntitlementStream(onUpdate: (entitlement: Entitlement | null) => void) {
@@ -67,8 +91,8 @@ interface AuthActions {
   saveMemories: (entries: MemoryEntry[]) => Promise<MemoryEntry[]>
   setMemoryEnabled: (enabled: boolean) => Promise<void>
   clearMemories: () => Promise<void>
-  checkout: (plan: Plan) => Promise<string>
-  openBilling: (action: 'manage' | 'cancel' | 'upgrade', plan?: Plan) => Promise<string>
+  checkout: (plan: PaidPlan) => Promise<string>
+  openBilling: (action: 'manage' | 'cancel' | 'upgrade', plan?: PaidPlan) => Promise<string>
 }
 
 export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
@@ -157,17 +181,58 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
   hydrateSignedIn: async (session: AuthSession) => {
     setToken(session.token)
-    const [, local] = await Promise.all([
-      api.me.get(),
-      desktop.profile.get(session.userId),
-      get().loadEntitlement(),
-      get().loadMemories(),
-    ])
+    const me = await api.me.get()
+    let local = await desktop.profile.get(session.userId)
+    if (!local.complete && me.onboardingComplete) {
+      local = await desktop.profile.complete(session.userId)
+    }
+    if (profileLooksEmpty(local.profile)) {
+      try {
+        const remote = await api.me.getProfile()
+        if (!profileLooksEmpty(remote)) {
+          local = await desktop.profile.set(session.userId, {
+            preferredName: remote.preferredName,
+            profession: remote.profession,
+            role: remote.role,
+            industry: remote.industry,
+            education: remote.education,
+            skills: remote.skills,
+            goals: remote.goals,
+            communicationStyle: remote.communicationStyle,
+            technicalLevel: remote.technicalLevel,
+            formal: remote.formal,
+            stepByStep: remote.stepByStep,
+            examples: remote.examples,
+            explainTerms: remote.explainTerms,
+            customContext: remote.customContext,
+          })
+        }
+      } catch {
+        // Profile now lives on this device. Ignore old-server misses.
+      }
+    }
+    if (!local.memories?.length) {
+      try {
+        const remote = await api.context.get()
+        if (remote.entries?.length || remote.enabled === false) {
+          local = await desktop.profile.setMemory(session.userId, {
+            entries: normalizeMemoryEntries(remote.entries),
+            enabled: remote.enabled !== false,
+          })
+        }
+      } catch {
+        // Memories now live on this device.
+      }
+    }
+    await get().loadEntitlement()
     startEntitlementStream((entitlement) => set({ entitlement }))
     set({
       session,
       profile: toUserProfile(session.userId, local.profile),
       onboardingComplete: local.complete === true,
+      memories: normalizeMemoryEntries(local.memories),
+      memoryEnabled: local.memoryEnabled !== false,
+      memoriesLoaded: true,
       loading: false,
       loginStatus: 'idle',
       loginError: null,
@@ -206,11 +271,16 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   },
 
   loadMemories: async () => {
+    const userId = get().session?.userId
+    if (!userId) {
+      set({ memories: [], memoryEnabled: true, memoriesLoaded: true })
+      return
+    }
     try {
-      const context = await api.context.get()
+      const local = await desktop.profile.get(userId)
       set({
-        memories: context.entries ?? [],
-        memoryEnabled: context.enabled !== false,
+        memories: normalizeMemoryEntries(local.memories),
+        memoryEnabled: local.memoryEnabled !== false,
         memoriesLoaded: true,
       })
     } catch {
@@ -219,24 +289,30 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   },
 
   saveMemories: async (entries) => {
-    const context = await api.context.update({ entries })
-    const next = context.entries ?? []
-    set({ memories: next, memoryEnabled: context.enabled !== false, memoriesLoaded: true })
+    const userId = get().session?.userId
+    if (!userId) throw new Error('Not signed in')
+    const local = await desktop.profile.setMemory(userId, { entries: normalizeMemoryEntries(entries).slice(0, MAX_MEMORIES) })
+    const next = normalizeMemoryEntries(local.memories)
+    set({ memories: next, memoryEnabled: local.memoryEnabled !== false, memoriesLoaded: true })
     return next
   },
 
   setMemoryEnabled: async (enabled) => {
-    const context = await api.context.update({ enabled })
+    const userId = get().session?.userId
+    if (!userId) throw new Error('Not signed in')
+    const local = await desktop.profile.setMemory(userId, { enabled })
     set({
-      memories: context.entries ?? get().memories,
-      memoryEnabled: context.enabled !== false,
+      memories: normalizeMemoryEntries(local.memories),
+      memoryEnabled: local.memoryEnabled !== false,
       memoriesLoaded: true,
     })
   },
 
   clearMemories: async () => {
-    const context = await api.context.delete()
-    set({ memories: [], memoryEnabled: context.enabled !== false, memoriesLoaded: true })
+    const userId = get().session?.userId
+    if (!userId) throw new Error('Not signed in')
+    const local = await desktop.profile.setMemory(userId, { entries: [] })
+    set({ memories: [], memoryEnabled: local.memoryEnabled !== false, memoriesLoaded: true })
   },
 
   checkout: async (plan) => {

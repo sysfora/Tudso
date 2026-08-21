@@ -128,37 +128,6 @@ Never:
   return parts.join('\n\n')
 }
 
-const PROFILE_CONTEXT_TTL_MS = 20_000
-const profileContextCache = new Map<string, {
-  at: number
-  value: { contextEntries?: string[] }
-}>()
-
-export async function getProfileContext(
-  userId: string,
-  profile?: UserProfile,
-): Promise<{ profile?: UserProfile; resume?: ParsedResume; contextEntries?: string[] }> {
-  const hit = profileContextCache.get(userId)
-  const contextEntries = hit && Date.now() - hit.at < PROFILE_CONTEXT_TTL_MS
-    ? hit.value.contextEntries
-    : await loadMemoryEntries(userId)
-  if (!hit || Date.now() - hit.at >= PROFILE_CONTEXT_TTL_MS) {
-    profileContextCache.set(userId, { at: Date.now(), value: { contextEntries } })
-  }
-  return { profile, resume: undefined, contextEntries }
-}
-
-async function loadMemoryEntries(userId: string): Promise<string[] | undefined> {
-  const { getContext } = await import('./pocketbase.js')
-  const context = await getContext(userId)
-  return context?.enabled === false ? undefined : context?.entries?.map((entry) => entry.text).filter(Boolean)
-}
-
-export function invalidateProfileContext(userId?: string) {
-  if (userId) profileContextCache.delete(userId)
-  else profileContextCache.clear()
-}
-
 const MEMORY_EXTRACT_SYSTEM = `Extract durable personal facts about the USER from this exchange.
 Return JSON only: {"facts":["..."]}
 Include only stable facts: name, role, tools, stack, preferences, constraints, timezone, company, how they like answers.

@@ -3,19 +3,19 @@ import fs from 'node:fs/promises'
 import express, { type Request, type Response, type Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
-import { authenticateWithEmailPassword, buildCallbackUrl, confirmEmailChange, confirmEmailVerification, confirmPasswordReset, createAccount, exchangeDesktopToken, exchangeOAuthCallback, generateAuthState, getOAuthUrl, requestEmailVerification, requestPasswordReset, verifyAuthState } from './auth.js'
-import { chat, getProfileContext, transcription, vision, buildChatMessages, buildSystemPrompt, resolveChatModel, resolveVisionModel, invalidateProfileContext } from './ai.js'
-import { learnFromExchange } from './learn.js'
+import { authenticateWithEmailPassword, buildCallbackUrl, confirmEmailChange, confirmEmailVerification, confirmPasswordReset, createAccount, createAppSession, exchangeOAuthCallback, generateAuthState, getOAuthUrl, requestEmailVerification, requestPasswordReset, resolveAccessToken, verifyAuthState } from './auth.js'
+import { chat, transcription, vision, buildChatMessages, buildSystemPrompt, resolveChatModel, resolveVisionModel, extractMemoryFacts } from './ai.js'
 import { beginPlainStream, endPlainStream, writePlainStream } from './stream.js'
 import { config } from './config.js'
 import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
 import { aiRateLimiter, rateLimiter, requireAuth, sensitiveRateLimiter } from './middleware.js'
-import { createConversation, createMessage, deleteConversation, deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getConversations, getContext, getDevices, getEntitlementForUser, getMessages, getOrCreateProfile, getResume, getSubscription, getUsageToday, getUserBilling, incrementUsage, syncUserBilling, updateContext, updateProfile, watchEntitlement } from './pocketbase.js'
-import { MAX_MEMORIES, MAX_MEMORY_CHARS, normalizeMemoryEntries } from './memory.js'
+import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getContext, getDevices, getEntitlementForUser, getProfileIfExists, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, watchEntitlement } from './pocketbase.js'
+import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
 import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
-import { isPaidPlan } from './plans.js'
-import type { AIStreamHandler, ChatMessage, Plan, UserProfile } from './types.js'
+import { isPaidPlan, CHECKOUT_PLANS } from './plans.js'
+import type { AIStreamHandler, ChatMessage, UserProfile } from './types.js'
+import { WEB_DEVICE_ID, clearWebSessionCookie, setWebSessionCookie } from './web-session.js'
 
 const DEVICE_ID = z.string().min(1).max(128).regex(/^[a-zA-Z0-9._:-]+$/)
 
@@ -43,6 +43,8 @@ const clientProfileSchema = z.object({
   customContext: z.string().max(2000).optional(),
 }).optional()
 
+const clientMemoriesSchema = z.array(z.string().max(MAX_MEMORY_CHARS)).max(MAX_MEMORIES).optional()
+
 function clientProfile(userId: string, body?: z.infer<typeof clientProfileSchema>): UserProfile | undefined {
   if (!body) return undefined
   return {
@@ -64,6 +66,13 @@ function clientProfile(userId: string, body?: z.infer<typeof clientProfileSchema
     customContext: body.customContext,
     created: '',
     updated: '',
+  }
+}
+
+function promptFromClient(userId: string, profileBody?: z.infer<typeof clientProfileSchema>, memories?: string[]) {
+  return {
+    profile: clientProfile(userId, profileBody),
+    contextEntries: memories?.map((entry) => entry.trim()).filter(Boolean).slice(0, MAX_MEMORIES),
   }
 }
 
@@ -117,11 +126,19 @@ function verifyInboxPage(email: string, state: string) {
   })
 }
 
-router.get('/auth/desktop', (req: Request, res: Response) => {
+router.get('/auth/desktop', async (req: Request, res: Response) => {
   const state = req.query.state as string | undefined
   if (!state) {
     res.status(400).send('Missing state')
     return
+  }
+  const cookieToken = typeof req.cookies?.token === 'string' ? req.cookies.token : ''
+  if (cookieToken && verifyAuthState(state)) {
+    const resolved = await resolveAccessToken(cookieToken)
+    if (resolved?.userId) {
+      await finishDesktopAuth(res, { token: '', userId: resolved.userId, email: resolved.email }, state)
+      return
+    }
   }
   const mode = req.query.mode === 'register' ? 'register' : 'login'
   res.setHeader('Content-Type', 'text/html')
@@ -440,7 +457,7 @@ router.post('/auth/desktop/subscribe', express.urlencoded({ extended: true }), a
   const parsed = z.object({
     code: z.string().min(1),
     state: z.string().min(1),
-    plan: z.enum(['pro', 'premium']),
+    plan: z.enum(CHECKOUT_PLANS),
   }).safeParse(req.body)
   if (!parsed.success) {
     res.status(400).send(sessionExpiredPage())
@@ -530,11 +547,7 @@ router.post('/auth/desktop/callback', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Invalid or expired code' })
     return
   }
-  const result = await exchangeDesktopToken(pending.token, deviceId, platform, appVersion)
-  if (!result) {
-    res.status(401).json({ error: 'Invalid token' })
-    return
-  }
+  const result = await createAppSession(pending.userId, pending.email, deviceId, platform, appVersion)
   pendingCodeTokens.delete(code)
   res.json({
     token: result.desktopToken,
@@ -564,57 +577,144 @@ router.post('/auth/desktop/start', (req: Request, res: Response) => {
   res.json({ url, state, deviceId, platform, appVersion })
 })
 
+async function startWebSession(res: Response, auth: { userId: string; email: string }) {
+  const session = await createAppSession(auth.userId, auth.email, WEB_DEVICE_ID, 'web', 'dashboard')
+  setWebSessionCookie(res, session.desktopToken)
+  return session
+}
+
+router.get('/auth/web/session', async (req: Request, res: Response) => {
+  const token = typeof req.cookies?.token === 'string' ? req.cookies.token : ''
+  if (!token) {
+    res.json({ user: null })
+    return
+  }
+  const resolved = await resolveAccessToken(token)
+  if (!resolved?.userId) {
+    res.json({ user: null })
+    return
+  }
+  res.json({ user: { userId: resolved.userId, email: resolved.email } })
+})
+
+router.post('/auth/web/login', rateLimiter, async (req: Request, res: Response) => {
+  const parsed = z.object({ email: z.string().email(), password: z.string().min(1) }).safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Enter a valid email and password.' })
+    return
+  }
+  const auth = await authenticateWithEmailPassword(parsed.data.email, parsed.data.password)
+  if (!auth) {
+    res.status(401).json({ error: 'Invalid email or password.' })
+    return
+  }
+  if (!auth.verified) {
+    await requestEmailVerification(auth.email)
+    res.status(403).json({ error: 'Verify your email, then sign in.', needsVerification: true, email: auth.email })
+    return
+  }
+  const session = await startWebSession(res, auth)
+  res.json({ userId: session.userId, email: session.email })
+})
+
+router.post('/auth/web/register', rateLimiter, async (req: Request, res: Response) => {
+  const parsed = z.object({
+    email: z.string().email(),
+    password: z.string().min(8),
+    passwordConfirm: z.string().min(8),
+    name: z.string().trim().max(80).optional(),
+  }).safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Enter a valid email and a password with at least 8 characters.' })
+    return
+  }
+  if (parsed.data.password !== parsed.data.passwordConfirm) {
+    res.status(400).json({ error: 'Passwords do not match.' })
+    return
+  }
+  const auth = await createAccount(parsed.data.email, parsed.data.password, parsed.data.name || parsed.data.email.split('@')[0] || 'Tudso user')
+  if (!auth) {
+    res.status(409).json({ error: 'Could not create account. That email may already be in use.' })
+    return
+  }
+  if (!auth.verified) {
+    res.json({ needsVerification: true, email: auth.email })
+    return
+  }
+  const session = await startWebSession(res, auth)
+  res.json({ userId: session.userId, email: session.email })
+})
+
+router.post('/auth/web/oauth', rateLimiter, async (req: Request, res: Response) => {
+  const { state } = generateAuthState('web')
+  try {
+    const url = await getOAuthUrl('google', state)
+    res.json({ url })
+  } catch (error) {
+    logError('Web Google sign-in start failed', error)
+    res.status(400).json({ error: error instanceof Error ? error.message : "Google sign-in isn't available right now." })
+  }
+})
+
+router.get('/auth/web/oauth/callback', async (req: Request, res: Response) => {
+  const parsed = z.object({ code: z.string(), state: z.string() }).safeParse(req.query)
+  if (!parsed.success) {
+    res.redirect('/login?error=oauth')
+    return
+  }
+  const [authState, provider] = parsed.data.state.split(':') as [string, 'google']
+  if (!verifyAuthState(authState)) {
+    res.redirect('/login?error=expired')
+    return
+  }
+  const auth = await exchangeOAuthCallback(provider, parsed.data.code, authState)
+  if (!auth) {
+    res.redirect('/login?error=oauth')
+    return
+  }
+  if (!auth.verified) {
+    await requestEmailVerification(auth.email)
+    res.redirect('/login?verify=1')
+    return
+  }
+  await startWebSession(res, auth)
+  res.redirect('/dashboard')
+})
+
 router.post('/auth/logout', requireAuth, async (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  const token = bearerToken(req) || (typeof req.cookies?.token === 'string' ? req.cookies.token : '')
   await deleteDesktopSession(token)
+  clearWebSessionCookie(res)
   res.json({ ok: true })
 })
 
 // Me
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
-  const [profile, billing] = await Promise.all([
-    getOrCreateProfile(req.userId!),
-    getUserBilling(req.userId!),
-  ])
+  const billing = await getUserBilling(req.userId!).catch(() => null)
   res.json({
     userId: req.userId,
     email: req.email,
-    profile,
     onboardingComplete: Boolean(billing?.onboardingComplete),
   })
 })
 
-router.post('/me/onboarding/complete', requireAuth, rateLimiter, async (req: Request, res: Response) => {
-  await syncUserBilling(req.userId!, { onboardingComplete: true })
-  res.json({ onboardingComplete: true })
-})
-
+function localUserDataGone(_req: Request, res: Response) {
+  res.status(410).json({ error: 'Profile, onboarding, and memory are stored on the device, not the server' })
+}
+router.post('/me/onboarding/complete', requireAuth, localUserDataGone)
 router.get('/me/profile', requireAuth, async (req: Request, res: Response) => {
-  const profile = await getOrCreateProfile(req.userId!)
-  res.json(profile)
+  try {
+    const profile = await getProfileIfExists(req.userId!)
+    if (!profile) {
+      res.status(404).json({ error: 'No profile on the server' })
+      return
+    }
+    res.json(profile)
+  } catch {
+    localUserDataGone(req, res)
+  }
 })
-
-router.patch('/me/profile', requireAuth, rateLimiter, async (req: Request, res: Response) => {
-  const schema = z.object({
-    preferredName: z.string().optional(),
-    profession: z.string().optional(),
-    role: z.string().optional(),
-    industry: z.string().optional(),
-    education: z.string().optional(),
-    skills: z.array(z.string()).optional(),
-    goals: z.array(z.string()).optional(),
-    communicationStyle: z.enum(['concise', 'balanced', 'detailed']).optional(),
-    technicalLevel: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
-    formal: z.boolean().optional(),
-    stepByStep: z.boolean().optional(),
-    examples: z.boolean().optional(),
-    explainTerms: z.boolean().optional(),
-    customContext: z.string().optional(),
-  })
-  const profile = await updateProfile(req.userId!, schema.parse(req.body))
-  res.json(profile)
-})
+router.patch('/me/profile', requireAuth, localUserDataGone)
 
 // Resume files stay on the device. These routes remain so old clients fail clearly.
 function resumeGone(_req: Request, res: Response) {
@@ -625,27 +725,27 @@ router.get('/me/resume', requireAuth, resumeGone)
 router.get('/me/resume/file', requireAuth, resumeGone)
 router.delete('/me/resume', requireAuth, resumeGone)
 
-// Conversations
-router.get('/conversations', requireAuth, async (req: Request, res: Response) => {
-  const conversations = await getConversations(req.userId!)
-  res.json(conversations)
-})
+function conversationsGone(_req: Request, res: Response) {
+  res.status(410).json({ error: 'Chat sessions are stored on the device, not the server' })
+}
+router.get('/conversations', requireAuth, conversationsGone)
+router.post('/conversations', requireAuth, conversationsGone)
+router.get('/conversations/:id', requireAuth, conversationsGone)
+router.patch('/conversations/:id', requireAuth, conversationsGone)
+router.delete('/conversations/:id', requireAuth, conversationsGone)
 
-router.post('/conversations', requireAuth, rateLimiter, async (req: Request, res: Response) => {
-  const { title } = z.object({ title: z.string().min(1) }).parse(req.body)
-  const conversation = await createConversation(req.userId!, title)
-  res.json(conversation)
-})
+const chatHistorySchema = z.array(z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string().max(100_000),
+})).max(24).optional()
 
-router.get('/conversations/:id', requireAuth, async (req: Request, res: Response) => {
-  const messages = await getMessages(req.userId!, req.params.id as string)
-  res.json(messages)
-})
-
-router.delete('/conversations/:id', requireAuth, rateLimiter, async (req: Request, res: Response) => {
-  await deleteConversation(req.userId!, req.params.id as string)
-  res.json({ ok: true })
-})
+function historyFromBody(history: z.infer<typeof chatHistorySchema>, includeHistory: boolean): ChatMessage[] {
+  if (!includeHistory || !history?.length) return []
+  return history
+    .filter((item) => item.content.trim())
+    .slice(-12)
+    .map((item) => ({ role: item.role, content: item.content }))
+}
 
 // AI
 router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Response) => {
@@ -655,30 +755,25 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
     stream: z.boolean().default(true),
     includeProfile: z.boolean().default(true),
     includeHistory: z.boolean().default(true),
+    history: chatHistorySchema,
     model: z.enum(['gpt-4.1-nano', 'gpt-4.1']).optional(),
     profile: clientProfileSchema,
+    memories: clientMemoriesSchema,
   })
-  const { conversationId, message, stream, includeProfile, includeHistory, model, profile: profileBody } = schema.parse(req.body)
+  const { message, stream, includeProfile, includeHistory, history: historyBody, model, profile: profileBody, memories } = schema.parse(req.body)
 
-  const [entitlement, historyRecords, profileContext] = await Promise.all([
-    getEntitlementForUser(req.userId!),
-    includeHistory && conversationId ? getMessages(req.userId!, conversationId) : Promise.resolve([]),
-    includeProfile
-      ? getProfileContext(req.userId!, clientProfile(req.userId!, profileBody))
-      : Promise.resolve({ profile: undefined, resume: undefined, contextEntries: undefined }),
-  ])
+  const entitlement = await getEntitlementForUser(req.userId!)
   if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-    res.status(403).json({ error: 'Chat requires an active Pro or Premium subscription' })
+    res.status(403).json({ error: 'Chat requires an active subscription' })
     return
   }
 
-  const history: ChatMessage[] = historyRecords
-    .slice(-12)
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-  const { profile, resume, contextEntries } = profileContext
+  const history: ChatMessage[] = historyFromBody(historyBody, includeHistory)
+  const { profile, contextEntries } = includeProfile
+    ? promptFromClient(req.userId!, profileBody, memories)
+    : { profile: undefined, contextEntries: undefined }
   const systemPrompt = buildSystemPrompt({
     profile,
-    resume,
     contextEntries,
     communicationStyle: profile?.communicationStyle,
   })
@@ -696,7 +791,7 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
         },
         onDone: () => {
           endPlainStream(res)
-          void persistChat(req.userId!, conversationId, message, content)
+          void persistChat(req.userId!, message, content)
         },
         onError: (error) => {
           if (res.headersSent) {
@@ -712,15 +807,10 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
 
   const result = await chat({ messages, model: resolveChatModel(model) })
   try {
-    if (conversationId) {
-      await createMessage(req.userId!, conversationId, 'user', storedUserContent(message))
-      await createMessage(req.userId!, conversationId, 'assistant', result.content)
-    }
     await incrementUsage(req.userId!, { requests: 1, tokens: result.usage?.totalTokens ?? 0 })
   } catch (error) {
     logError('Failed to persist chat usage', error, { user: req.userId })
   }
-  void learnFromExchange(req.userId!, storedUserContent(message), result.content)
   res.json(result)
 })
 
@@ -729,27 +819,23 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
     image: z.string().min(1),
     message: z.string().min(1),
     conversationId: z.string().optional(),
+    history: chatHistorySchema,
     model: z.enum(['gpt-4.1-nano', 'gpt-4.1']).optional(),
     profile: clientProfileSchema,
+    memories: clientMemoriesSchema,
   })
-  const { image, message, conversationId, model, profile: profileBody } = schema.parse(req.body)
+  const { image, message, history: historyBody, model, profile: profileBody, memories } = schema.parse(req.body)
 
-  const [entitlement, historyRecords, profileContext] = await Promise.all([
-    getEntitlementForUser(req.userId!),
-    conversationId ? getMessages(req.userId!, conversationId) : Promise.resolve([]),
-    getProfileContext(req.userId!, clientProfile(req.userId!, profileBody)),
-  ])
+  const entitlement = await getEntitlementForUser(req.userId!)
   if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-    res.status(403).json({ error: 'Screen answers require an active Pro or Premium subscription' })
+    res.status(403).json({ error: 'Screen answers require an active subscription' })
     return
   }
 
-  const history: ChatMessage[] = historyRecords
+  const history: ChatMessage[] = historyFromBody(historyBody, true)
     .filter((m) => !(m.role === 'user' && /^(Answer from screen|Live copilot)$/i.test(m.content)))
-    .slice(-12)
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-  const { profile, resume, contextEntries } = profileContext
-  const systemPrompt = buildSystemPrompt({ profile, resume, contextEntries, screenContext: true })
+  const { profile, contextEntries } = promptFromClient(req.userId!, profileBody, memories)
+  const systemPrompt = buildSystemPrompt({ profile, contextEntries, screenContext: true })
   const messages = buildChatMessages(systemPrompt, history, message)
   beginPlainStream(res)
   let content = ''
@@ -762,7 +848,7 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
       },
       onDone: () => {
         endPlainStream(res)
-        void persistVision(req.userId!, conversationId, message, content)
+        void persistVision(req.userId!, message, content)
       },
       onError: (error) => {
         if (res.headersSent) {
@@ -778,7 +864,7 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
 router.post('/ai/transcribe', requireAuth, aiRateLimiter, upload.single('audio'), async (req: Request, res: Response) => {
   const entitlement = await getEntitlementForUser(req.userId!)
   if (!isPaidPlan(entitlement.plan, entitlement.status)) {
-    res.status(403).json({ error: 'Voice input requires an active Pro or Premium subscription' })
+    res.status(403).json({ error: 'Voice input requires an active subscription' })
     return
   }
   if (!req.file) {
@@ -803,10 +889,26 @@ router.post('/ai/transcribe', requireAuth, aiRateLimiter, upload.single('audio')
   }
 })
 
+router.post('/ai/memory-extract', requireAuth, aiRateLimiter, async (req: Request, res: Response) => {
+  const schema = z.object({
+    userMessage: z.string().min(1).max(20_000),
+    assistantContent: z.string().min(1).max(100_000),
+    existing: z.array(z.string().max(MAX_MEMORY_CHARS)).max(MAX_MEMORIES).optional(),
+  })
+  const { userMessage, assistantContent, existing } = schema.parse(req.body)
+  const entitlement = await getEntitlementForUser(req.userId!)
+  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
+    res.status(403).json({ error: 'Memory requires an active subscription' })
+    return
+  }
+  const facts = await extractMemoryFacts(userMessage, assistantContent, existing ?? [])
+  res.json({ facts })
+})
+
 router.get('/ai/realtime/session', requireAuth, async (req: Request, res: Response) => {
   const entitlement = await getEntitlementForUser(req.userId!)
   if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-    res.status(403).json({ error: 'Live copilot requires an active Pro or Premium subscription' })
+    res.status(403).json({ error: 'Live copilot requires an active subscription' })
     return
   }
   // For production, create a short-lived ephemeral session token from the provider
@@ -853,6 +955,55 @@ router.get('/usage', requireAuth, async (req: Request, res: Response) => {
   res.json({ usage })
 })
 
+router.post('/usage/session', requireAuth, rateLimiter, async (req: Request, res: Response) => {
+  await incrementUsage(req.userId!, { sessions: 1 })
+  res.json({ ok: true })
+})
+
+router.get('/me/dashboard', requireAuth, async (req: Request, res: Response) => {
+  const userId = req.userId!
+  const [entitlement, subscription, usage, history, devices] = await Promise.all([
+    getEntitlementForUser(userId),
+    getSubscription(userId),
+    getUsageToday(userId),
+    getUsageHistory(userId, 14),
+    getDevices(userId),
+  ])
+  const sessionCount = history.reduce((total, day) => total + (day.sessions ?? 0), 0)
+  res.json({
+    email: req.email ?? '',
+    entitlement,
+    subscription,
+    usage,
+    history,
+    sessionCount,
+    conversationCount: sessionCount,
+    deviceCount: devices.length,
+  })
+})
+
+router.get('/billing/success', async (req: Request, res: Response) => {
+  const sessionId = typeof req.query.session_id === 'string' ? req.query.session_id : ''
+  const token = typeof req.cookies?.token === 'string' ? req.cookies.token : ''
+  const resolved = token ? await resolveAccessToken(token) : null
+  if (resolved?.userId && sessionId) {
+    try {
+      await finalizeCheckoutSession(sessionId, resolved.userId)
+    } catch (error) {
+      logError('Failed to finalize web checkout', error, { user: resolved.userId })
+    }
+  }
+  res.redirect('/dashboard?billing=success')
+})
+
+router.get('/billing/cancel', (_req: Request, res: Response) => {
+  res.redirect('/dashboard?billing=cancel')
+})
+
+router.get('/billing/return', (_req: Request, res: Response) => {
+  res.redirect('/dashboard')
+})
+
 // Billing
 router.get('/billing/plans', async (_req: Request, res: Response) => {
   const prices = await listPaidPlanPrices()
@@ -860,9 +1011,9 @@ router.get('/billing/plans', async (_req: Request, res: Response) => {
 })
 
 router.post('/billing/checkout', requireAuth, rateLimiter, async (req: Request, res: Response) => {
-  const { plan } = z.object({ plan: z.enum(['pro', 'premium']) }).parse(req.body)
+  const { plan } = z.object({ plan: z.enum(CHECKOUT_PLANS) }).parse(req.body)
   try {
-    const session = await createCheckoutSession(req.userId!, req.email ?? '', plan as Plan)
+    const session = await createCheckoutSession(req.userId!, req.email ?? '', plan)
     res.json(session)
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : 'Could not start checkout' })
@@ -872,7 +1023,7 @@ router.post('/billing/checkout', requireAuth, rateLimiter, async (req: Request, 
 router.post('/billing/portal', requireAuth, async (req: Request, res: Response) => {
   const { action, plan } = z.object({
     action: z.enum(['manage', 'cancel', 'upgrade']).default('manage'),
-    plan: z.enum(['pro', 'premium']).optional(),
+    plan: z.enum(CHECKOUT_PLANS).optional(),
   }).parse(req.body ?? {})
   try {
     const session = await createCustomerPortalSession(req.userId!, { action, plan })
@@ -934,52 +1085,27 @@ router.post('/me/sessions/revoke-others', requireAuth, sensitiveRateLimiter, asy
   res.json({ ok: true, revoked })
 })
 
-// Memory
+// Memory — read leftover server records for one-time device migration. Writes stay on the device.
 router.get('/me/context', requireAuth, async (req: Request, res: Response) => {
-  const context = await getContext(req.userId!)
-  res.json(context ?? { id: '', user: req.userId, entries: [], enabled: true })
+  try {
+    const context = await getContext(req.userId!)
+    res.json(context ?? { id: '', user: req.userId, entries: [], enabled: true })
+  } catch {
+    localUserDataGone(req, res)
+  }
 })
-
-router.patch('/me/context', requireAuth, rateLimiter, async (req: Request, res: Response) => {
-  const { entries, enabled } = z.object({
-    entries: z.array(z.object({
-      id: z.string().min(1).max(64),
-      text: z.string().min(1).max(MAX_MEMORY_CHARS),
-      created: z.string().min(1),
-      source: z.enum(['auto', 'manual']).optional(),
-    })).max(MAX_MEMORIES).optional(),
-    enabled: z.boolean().optional(),
-  }).refine((body) => body.entries !== undefined || body.enabled !== undefined, {
-    message: 'entries or enabled is required',
-  }).parse(req.body)
-  const context = await updateContext(req.userId!, {
-    entries: entries ? normalizeMemoryEntries(entries) : undefined,
-    enabled,
-  })
-  invalidateProfileContext(req.userId)
-  res.json(context)
-})
-
-router.delete('/me/context', requireAuth, rateLimiter, async (req: Request, res: Response) => {
-  const existing = await getContext(req.userId!)
-  const context = await updateContext(req.userId!, { entries: [], enabled: existing?.enabled ?? true })
-  invalidateProfileContext(req.userId)
-  res.json({ ok: true, entries: [], enabled: context.enabled })
-})
+router.patch('/me/context', requireAuth, localUserDataGone)
+router.delete('/me/context', requireAuth, localUserDataGone)
 
 // Account export
 router.get('/me/export', requireAuth, sensitiveRateLimiter, async (req: Request, res: Response) => {
   const userId = req.userId!
-  const [profile, resume, conversations, subscription, entitlement, usage, context] = await Promise.all([
-    getOrCreateProfile(userId),
-    getResume(userId),
-    getConversations(userId),
+  const [subscription, entitlement, usage, history] = await Promise.all([
     getSubscription(userId),
     getEntitlementForUser(userId),
     getUsageToday(userId),
-    getContext(userId),
+    getUsageHistory(userId, 30),
   ])
-  const messages = (await Promise.all(conversations.map((c: { id: string }) => getMessages(userId, c.id)))).flat()
   const billing = subscription
     ? {
         status: subscription.status,
@@ -991,15 +1117,11 @@ router.get('/me/export', requireAuth, sensitiveRateLimiter, async (req: Request,
   res.json({
     exportedAt: new Date().toISOString(),
     email: req.email ?? '',
-    profile,
-    resume,
-    conversations,
-    messages,
     subscription: billing,
     entitlement,
     usage,
-    memories: context?.entries ?? [],
-    memoryEnabled: context?.enabled !== false,
+    usageHistory: history,
+    note: 'Profile, resume, chats, memories, and PIN are stored only on your device.',
   })
 })
 
@@ -1015,44 +1137,20 @@ router.delete('/me/account', requireAuth, sensitiveRateLimiter, async (req: Requ
   res.json({ ok: true })
 })
 
-async function persistChat(userId: string, conversationId: string | undefined, message: string, content: string) {
-  const userText = storedUserContent(message)
+async function persistChat(userId: string, _message: string, _content: string) {
   try {
-    if (conversationId && content) {
-      await createMessage(userId, conversationId, 'user', userText)
-      await createMessage(userId, conversationId, 'assistant', content)
-    }
     await incrementUsage(userId, { requests: 1 })
   } catch (error) {
     logError('Failed to persist chat usage', error, { user: userId })
   }
-  void learnFromExchange(userId, userText, content)
 }
 
-async function persistVision(userId: string, conversationId: string | undefined, message: string, content: string) {
-  const userText = storedUserContent(message)
-  try {
-    if (conversationId) {
-      await createMessage(userId, conversationId, 'user', userText)
-      await createMessage(userId, conversationId, 'assistant', content || '(no response)')
-    }
-  } catch (error) {
-    logError('Failed to persist vision messages', pocketbaseError(error), { user: userId })
-  }
+async function persistVision(userId: string, _message: string, _content: string) {
   try {
     await incrementUsage(userId, { requests: 1, screenAnalyses: 1 })
   } catch (error) {
     logError('Failed to persist vision usage', pocketbaseError(error), { user: userId })
   }
-  void learnFromExchange(userId, userText, content)
-}
-
-function storedUserContent(message: string): string {
-  const transcript = message.match(/Transcript:\s*([\s\S]+)$/i)?.[1]?.trim()
-  if (transcript && transcript !== '(no speech in this moment)') return transcript
-  if (/live interview copilot|Audio source:/i.test(message)) return 'Live copilot'
-  if (/Answer from this screenshot|Answer whatever needs a response on this screenshot/i.test(message)) return 'Answer from screen'
-  return message
 }
 
 function pocketbaseError(error: unknown): unknown {

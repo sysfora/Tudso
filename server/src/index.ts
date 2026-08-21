@@ -1,5 +1,6 @@
 import './eventsource-polyfill.js'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import express from 'express'
 import helmet from 'helmet'
 import http from 'node:http'
@@ -38,6 +39,7 @@ app.use(helmet({
   },
 }))
 app.use(cors({ origin: true, credentials: true }))
+app.use(cookieParser())
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }))
 app.use(express.json({
   limit: '10mb',

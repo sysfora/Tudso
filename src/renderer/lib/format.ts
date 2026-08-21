@@ -1,11 +1,24 @@
+const PLACEHOLDER_SESSION_TITLE = /^(new session|answer from screen|live copilot)$/i
+const AUTO_TITLE_LENGTH = 42
+export const MAX_SESSION_TITLE = 80
+
 export function createId() {
   return crypto.randomUUID()
 }
 
-export function makeTitle(text: string) {
+export function isPlaceholderSessionTitle(title: string) {
+  const clean = title.replace(/\s+/g, ' ').trim()
+  return !clean || PLACEHOLDER_SESSION_TITLE.test(clean)
+}
+
+export function sessionTitleFromChat(text: string) {
   const clean = text.replace(/\s+/g, ' ').trim()
-  if (!clean) return 'New session'
-  return clean.length > 42 ? `${clean.slice(0, 42)}…` : clean
+  if (!clean || PLACEHOLDER_SESSION_TITLE.test(clean)) return null
+  return clean.length > AUTO_TITLE_LENGTH ? `${clean.slice(0, AUTO_TITLE_LENGTH)}…` : clean
+}
+
+export function makeTitle(text: string) {
+  return sessionTitleFromChat(text) ?? 'New session'
 }
 
 export function conversationGroup(timestamp: number) {

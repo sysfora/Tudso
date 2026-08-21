@@ -72,10 +72,21 @@ export interface LocalResumeMeta {
   storedName: string
 }
 
+export type MemorySource = 'auto' | 'manual'
+
+export interface MemoryEntry {
+  id: string
+  text: string
+  created: string
+  source?: MemorySource
+}
+
 export interface LocalUserData {
   complete: boolean
   profile: LocalProfile
   resume?: LocalResumeMeta
+  memories: MemoryEntry[]
+  memoryEnabled: boolean
 }
 
 export type OnboardingStep =
@@ -138,7 +149,6 @@ export interface ShortcutMap {
   nextConversation: string
   previousConversation: string
   askScreen: string
-  liveCopilotScreen: string
   liveCopilotAudio: string
   stopGeneration: string
   copyLastAnswer: string
@@ -277,7 +287,6 @@ export type AppCommand =
   | 'send-message'
   | 'stop-generation'
   | 'ask-screen'
-  | 'live-copilot-screen'
   | 'live-copilot-audio'
   | 'position-window-1'
   | 'position-window-2'

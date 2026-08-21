@@ -1,4 +1,4 @@
-import { ArrowUp, AudioLines, Mic, MicOff, Monitor, Paperclip, Radio, ScanSearch, Square, User, X } from 'lucide-react'
+import { ArrowUp, AudioLines, Mic, MicOff, Monitor, Paperclip, Radio, ScanSearch, Square, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { formatAccelerator } from '@shared/accelerator'
 import { MODEL_OPTIONS, resolveChatModel } from '@shared/defaults'
@@ -32,7 +32,6 @@ export function Composer() {
   const entitlement = useAuthStore((state) => state.entitlement)
   const realtimeListening = useRealtimeStore((state) => state.listening)
   const realtimeSpeaking = useRealtimeStore((state) => state.speaking)
-  const realtimeWithScreen = useRealtimeStore((state) => state.withScreen)
   const realtimeError = useRealtimeStore((state) => state.error)
   const toggleRealtime = useRealtimeStore((state) => state.toggle)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -44,7 +43,6 @@ export function Composer() {
   const paid = isPaidPlan(entitlement?.plan, entitlement?.status)
   const screenAllowed = paid
   const audioAllowed = paid
-  const liveScreenAllowed = screenAllowed && audioAllowed
 
   useEffect(() => {
     const node = textareaRef.current
@@ -92,20 +90,13 @@ export function Composer() {
         </Select>
         <button
           type="button"
-          className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted hover:bg-raised hover:text-fg"
-        >
-          <User className="h-3 w-3" />
-          Profile
-        </button>
-        <button
-          type="button"
           onClick={() => screenAllowed && toggleScreenContext()}
           className={cn(
             'flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
             screenContext && screenAllowed ? 'bg-accent-fill text-accent-fill-fg' : 'text-muted hover:bg-raised hover:text-fg',
             !screenAllowed && 'opacity-50 cursor-not-allowed',
           )}
-          title={screenAllowed ? 'Include screen with your next message' : 'Upgrade to Pro for screen analysis'}
+          title={screenAllowed ? 'Include screen with your next message' : 'Upgrade to include screen'}
         >
           <Monitor className="h-3 w-3" />
           Screen
@@ -158,7 +149,7 @@ export function Composer() {
               <Paperclip className="h-4 w-4" />
             </IconButton>
             <IconButton
-              label={screenAllowed ? 'Answer from screen' : 'Upgrade to Pro to answer from screen'}
+              label={screenAllowed ? 'Answer from screen' : 'Upgrade to answer from screen'}
               shortcut={formatAccelerator(shortcuts.askScreen, desktop.platform)}
               disabled={Boolean(generatingId) || realtimeListening}
               onClick={() => void askFromScreen()}
@@ -175,43 +166,21 @@ export function Composer() {
               onClick={toggleVoice}
             />
             <LiveControl
-              active={realtimeListening && realtimeWithScreen}
-              idleLabel={
-                liveScreenAllowed
-                  ? 'Live copilot with screen'
-                  : 'Upgrade to Pro for live copilot with screen'
-              }
-              liveLabel="Stop live copilot"
-              idleIcon={<Monitor className="h-4 w-4" />}
-              liveIcon={<AudioLines className="h-4 w-4" />}
-              shortcut={formatAccelerator(shortcuts.liveCopilotScreen, desktop.platform)}
-              onClick={() => {
-                if (!liveScreenAllowed && !(realtimeListening && realtimeWithScreen)) {
-                  useRealtimeStore.setState({
-                    error: 'Live copilot with screen needs screen analysis and audio on Pro or Premium.',
-                  })
-                  return
-                }
-                if (listening) toggleVoice()
-                void toggleRealtime(true)
-              }}
-            />
-            <LiveControl
-              active={realtimeListening && !realtimeWithScreen}
-              idleLabel={audioAllowed ? 'Live copilot' : 'Upgrade to Pro for live copilot'}
+              active={realtimeListening}
+              idleLabel={audioAllowed ? 'Live copilot' : 'Upgrade for live copilot'}
               liveLabel="Stop live copilot"
               idleIcon={<Radio className="h-4 w-4" />}
               liveIcon={<AudioLines className="h-4 w-4" />}
               shortcut={formatAccelerator(shortcuts.liveCopilotAudio, desktop.platform)}
               onClick={() => {
-                if (!audioAllowed && !(realtimeListening && !realtimeWithScreen)) {
+                if (!audioAllowed && !realtimeListening) {
                   useRealtimeStore.setState({
-                    error: 'Live copilot needs audio on Pro or Premium.',
+                    error: 'Live copilot needs an active subscription.',
                   })
                   return
                 }
                 if (listening) toggleVoice()
-                void toggleRealtime(false)
+                void toggleRealtime()
               }}
             />
             <Select value={realtimeMode} onValueChange={(value) => useRealtimeStore.setState({ mode: value as 'mic' | 'system' })} disabled={realtimeListening}>
@@ -219,8 +188,8 @@ export function Composer() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="mic" className="text-[12px]">Microphone (You)</SelectItem>
                 <SelectItem value="system" className="text-[12px]">Computer Audio (Interviewer)</SelectItem>
+                <SelectItem value="mic" className="text-[12px]">Microphone (You)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -257,11 +226,11 @@ export function Composer() {
         </p>
       ) : null}
       <p className="mt-1.5 px-1 text-[11px] text-muted">
-        Enter to send · {formatAccelerator(shortcuts.toggleModel, desktop.platform)} {resolveChatModel(settings.model) === 'gpt-4.1' ? 'Intelligent' : 'Fast'} · {formatAccelerator(shortcuts.askScreen, desktop.platform)} answer from screen · {formatAccelerator(shortcuts.liveCopilotScreen, desktop.platform)} copilot with screen · {formatAccelerator(shortcuts.liveCopilotAudio, desktop.platform)} copilot
+        Enter to send · {formatAccelerator(shortcuts.toggleModel, desktop.platform)} {resolveChatModel(settings.model) === 'gpt-4.1' ? 'Intelligent' : 'Fast'} · {formatAccelerator(shortcuts.askScreen, desktop.platform)} answer from screen · {formatAccelerator(shortcuts.liveCopilotAudio, desktop.platform)} copilot
         {listening ? ' · Voice input live' : null}
         {voiceError ? ` · ${voiceError}` : null}
         {realtimeListening
-          ? ` · ${realtimeWithScreen ? 'Watching screen' : 'Audio only'} · ${realtimeMode === 'system' ? 'Computer Audio (Interviewer)' : 'Microphone (You)'} · ${realtimeSpeaking ? 'hearing speech' : generatingId ? 'answering, still listening' : realtimeTranscript ? 'waiting for a pause' : 'listening'}`
+          ? ` · Live copilot · ${realtimeMode === 'system' ? 'Computer Audio (Interviewer)' : 'Microphone (You)'} · ${realtimeSpeaking ? 'hearing speech' : generatingId ? 'answering, still listening' : realtimeTranscript ? 'waiting for a pause' : 'listening'}`
           : null}
         {realtimeError ? ` · ${realtimeError}` : null}
       </p>

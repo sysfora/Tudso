@@ -37,6 +37,15 @@
   --color-brand-pink: var(--brand-pink);
   --color-brand-cream: var(--brand-cream);
   --color-brand-sky: var(--brand-sky);
+  --color-fg: var(--app-fg, var(--foreground));
+  --color-surface-2: var(--app-surface-2, var(--secondary));
+  --color-raised: var(--app-raised, var(--secondary));
+  --color-lift: var(--app-lift, var(--secondary));
+  --color-accent-fill: var(--app-accent-fill, var(--primary));
+  --color-accent-fill-fg: var(--app-accent-fill-fg, var(--primary-foreground));
+  --color-accent-fill-hover: var(--app-accent-fill-hover, var(--primary));
+  --color-danger: var(--app-danger, var(--destructive));
+  --color-ok: var(--app-ok, #2f7d57);
   --font-display: "Fraunces", Georgia, serif;
 }
 
@@ -100,4 +109,84 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+}
+
+.app-ui {
+  --app-fg: #1a1a1e;
+  --app-surface: #ffffff;
+  --app-surface-2: #ececee;
+  --app-raised: #e2e2e8;
+  --app-lift: #d0d0d8;
+  --app-accent-fill: #5b5fee;
+  --app-accent-fill-fg: #ffffff;
+  --app-accent-fill-hover: color-mix(in srgb, #5b5fee 82%, #000000);
+  --app-danger: #c44444;
+  --app-ok: #2f7d57;
+  --background: #f4f4f5;
+  --foreground: #1a1a1e;
+  --card: #ffffff;
+  --card-foreground: #1a1a1e;
+  --primary: #5b5fee;
+  --primary-foreground: #ffffff;
+  --secondary: #ececee;
+  --secondary-foreground: #1a1a1e;
+  --muted: #6d6d76;
+  --muted-foreground: #6d6d76;
+  --accent: #5b5fee;
+  --accent-foreground: #ffffff;
+  --destructive: #c44444;
+  --destructive-foreground: #c44444;
+  --border: color-mix(in srgb, #000000 8%, transparent);
+  --input: #ececee;
+  --ring: #5b5fee;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+}
+
+.app-ui.dark {
+  --app-fg: #f3f3f5;
+  --app-surface: #26262b;
+  --app-surface-2: #303036;
+  --app-raised: #44444e;
+  --app-lift: #5c5c68;
+  --app-accent-fill: #5b5fee;
+  --app-accent-fill-fg: #ffffff;
+  --app-accent-fill-hover: color-mix(in srgb, #5b5fee 82%, #ffffff);
+  --app-danger: #e07070;
+  --app-ok: #7dba98;
+  --background: #1c1c1f;
+  --foreground: #f3f3f5;
+  --card: #26262b;
+  --card-foreground: #f3f3f5;
+  --primary: #5b5fee;
+  --primary-foreground: #ffffff;
+  --secondary: #303036;
+  --secondary-foreground: #f3f3f5;
+  --muted: #a8a8b0;
+  --muted-foreground: #a8a8b0;
+  --accent: #c4c6ff;
+  --accent-foreground: #1a1a1f;
+  --destructive: #e07070;
+  --destructive-foreground: #e07070;
+  --border: color-mix(in srgb, #ffffff 8%, transparent);
+  --input: #303036;
+  --ring: #c4c6ff;
+}
+
+.app-ui input:not([type='checkbox']):not([type='radio']):not([type='hidden']) {
+  height: 32px;
+  border: 0;
+  background: var(--app-surface-2);
+  font-size: 13px;
+  box-shadow: none;
+}
+
+.app-ui input:not([type='checkbox']):not([type='radio']):hover,
+.app-ui input:not([type='checkbox']):not([type='radio']):focus-visible {
+  background: var(--app-lift);
+  outline: none;
+  box-shadow: none;
 }

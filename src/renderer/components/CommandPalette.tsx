@@ -27,7 +27,6 @@ const COMMANDS: Command[] = [
   { id: 'scroll-up', label: 'Scroll up', shortcutId: 'scrollUp', section: 'Chat' },
   { id: 'scroll-down', label: 'Scroll down', shortcutId: 'scrollDown', section: 'Chat' },
   { id: 'ask-screen', label: 'Answer from screen', shortcutId: 'askScreen', section: 'Copilot' },
-  { id: 'live-copilot-screen', label: 'Live copilot with screen', shortcutId: 'liveCopilotScreen', section: 'Copilot' },
   { id: 'live-copilot-audio', label: 'Live copilot', shortcutId: 'liveCopilotAudio', section: 'Copilot' },
   { id: 'stop-generation', label: 'Stop listening or generating', shortcutId: 'stopGeneration', section: 'Copilot' },
   { id: 'copy-last-answer', label: 'Copy last answer, markdown', shortcutId: 'copyLastAnswer', section: 'Copy' },

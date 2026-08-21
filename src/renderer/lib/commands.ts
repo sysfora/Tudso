@@ -42,11 +42,8 @@ export function runAppCommand(command: AppCommand) {
     case 'ask-screen':
       void store.askFromScreen()
       return
-    case 'live-copilot-screen':
-      void useRealtimeStore.getState().toggle(true)
-      return
     case 'live-copilot-audio':
-      void useRealtimeStore.getState().toggle(false)
+      void useRealtimeStore.getState().toggle()
       return
     case 'stop-generation':
       useRealtimeStore.getState().stop()
@@ -141,7 +138,7 @@ export function runAppCommand(command: AppCommand) {
       const entitlement = useAuthStore.getState().entitlement
       if (!canHideFromCapture(entitlement?.plan, entitlement?.status)) {
         store.setSettingsOpen(true, 'subscription')
-        desktop.app.notify('Premium', 'Hide from screen share is on Premium.')
+        desktop.app.notify('Subscription', 'Hide from screen share needs an active plan.')
         return
       }
       void store.setSettings({ hideFromCapture: !store.settings.hideFromCapture })

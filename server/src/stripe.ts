@@ -2,6 +2,7 @@ import Stripe from 'stripe'
 import { config } from './config.js'
 import { log } from './log.js'
 import { getSubscription, upsertEntitlement, upsertSubscription, type UserBilling } from './pocketbase.js'
+import { CHECKOUT_PLANS, isCheckoutPlan, type PaidPlan } from './plans.js'
 import type { EntitlementRecord, Plan, SubscriptionRecord } from './types.js'
 
 const LIVE_PLAN_TTL_MS = 8_000
@@ -10,6 +11,10 @@ const liveEntitlementCache = new Map<string, { at: number; value: EntitlementRec
 export const stripe = new Stripe(config.stripe.secretKey, { apiVersion: '2025-02-24.acacia' })
 
 export function priceIdToPlan(priceId: string): Plan {
+  if (!priceId) return 'free'
+  if (priceId === config.stripe.priceIds.weekly) return 'weekly'
+  if (priceId === config.stripe.priceIds.monthly) return 'monthly'
+  if (priceId === config.stripe.priceIds.yearly) return 'yearly'
   if (priceId === config.stripe.priceIds.pro) return 'pro'
   if (priceId === config.stripe.priceIds.premium) return 'premium'
   return 'free'
@@ -170,7 +175,7 @@ export async function resolveLiveEntitlement(userId: string, billingHint?: UserB
 export async function createCheckoutSession(
   userId: string,
   email: string,
-  plan: Plan,
+  plan: PaidPlan,
   urls?: { successUrl?: string; cancelUrl?: string },
 ): Promise<{ url: string }> {
   let customerId: string | undefined
@@ -184,13 +189,13 @@ export async function createCheckoutSession(
     await syncUserBilling(userId, { stripeCustomerId: customerId })
   }
   const priceId = config.stripe.priceIds[plan]
-  if (!priceId || plan === 'free') throw new Error('Invalid plan selected')
+  if (!priceId) throw new Error('Invalid plan selected')
   const session = await stripe.checkout.sessions.create({
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
     mode: 'subscription',
     success_url: urls?.successUrl ?? `${config.app.url}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: urls?.cancelUrl ?? `${config.app.url}/billing/cancel`,
+    cancel_url: urls?.cancelUrl ?? `${config.app.url}/dashboard?billing=cancel`,
     client_reference_id: userId,
     metadata: { userId },
     subscription_data: { metadata: { userId } },
@@ -205,7 +210,7 @@ export async function createCustomerPortalSession(
   const sub = await getSubscription(userId)
   if (!sub?.stripeCustomerId) throw new Error('No billing account yet. Subscribe first.')
 
-  const returnUrl = `${config.app.url}/billing/return`
+  const returnUrl = `${config.app.url}/dashboard`
   const action = options.action ?? 'manage'
 
   if (action === 'cancel') {
@@ -222,8 +227,8 @@ export async function createCustomerPortalSession(
   }
 
   if (action === 'upgrade') {
-    const target: Plan = options.plan === 'pro' ? 'pro' : 'premium'
-    const priceId = config.stripe.priceIds[target]
+    const target = isCheckoutPlan(options.plan) ? options.plan : null
+    const priceId = target ? config.stripe.priceIds[target] : ''
     if (sub.stripeSubscriptionId && priceId) {
       const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId)
       const itemId = stripeSub.items.data[0]?.id
@@ -252,18 +257,16 @@ export async function createCustomerPortalSession(
 }
 
 export async function listPaidPlanPrices(): Promise<Array<{
-  id: 'pro' | 'premium'
+  id: PaidPlan
   priceId: string
   amount: number | null
   currency: string
   interval: string
 }>> {
-  const ids = [
-    ['pro', config.stripe.priceIds.pro],
-    ['premium', config.stripe.priceIds.premium],
-  ] as const
-  return Promise.all(ids.map(async ([id, priceId]) => {
-    if (!priceId) return { id, priceId: '', amount: null, currency: 'usd', interval: 'month' }
+  return Promise.all(CHECKOUT_PLANS.map(async (id) => {
+    const priceId = config.stripe.priceIds[id]
+    const interval = id === 'weekly' ? 'week' : id === 'yearly' ? 'year' : 'month'
+    if (!priceId) return { id, priceId: '', amount: null, currency: 'usd', interval }
     try {
       const price = await stripe.prices.retrieve(priceId)
       return {
@@ -271,10 +274,10 @@ export async function listPaidPlanPrices(): Promise<Array<{
         priceId,
         amount: price.unit_amount ?? null,
         currency: price.currency ?? 'usd',
-        interval: price.recurring?.interval ?? 'month',
+        interval: price.recurring?.interval ?? interval,
       }
     } catch {
-      return { id, priceId, amount: null, currency: 'usd', interval: 'month' }
+      return { id, priceId, amount: null, currency: 'usd', interval }
     }
   }))
 }

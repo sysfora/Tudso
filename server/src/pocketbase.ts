@@ -58,14 +58,13 @@ export async function getUserByEmail(email: string): Promise<{ id: string; email
 export const DEFAULT_USER_BILLING = {
   plan: 'free' as const,
   planStatus: 'unpaid' as const,
-  onboardingComplete: false,
 }
 
 export interface UserBilling {
   id: string
   plan?: Plan
   planStatus?: EntitlementRecord['status']
-  freeAccess?: 'pro' | 'premium'
+  freeAccess?: 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
   onboardingComplete?: boolean
   stripeCustomerId?: string
   stripeSubscriptionId?: string
@@ -103,7 +102,6 @@ export async function syncUserBilling(
     stripeCustomerId?: string
     stripeSubscriptionId?: string
     expiresAt?: string
-    onboardingComplete?: boolean
   },
 ): Promise<void> {
   const pb = await getAdminPb()
@@ -113,7 +111,6 @@ export async function syncUserBilling(
   if (data.stripeCustomerId !== undefined) payload.stripeCustomerId = data.stripeCustomerId
   if (data.stripeSubscriptionId !== undefined) payload.stripeSubscriptionId = data.stripeSubscriptionId
   if (data.expiresAt !== undefined) payload.expiresAt = data.expiresAt
-  if (data.onboardingComplete !== undefined) payload.onboardingComplete = data.onboardingComplete
   if (!Object.keys(payload).length) return
   try {
     await pb.collection('users').update(userId, payload)
@@ -134,20 +131,27 @@ export async function ensureUserBilling(userId: string): Promise<void> {
   }
 }
 
-export async function getOrCreateProfile(userId: string): Promise<UserProfile> {
+export async function getProfileIfExists(userId: string): Promise<UserProfile | null> {
   const pb = await getAdminPb()
   try {
     const record = await pb.collection('profiles').getFirstListItem(`user="${userId}"`)
-    return await applyProfileDefaults(record as unknown as UserProfile)
-  } catch {
-    const record = await pb.collection('profiles').create({
-      user: userId,
-      skills: [],
-      goals: [],
-      ...DEFAULT_PROFILE_PREFERENCES,
-    })
     return record as unknown as UserProfile
+  } catch {
+    return null
   }
+}
+
+export async function getOrCreateProfile(userId: string): Promise<UserProfile> {
+  const existing = await getProfileIfExists(userId)
+  if (existing) return await applyProfileDefaults(existing)
+  const pb = await getAdminPb()
+  const record = await pb.collection('profiles').create({
+    user: userId,
+    skills: [],
+    goals: [],
+    ...DEFAULT_PROFILE_PREFERENCES,
+  })
+  return record as unknown as UserProfile
 }
 
 function answerPrefsLookUnset(profile: UserProfile) {
@@ -354,7 +358,7 @@ export function entitlementFromBilling(billing: UserBilling | null, fallbackUser
 }
 
 export function entitlementFromFreeAccess(userId: string, billing: UserBilling): EntitlementRecord {
-  const plan = billing.freeAccess === 'premium' ? 'premium' : 'pro'
+  const plan = isFreeAccessPlan(billing.freeAccess) ? billing.freeAccess : 'monthly'
   return {
     id: billing.id || userId,
     user: userId,
@@ -522,16 +526,30 @@ export async function getUsageToday(userId: string): Promise<UsageRecord> {
     return record as unknown as UsageRecord
   } catch {
     try {
-      const record = await pb.collection('usage').create({
-        user: userId,
-        date: `${day} 00:00:00.000Z`,
-        requests: 0,
-        tokens: 0,
-        screenAnalyses: 0,
-        realtimeMinutes: 0,
-        audioMinutes: 0,
-      })
-      return record as unknown as UsageRecord
+      try {
+        const record = await pb.collection('usage').create({
+          user: userId,
+          date: `${day} 00:00:00.000Z`,
+          requests: 0,
+          tokens: 0,
+          screenAnalyses: 0,
+          realtimeMinutes: 0,
+          audioMinutes: 0,
+          sessions: 0,
+        })
+        return record as unknown as UsageRecord
+      } catch {
+        const record = await pb.collection('usage').create({
+          user: userId,
+          date: `${day} 00:00:00.000Z`,
+          requests: 0,
+          tokens: 0,
+          screenAnalyses: 0,
+          realtimeMinutes: 0,
+          audioMinutes: 0,
+        })
+        return record as unknown as UsageRecord
+      }
     } catch {
       const record = await pb.collection('usage').getFirstListItem(usageDayFilter(userId, day))
       return record as unknown as UsageRecord
@@ -542,14 +560,34 @@ export async function getUsageToday(userId: string): Promise<UsageRecord> {
 export async function incrementUsage(userId: string, increments: Partial<Omit<UsageRecord, 'id' | 'user' | 'date' | 'created' | 'updated'>>): Promise<UsageRecord> {
   const pb = await getAdminPb()
   const usage = await getUsageToday(userId)
-  const record = await pb.collection('usage').update(usage.id, {
+  const payload = {
     requests: (usage.requests ?? 0) + (increments.requests ?? 0),
     tokens: (usage.tokens ?? 0) + (increments.tokens ?? 0),
     screenAnalyses: (usage.screenAnalyses ?? 0) + (increments.screenAnalyses ?? 0),
     realtimeMinutes: (usage.realtimeMinutes ?? 0) + (increments.realtimeMinutes ?? 0),
     audioMinutes: (usage.audioMinutes ?? 0) + (increments.audioMinutes ?? 0),
+    sessions: (usage.sessions ?? 0) + (increments.sessions ?? 0),
+  }
+  try {
+    const record = await pb.collection('usage').update(usage.id, payload)
+    return record as unknown as UsageRecord
+  } catch {
+    const { sessions: _sessions, ...withoutSessions } = payload
+    const record = await pb.collection('usage').update(usage.id, withoutSessions)
+    return record as unknown as UsageRecord
+  }
+}
+
+export async function getUsageHistory(userId: string, days = 14): Promise<UsageRecord[]> {
+  const pb = await getAdminPb()
+  const since = new Date()
+  since.setUTCDate(since.getUTCDate() - (days - 1))
+  const day = since.toISOString().slice(0, 10)
+  const records = await pb.collection('usage').getFullList({
+    filter: `user=${pbQuote(userId)} && date >= "${day} 00:00:00.000Z"`,
+    sort: 'date',
   })
-  return record as unknown as UsageRecord
+  return records as unknown as UsageRecord[]
 }
 
 export async function upsertDevice(userId: string, device: Omit<DeviceRecord, 'id' | 'user' | 'created' | 'updated'>): Promise<DeviceRecord> {
@@ -583,15 +621,6 @@ export async function deleteDevice(userId: string, deviceId: string): Promise<vo
     // ignore
   }
   await deleteDesktopSessionsForDevice(userId, deviceId)
-}
-
-export async function createConversation(userId: string, title: string): Promise<{ id: string; title: string; created: string; updated: string }> {
-  const pb = await getAdminPb()
-  const record = await pb.collection('conversations').create({
-    user: userId,
-    title,
-  })
-  return record as unknown as { id: string; title: string; created: string; updated: string }
 }
 
 export async function getContext(userId: string): Promise<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean } | null> {
@@ -645,65 +674,6 @@ export async function deleteContext(userId: string): Promise<void> {
   if (existing) {
     await pb.collection('user_context').delete(existing.id)
   }
-}
-
-export async function getConversations(userId: string): Promise<Array<{ id: string; title: string; created: string; updated: string }>> {
-  const pb = await getAdminPb()
-  const records = await pb.collection('conversations').getFullList({ filter: `user="${userId}"`, sort: '-updated' })
-  return records as unknown as Array<{ id: string; title: string; created: string; updated: string }>
-}
-
-export async function getMessages(userId: string, conversationId: string): Promise<Array<{ id: string; role: string; content: string; created: string; metadata?: unknown }>> {
-  const pb = await getAdminPb()
-  const records = await pb.collection('messages').getFullList({ filter: `conversation="${conversationId}" && user="${userId}"`, sort: 'created' })
-  return records as unknown as Array<{ id: string; role: string; content: string; created: string; metadata?: unknown }>
-}
-
-const MESSAGE_CONTENT_LIMITS = [100_000, 5_000, 255]
-
-function sanitizeMessageContent(content: string, max: number): string {
-  const text = String(content ?? '').replace(/\u0000/g, '').trim() || '(empty)'
-  if (text.length <= max) return text
-  return `${text.slice(0, Math.max(1, max - 1))}…`
-}
-
-function pocketbaseFieldError(error: unknown, field: string): { code?: string; message?: string } | undefined {
-  const err = error as { data?: { data?: Record<string, { code?: string; message?: string }> } & Record<string, { code?: string; message?: string }>; response?: { data?: Record<string, { code?: string; message?: string }> } }
-  const fields = err.data?.data ?? err.response?.data ?? err.data
-  return fields?.[field]
-}
-
-export async function createMessage(userId: string, conversationId: string, role: string, content: string, metadata?: unknown): Promise<{ id: string; role: string; content: string; created: string }> {
-  const pb = await getAdminPb()
-  let lastError: unknown
-  for (const max of MESSAGE_CONTENT_LIMITS) {
-    try {
-      const record = await pb.collection('messages').create({
-        user: userId,
-        conversation: conversationId,
-        role,
-        content: sanitizeMessageContent(content, max),
-        metadata: metadata ?? {},
-      })
-      await pb.collection('conversations').update(conversationId, { updated: new Date().toISOString() }).catch(() => undefined)
-      return record as unknown as { id: string; role: string; content: string; created: string }
-    } catch (error) {
-      lastError = error
-      const field = pocketbaseFieldError(error, 'content')
-      const tooLong = field?.code === 'validation_max_text_length'
-        || field?.code === 'validation_length_too_long'
-        || /too (long|large)|maximum|max/i.test(`${field?.code ?? ''} ${field?.message ?? ''}`)
-      if (!tooLong) break
-    }
-  }
-  throw lastError
-}
-
-export async function deleteConversation(userId: string, conversationId: string): Promise<void> {
-  const pb = await getAdminPb()
-  await pb.collection('conversations').delete(conversationId)
-  const messages = await pb.collection('messages').getFullList({ filter: `conversation="${conversationId}" && user="${userId}"` })
-  await Promise.all(messages.map((m) => pb.collection('messages').delete(m.id)))
 }
 
 export async function storeDesktopSession(session: DesktopSession): Promise<void> {
@@ -775,7 +745,7 @@ export async function deleteOtherDesktopSessions(userId: string, keepToken: stri
 export async function deleteUserData(userId: string): Promise<void> {
   const pb = await getAdminPb()
   await deleteResume(userId).catch(() => undefined)
-  const collections = ['profiles', 'conversations', 'messages', 'subscriptions', 'entitlements', 'usage', 'devices', 'desktop_sessions', 'preferences', 'shortcut_preferences', 'privacy_preferences', 'user_context', 'onboarding']
+  const collections = ['profiles', 'subscriptions', 'entitlements', 'usage', 'devices', 'desktop_sessions', 'preferences', 'shortcut_preferences', 'privacy_preferences', 'user_context', 'onboarding']
   for (const collection of collections) {
     try {
       const records = await pb.collection(collection).getFullList({ filter: `user="${userId}"`, batch: 500 })

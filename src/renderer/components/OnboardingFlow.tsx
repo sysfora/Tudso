@@ -9,7 +9,7 @@ import { DEFAULT_PROFILE_PREFERENCES } from '@/types/api'
 const STEPS = [
   {
     title: 'About you',
-    description: 'A name and what you do help Tudso sound like it knows you.',
+    description: 'A name and what you do help Tudso sound like it knows you. Saved on this device.',
   },
   {
     title: 'Add your resume',

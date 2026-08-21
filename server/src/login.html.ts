@@ -1,3 +1,5 @@
+import { PAID_PLAN_CATALOG, type PaidPlan } from './plans.js'
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -287,7 +289,7 @@ const STYLES = `
     padding: 48px 24px 64px;
   }
   body.choose-plan main {
-    max-width: 760px;
+    max-width: 980px;
   }
   .who {
     margin: -12px 0 28px;
@@ -296,13 +298,14 @@ const STYLES = `
   }
   .plans {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 12px;
     align-items: stretch;
   }
   .plan {
     display: flex;
     flex-direction: column;
+    position: relative;
     min-height: 100%;
     padding: 22px 20px 20px;
     border: 1px solid var(--border);
@@ -310,8 +313,28 @@ const STYLES = `
     background: var(--surface);
   }
   .plan-featured {
-    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    border-color: var(--accent);
     background: var(--field);
+  }
+  .plan-mark {
+    margin: 0 0 12px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1;
+  }
+  .plan-featured .plan-mark { color: var(--accent); }
+  .plan-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: var(--fill);
+    color: var(--fill-fg);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
   }
   .plan h2 {
     margin: 0;
@@ -319,19 +342,22 @@ const STYLES = `
     font-weight: 600;
     letter-spacing: -0.02em;
   }
+  .plan-featured h2 { color: var(--accent); }
   .price {
     margin: 10px 0 0;
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 600;
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
+    line-height: 1;
   }
-  .price small {
-    margin-left: 4px;
-    font-size: 13px;
-    font-weight: 500;
+  .price .cents {
+    margin-left: 1px;
+    font-size: 14px;
+    font-weight: 600;
     letter-spacing: 0;
     color: var(--muted);
+    vertical-align: super;
   }
   .plan-copy {
     margin: 10px 0 0;
@@ -362,7 +388,15 @@ const STYLES = `
     margin-top: 1px;
   }
   .plan form { margin-top: auto; }
-  @media (max-width: 700px) {
+  .plan:not(.plan-featured) button {
+    background: transparent;
+    color: var(--fg);
+    border-color: var(--border);
+  }
+  .plan:not(.plan-featured) button:hover {
+    background: var(--lift);
+  }
+  @media (max-width: 860px) {
     .plans { grid-template-columns: 1fr; }
   }
   ::selection {
@@ -526,57 +560,19 @@ const CHECK = `<svg class="tick" viewBox="0 0 16 16" aria-hidden="true" focusabl
 const DASH = `<svg class="dash" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M4 8h8"/></svg>`
 
 type PlanPrice = {
-  id: 'pro' | 'premium'
+  id: PaidPlan
   amount: number | null
   currency: string
   interval: string
 }
 
-function formatPlanPrice(price?: PlanPrice): string {
-  if (!price || price.amount == null || !price.currency) return ''
-  const value = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: price.currency.toUpperCase(),
-    maximumFractionDigits: price.amount % 100 === 0 ? 0 : 2,
-  }).format(price.amount / 100)
-  const interval = price.interval || 'month'
-  return `${value}<small>/ ${interval}</small>`
+function formatPlanPrice(price?: PlanPrice, fallbackAmount?: number): string {
+  const amount = price?.amount ?? fallbackAmount
+  if (amount == null) return ''
+  const dollars = Math.floor(Math.abs(amount) / 100)
+  const cents = String(Math.abs(amount) % 100).padStart(2, '0')
+  return `$${dollars}<span class="cents">.${cents}</span>`
 }
-
-const PLAN_CARDS: Array<{
-  id: 'pro' | 'premium'
-  name: string
-  description: string
-  featured?: boolean
-  action: string
-  features: Array<{ text: string; included: boolean }>
-}> = [
-  {
-    id: 'pro',
-    name: 'Pro',
-    description: 'Chat, screen answers, and live copilot. Always visible in screen share.',
-    action: 'Subscribe to Pro',
-    features: [
-      { text: 'Chat and Intelligent model', included: true },
-      { text: 'Screen answers', included: true },
-      { text: 'Live copilot', included: true },
-      { text: 'Hide from screen share', included: false },
-    ],
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    description: 'Everything in Pro, plus a switch to hide Tudso from screen share.',
-    featured: true,
-    action: 'Subscribe to Premium',
-    features: [
-      { text: 'Chat and Intelligent model', included: true },
-      { text: 'Screen answers', included: true },
-      { text: 'Live copilot', included: true },
-      { text: 'Hide from screen share — turn it on or off', included: true },
-    ],
-  },
-]
 
 export function subscribePage(params: {
   code: string
@@ -587,12 +583,15 @@ export function subscribePage(params: {
 }): string {
   const code = escapeHtml(params.code)
   const state = escapeHtml(params.state)
-  const prices = Object.fromEntries(params.prices.map((price) => [price.id, price])) as Partial<Record<'pro' | 'premium', PlanPrice>>
-  const cards = PLAN_CARDS.map((plan) => {
-    const price = formatPlanPrice(prices[plan.id])
+  const prices = Object.fromEntries(params.prices.map((price) => [price.id, price])) as Partial<Record<PaidPlan, PlanPrice>>
+  const cards = PAID_PLAN_CATALOG.map((plan) => {
+    const price = formatPlanPrice(prices[plan.id], plan.fallbackAmount)
     const features = plan.features.map((feature) => `
           <li class="${feature.included ? '' : 'out'}">${feature.included ? CHECK : DASH}<span>${escapeHtml(feature.text)}</span></li>`).join('')
+    const badge = plan.badge ? `<span class="plan-badge">${escapeHtml(plan.badge)}</span>` : ''
     return `<article class="plan${plan.featured ? ' plan-featured' : ''}">
+        ${badge}
+        <p class="plan-mark">${escapeHtml(plan.mark)}</p>
         <h2>${escapeHtml(plan.name)}</h2>
         ${price ? `<p class="price">${price}</p>` : ''}
         <p class="plan-copy">${escapeHtml(plan.description)}</p>
@@ -610,7 +609,7 @@ export function subscribePage(params: {
   const body = `  <main>
     ${brandMark()}
     <h1>Choose a plan</h1>
-    <p class="lede">Tudso needs a plan for chat, screen answers, and live copilot. Subscribe to open the app.</p>
+    <p class="lede">Unlimited call time and real-time answers. Pick weekly, monthly, or yearly to open the app.</p>
     <p class="who">Billing for ${escapeHtml(params.email)}</p>
     ${params.error ? `<p class="error" role="alert">${escapeHtml(params.error)}</p>` : ''}
     <div class="plans">

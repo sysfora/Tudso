@@ -54,6 +54,7 @@ export const CHANNELS = {
   profileGet: 'profile:get',
   profileSet: 'profile:set',
   profileComplete: 'profile:complete',
+  profileSetMemory: 'profile:set-memory',
   profileSaveResume: 'profile:save-resume',
   profileDeleteResume: 'profile:delete-resume',
 

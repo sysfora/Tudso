@@ -25,11 +25,11 @@ export function findOAuthProvider(
 
 const pendingStates = new Map<string, AuthState>()
 
-export function generateAuthState(): { state: string; codeVerifier: string; url: string } {
+export function generateAuthState(kind: 'desktop' | 'web' = 'desktop'): { state: string; codeVerifier: string; url: string } {
   const state = crypto.randomBytes(32).toString('hex')
   const codeVerifier = crypto.randomBytes(32).toString('hex')
-  pendingStates.set(state, { state, codeVerifier, createdAt: Date.now() })
-  const url = new URL('/auth/desktop', config.app.url)
+  pendingStates.set(state, { state, codeVerifier, createdAt: Date.now(), kind })
+  const url = new URL(kind === 'web' ? '/login' : '/auth/desktop', config.app.url)
   url.searchParams.set('state', state)
   return { state, codeVerifier, url: url.toString() }
 }
@@ -166,7 +166,7 @@ export async function getOAuthUrl(provider: 'google', state: string): Promise<st
   if (!pending) throw new Error('Sign-in expired. Return to Tudso and try again.')
 
   const pb = createUserPb()
-  const redirectUrl = `${config.app.url}/auth/desktop/oauth/callback`
+  const redirectUrl = oauthRedirectUrl(pending.kind)
   const authMethods = await pb.collection('users').listAuthMethods()
   const method = findOAuthProvider(authMethods, provider)
   const authURL = method?.authURL || method?.authUrl
@@ -183,11 +183,16 @@ export async function getOAuthUrl(provider: 'google', state: string): Promise<st
   return url.toString()
 }
 
+function oauthRedirectUrl(kind: AuthState['kind'] = 'desktop'): string {
+  const path = kind === 'web' ? '/auth/web/oauth/callback' : '/auth/desktop/oauth/callback'
+  return `${config.app.url}${path}`
+}
+
 export async function exchangeOAuthCallback(provider: 'google', code: string, state: string): Promise<PasswordAuthResult | null> {
   const pending = verifyAuthState(state)
   if (!pending) return null
   const pb = createUserPb()
-  const redirectUrl = `${config.app.url}/auth/desktop/oauth/callback`
+  const redirectUrl = oauthRedirectUrl(pending.kind)
   try {
     const result = await pb.collection('users').authWithOAuth2Code(provider, code, pending.codeVerifier, redirectUrl)
     const record = result.record as unknown as { id: string; email: string; plan?: string; verified?: boolean }
@@ -201,15 +206,25 @@ export async function exchangeOAuthCallback(provider: 'google', code: string, st
   }
 }
 
+export async function createAppSession(
+  userId: string,
+  email: string,
+  deviceId: string,
+  platform: string,
+  appVersion: string,
+): Promise<{ desktopToken: string; userId: string; email: string }> {
+  const session = generateDesktopToken(userId, deviceId)
+  await storeDesktopSession(session)
+  const { upsertDevice } = await import('./pocketbase.js')
+  await upsertDevice(userId, { deviceId, platform, appVersion, lastSeen: new Date().toISOString() })
+  await ensureUserBilling(userId)
+  return { desktopToken: session.token, userId, email }
+}
+
 export async function exchangeDesktopToken(pocketbaseToken: string, deviceId: string, platform: string, appVersion: string): Promise<{ desktopToken: string; userId: string; email: string } | null> {
   const user = await getUserFromToken(pocketbaseToken)
   if (!user) return null
-  const session = generateDesktopToken(user.id, deviceId)
-  await storeDesktopSession(session)
-  const { upsertDevice } = await import('./pocketbase.js')
-  await upsertDevice(user.id, { deviceId, platform, appVersion, lastSeen: new Date().toISOString() })
-  await ensureUserBilling(user.id)
-  return { desktopToken: session.token, userId: user.id, email: user.email }
+  return createAppSession(user.id, user.email, deviceId, platform, appVersion)
 }
 
 export function buildCallbackUrl(code: string, state: string): string {

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Check, Minus } from 'lucide-react'
-import { PAID_PLAN_CATALOG, isPaidPlan, type PaidPlan } from '@shared/plans'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Ban, Check, CreditCard, Receipt, Wallet } from 'lucide-react'
+import { PAID_PLAN_CATALOG, isCheckoutPlan, isPaidPlan, planDisplayName, splitPrice, type PaidPlan } from '@shared/plans'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { api } from '@/lib/api'
-import { formatMemoryDate, formatPlanPrice } from '@/lib/format'
+import { formatMemoryDate } from '@/lib/format'
 import { useAuthStore } from '@/store/auth-store'
 import type { BillingPlanPrice, Subscription as BillingSubscription } from '@/types/api'
 
@@ -26,7 +26,7 @@ export function Subscription() {
       .then((result) => {
         const next: Partial<Record<PaidPlan, BillingPlanPrice>> = {}
         for (const item of result.plans ?? []) {
-          if (item.id === 'pro' || item.id === 'premium') next[item.id] = item
+          if (isCheckoutPlan(item.id)) next[item.id] = item
         }
         setPrices(next)
       })
@@ -63,7 +63,7 @@ export function Subscription() {
   const period = billing?.currentPeriodEnd ? formatMemoryDate(billing.currentPeriodEnd) : ''
   const canceling = Boolean(paid && billing?.cancelAtPeriodEnd)
   const hasCustomer = Boolean(billing?.stripeCustomerId)
-  const currentName = paid ? (plan === 'premium' ? 'Premium' : 'Pro') : 'No plan'
+  const currentName = paid ? planDisplayName(plan) : 'No plan'
   const currentDetail = entitlement?.freeAccess
     ? 'Complimentary access'
     : !paid
@@ -81,14 +81,17 @@ export function Subscription() {
   return (
     <div className="space-y-6">
       <p className="text-[12px] leading-relaxed text-muted">
-        Subscribe, change, or cancel in your browser. Premium adds a switch to hide Tudso from screen share. Pro stays visible.
+        Unlimited call time and real-time answers. Subscribe, change, or cancel in the browser.
       </p>
 
       <section>
         <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Current</h3>
-        <div className="rounded-md bg-surface-2 px-3 py-2.5">
-          <p className="text-[14px] font-medium">{currentName}</p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{currentDetail}</p>
+        <div className="flex items-start gap-2.5 rounded-md bg-surface-2 px-3 py-2.5">
+          <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+          <div>
+            <p className="text-[14px] font-medium">{currentName}</p>
+            <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{currentDetail}</p>
+          </div>
         </div>
       </section>
 
@@ -97,28 +100,42 @@ export function Subscription() {
         <div className="space-y-2">
           {PAID_PLAN_CATALOG.map((item) => {
             const current = paid && plan === item.id
-            const price = formatPlanPrice(prices[item.id]?.amount, prices[item.id]?.currency, prices[item.id]?.interval)
+            const amount = prices[item.id]?.amount ?? item.fallbackAmount
+            const { dollars, cents } = splitPrice(amount)
             const actionKey = `plan-${item.id}`
-            const actionLabel = current
-              ? 'Current'
-              : paid
-                ? item.id === 'premium'
-                  ? 'Upgrade'
-                  : 'Switch'
-                : 'Subscribe'
+            const actionLabel = current ? 'Current' : paid ? 'Switch' : item.action
             return (
               <div
                 key={item.id}
-                className={cn('rounded-md p-3', current ? 'bg-raised' : 'bg-surface-2')}
+                className={cn(
+                  'relative rounded-md p-3',
+                  current
+                    ? 'bg-raised'
+                    : item.featured
+                      ? 'border border-accent bg-surface-2'
+                      : 'bg-surface-2',
+                )}
               >
-                <div className="flex items-start justify-between gap-3">
+                {item.badge ? (
+                  <span className="absolute right-3 top-3 rounded-full bg-accent-fill px-2 py-0.5 text-[10px] font-medium text-accent-fill-fg">
+                    {item.badge}
+                  </span>
+                ) : null}
+                <p className={cn('text-[13px] font-medium tracking-wide', item.featured ? 'text-accent' : 'text-fg')}>
+                  {item.mark}
+                </p>
+                <div className="mt-1.5 flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[14px] font-medium">{item.name}</p>
-                    {price ? <p className="mt-0.5 text-[12px] text-muted">{price}</p> : null}
+                    <p className={cn('text-[14px] font-medium', item.featured ? 'text-accent' : '')}>{item.name}</p>
+                    <p className="mt-1 flex items-start leading-none">
+                      <span className="text-[16px] font-medium">$</span>
+                      <span className="text-[22px] font-medium tracking-tight">{dollars}</span>
+                      <span className="mt-0.5 text-[11px] text-muted">.{cents}</span>
+                    </p>
                   </div>
                   <Button
                     size="sm"
-                    variant={current ? 'outline' : 'default'}
+                    variant={current ? 'outline' : item.featured ? 'default' : 'outline'}
                     disabled={Boolean(busy) || current}
                     loading={busy === actionKey}
                     onClick={() => choosePlan(item.id)}
@@ -130,12 +147,8 @@ export function Subscription() {
                 <ul className="mt-2 space-y-1">
                   {item.features.map((feature) => (
                     <li key={feature.text} className="flex items-start gap-2 text-[12px] leading-relaxed">
-                      {feature.included ? (
-                        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-                      ) : (
-                        <Minus className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
-                      )}
-                      <span className={feature.included ? 'text-fg' : 'text-muted'}>{feature.text}</span>
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+                      <span className="text-fg">{feature.text}</span>
                     </li>
                   ))}
                 </ul>
@@ -150,25 +163,18 @@ export function Subscription() {
           <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Billing</h3>
           <div className="divide-y divide-border overflow-hidden rounded-md bg-surface-2">
             <BillingRow
+              icon={<Wallet className="h-3.5 w-3.5" />}
               title="Manage subscription"
               description="Payment method, invoices, and plan details in the browser."
               action="Manage"
+              actionIcon={<Receipt className="h-3.5 w-3.5" />}
               disabled={Boolean(busy)}
               loading={busy === 'manage'}
               onClick={() => void run('manage', () => openBilling('manage'), 'Opened billing in your browser.')}
             />
-            {paid && plan === 'pro' ? (
-              <BillingRow
-                title="Upgrade subscription"
-                description="Move to Premium in the browser for hide from screen share."
-                action="Upgrade"
-                disabled={Boolean(busy)}
-                loading={busy === 'upgrade'}
-                onClick={() => void run('upgrade', () => openBilling('upgrade', 'premium'), 'Opened the upgrade in your browser.')}
-              />
-            ) : null}
             {paid && !canceling ? (
               <BillingRow
+                icon={<Ban className="h-3.5 w-3.5" />}
                 title="Cancel subscription"
                 description="Confirm cancellation in the browser. Access continues until the period ends."
                 action="Cancel"
@@ -189,17 +195,21 @@ export function Subscription() {
 }
 
 function BillingRow({
+  icon,
   title,
   description,
   action,
+  actionIcon,
   danger,
   disabled,
   loading,
   onClick,
 }: {
+  icon: ReactNode
   title: string
   description: string
   action: string
+  actionIcon?: React.ReactNode
   danger?: boolean
   disabled?: boolean
   loading?: boolean
@@ -207,11 +217,15 @@ function BillingRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-4 px-3 py-2.5">
-      <div>
-        <p className="text-[13px] font-medium">{title}</p>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{description}</p>
+      <div className="flex min-w-0 items-start gap-2.5">
+        <span className={cn('mt-0.5 text-muted', danger && 'text-danger')}>{icon}</span>
+        <div>
+          <p className="text-[13px] font-medium">{title}</p>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{description}</p>
+        </div>
       </div>
       <Button variant={danger ? 'danger' : 'outline'} size="sm" disabled={disabled} loading={loading} onClick={onClick}>
+        {actionIcon}
         {action}
       </Button>
     </div>

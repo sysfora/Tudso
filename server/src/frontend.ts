@@ -12,13 +12,17 @@ const clientDist = join(webRoot, 'dist', 'client')
 const serverDist = join(webRoot, 'dist', 'server')
 const SSR_MARK = '<!--ssr-outlet-->'
 
-type RenderPage = () => string
+type RenderPage = (url: string) => string
 
 /** Vite middleware is only for local `npm run dev` (tsx from src/). Hosted `npm start` serves the built app. */
 export function isFrontendDev(): boolean {
   if (process.env.WEB_VITE === '1') return true
   if (process.env.WEB_VITE === '0' || process.env.NODE_ENV === 'production') return false
   return fileURLToPath(import.meta.url).replaceAll('\\', '/').includes('/src/')
+}
+
+function isAppPage(path: string): boolean {
+  return path === '/' || path === '/login' || path === '/dashboard' || path.startsWith('/dashboard/')
 }
 
 export async function attachFrontend(app: Express, httpServer: Server): Promise<void> {
@@ -39,8 +43,8 @@ function injectSsr(template: string, appHtml: string): string {
   return html.replace('<div id="root"></div>', `<div id="root">${body}</div>`)
 }
 
-async function sendSsrPage(res: Response, template: string, render: RenderPage) {
-  const html = injectSsr(template, render())
+function sendSsrPage(res: Response, template: string, render: RenderPage, url: string) {
+  const html = injectSsr(template, render(url))
   res.status(200).set({
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-cache',
@@ -59,10 +63,14 @@ async function attachProductionFrontend(app: Express) {
   }
   const template = await readFile(indexFile, 'utf8')
   const { render } = await import(pathToFileURL(ssrFile).href) as { render: RenderPage }
-  log.info('Serving SSR landing page', { dir: clientDist })
+  log.info('Serving SSR web app', { dir: clientDist })
   app.use(express.static(clientDist, { index: false, maxAge: '7d' }))
-  app.get('/', (_req, res) => {
-    void sendSsrPage(res, template, render)
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || !isAppPage(req.path)) {
+      next()
+      return
+    }
+    sendSsrPage(res, template, render, req.originalUrl)
   })
 }
 
@@ -73,17 +81,23 @@ async function attachDevFrontend(app: Express, httpServer: Server) {
     server: { middlewareMode: true, hmr: { server: httpServer } },
     appType: 'custom',
   })
-  log.info('Serving SSR landing page with Vite (dev)')
-  app.get('/', async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const raw = await readFile(join(webRoot, 'index.html'), 'utf8')
-      const template = await vite.transformIndexHtml(req.originalUrl, raw)
-      const { render } = await vite.ssrLoadModule('/src/entry-server.tsx') as { render: RenderPage }
-      await sendSsrPage(res, template, render)
-    } catch (error) {
-      vite.ssrFixStacktrace(error as Error)
-      next(error)
+  log.info('Serving SSR web app with Vite (dev)')
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'GET' || !isAppPage(req.path)) {
+      next()
+      return
     }
+    void (async () => {
+      try {
+        const raw = await readFile(join(webRoot, 'index.html'), 'utf8')
+        const template = await vite.transformIndexHtml(req.originalUrl, raw)
+        const { render } = await vite.ssrLoadModule('/src/entry-server.tsx') as { render: RenderPage }
+        sendSsrPage(res, template, render, req.originalUrl)
+      } catch (error) {
+        vite.ssrFixStacktrace(error as Error)
+        next(error)
+      }
+    })()
   })
   app.use(vite.middlewares)
 }

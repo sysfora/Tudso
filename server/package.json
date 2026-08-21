@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build --config web/vite.config.ts && vite build --config web/vite.config.ts --ssr src/entry-server.tsx",
     "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "eslint .",
-    "test": "set POCKETBASE_URL=http://localhost:8090&& set POCKETBASE_ADMIN_EMAIL=admin@test.com&& set POCKETBASE_ADMIN_PASSWORD=test&& set AI_API_KEY=test&& set JWT_SECRET=0123456789abcdef0123456789abcdef&& set ENCRYPTION_KEY=0123456789abcdef0123456789abcdef&& set STRIPE_SECRET_KEY=sk_test_123&& set STRIPE_WEBHOOK_SECRET=whsec_test&& set STRIPE_PUBLISHABLE_KEY=pk_test_123&& set STRIPE_PRICE_PRO=price_pro_123&& set STRIPE_PRICE_PREMIUM=price_premium_123&& vitest run"
+    "test": "set POCKETBASE_URL=http://localhost:8090&& set POCKETBASE_ADMIN_EMAIL=admin@test.com&& set POCKETBASE_ADMIN_PASSWORD=test&& set AI_API_KEY=test&& set JWT_SECRET=0123456789abcdef0123456789abcdef&& set ENCRYPTION_KEY=0123456789abcdef0123456789abcdef&& set STRIPE_SECRET_KEY=sk_test_123&& set STRIPE_WEBHOOK_SECRET=whsec_test&& set STRIPE_PUBLISHABLE_KEY=pk_test_123&& set STRIPE_PRICE_WEEKLY=price_weekly_123&& set STRIPE_PRICE_MONTHLY=price_monthly_123&& set STRIPE_PRICE_YEARLY=price_yearly_123&& set STRIPE_PRICE_PRO=price_pro_123&& set STRIPE_PRICE_PREMIUM=price_premium_123&& vitest run"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
@@ -20,6 +20,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "eventsource": "^5.1.0",
@@ -35,6 +36,7 @@
     "pocketbase": "^0.25.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-router-dom": "^7.18.2",
     "sonner": "^2.0.7",
     "stripe": "^17.5.0",
     "tailwind-merge": "^3.5.0",
@@ -43,6 +45,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.1",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.7",

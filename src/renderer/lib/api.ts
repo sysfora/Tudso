@@ -1,6 +1,7 @@
 import { config } from '@/config'
-import type { BillingPlanPrice, Entitlement, MemoryEntry, Plan, Subscription, UserProfile } from '@/types/api'
+import type { BillingPlanPrice, Entitlement, MemoryEntry, Subscription, UserProfile } from '@/types/api'
 import { toPromptProfile } from '@/types/api'
+import type { PaidPlan } from '@shared/plans'
 
 const API_BASE = config.serverUrl
 
@@ -78,7 +79,7 @@ export const api = {
     logout: () => fetchJson<void>('/auth/logout', { method: 'POST' }),
   },
   me: {
-    get: () => fetchJson<{ userId: string; email: string; profile: UserProfile; onboardingComplete: boolean }>('/me'),
+    get: () => fetchJson<{ userId: string; email: string; onboardingComplete?: boolean }>('/me'),
     getProfile: () => fetchJson<UserProfile>('/me/profile'),
     completeOnboarding: () =>
       fetchJson<{ onboardingComplete: boolean }>('/me/onboarding/complete', { method: 'POST' }),
@@ -101,29 +102,38 @@ export const api = {
       }),
     delete: () => fetchJson<{ ok: true; entries: MemoryEntry[]; enabled: boolean }>('/me/context', { method: 'DELETE' }),
   },
-  conversations: {
-    list: () => fetchJson<Array<{ id: string; title: string; created: string; updated: string }>>('/conversations'),
-    create: (title: string) => fetchJson<{ id: string; title: string; created: string; updated: string }>('/conversations', { method: 'POST', body: JSON.stringify({ title }) }),
-    getMessages: (id: string) => fetchJson<Array<{ id: string; role: string; content: string; created: string }>>(`/conversations/${id}`),
-    delete: (id: string) => fetchJson<void>(`/conversations/${id}`, { method: 'DELETE' }),
-  },
   ai: {
-    chat: async (message: string, conversationId?: string, signal?: AbortSignal, model?: string, profile?: ReturnType<typeof toPromptProfile>) => {
+    chat: async (
+      message: string,
+      history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+      signal?: AbortSignal,
+      model?: string,
+      profile?: ReturnType<typeof toPromptProfile>,
+      memories?: string[],
+    ) => {
       const response = await fetch(`${API_BASE}/ai/chat`, {
         method: 'POST',
         headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ message, conversationId, stream: true, model, profile }),
+        body: JSON.stringify({ message, history, stream: true, model, profile, memories }),
         signal,
         cache: 'no-store',
       })
       if (!response.ok) throw new Error(await response.text())
       return response.body as ReadableStream<Uint8Array> | null
     },
-    vision: async (image: string, message: string, conversationId?: string, signal?: AbortSignal, model?: string, profile?: ReturnType<typeof toPromptProfile>) => {
+    vision: async (
+      image: string,
+      message: string,
+      history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+      signal?: AbortSignal,
+      model?: string,
+      profile?: ReturnType<typeof toPromptProfile>,
+      memories?: string[],
+    ) => {
       const response = await fetch(`${API_BASE}/ai/vision`, {
         method: 'POST',
         headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ image, message, conversationId, model, profile }),
+        body: JSON.stringify({ image, message, history, model, profile, memories }),
         signal,
         cache: 'no-store',
       })
@@ -137,6 +147,11 @@ export const api = {
       const result = await fetchJson<{ text: string }>('/ai/transcribe', { method: 'POST', body: form })
       return result.text
     },
+    extractMemory: (userMessage: string, assistantContent: string, existing: string[]) =>
+      fetchJson<{ facts: string[] }>('/ai/memory-extract', {
+        method: 'POST',
+        body: JSON.stringify({ userMessage, assistantContent, existing }),
+      }),
   },
   entitlements: {
     get: () => fetchJson<Entitlement | null>('/entitlements'),
@@ -145,10 +160,11 @@ export const api = {
   },
   usage: {
     get: () => fetchJson<{ usage: unknown }>('/usage'),
+    trackSession: () => fetchJson<{ ok: true }>('/usage/session', { method: 'POST' }),
   },
   billing: {
-    checkout: (plan: Plan) => fetchJson<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
-    portal: (payload?: { action?: 'manage' | 'cancel' | 'upgrade'; plan?: Plan }) =>
+    checkout: (plan: PaidPlan) => fetchJson<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
+    portal: (payload?: { action?: 'manage' | 'cancel' | 'upgrade'; plan?: PaidPlan }) =>
       fetchJson<{ url: string }>('/billing/portal', { method: 'POST', body: JSON.stringify(payload ?? { action: 'manage' }) }),
     subscription: () => fetchJson<Subscription | null>('/billing/subscription'),
     plans: () => fetchJson<{ plans: BillingPlanPrice[] }>('/billing/plans'),

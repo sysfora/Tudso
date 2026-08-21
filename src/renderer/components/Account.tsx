@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Download, Globe, KeyRound, Laptop, LogOut, Mail, Monitor, Terminal, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
@@ -16,10 +17,18 @@ type Device = {
   current?: boolean
 }
 
+function platformIcon(value: string) {
+  if (value === 'darwin') return <Laptop className="h-3.5 w-3.5" />
+  if (value === 'linux') return <Terminal className="h-3.5 w-3.5" />
+  if (value === 'web') return <Globe className="h-3.5 w-3.5" />
+  return <Monitor className="h-3.5 w-3.5" />
+}
+
 function platformLabel(value: string) {
   if (value === 'win32') return 'Windows'
   if (value === 'darwin') return 'Mac'
   if (value === 'linux') return 'Linux'
+  if (value === 'web') return 'Web'
   return value || 'Unknown'
 }
 
@@ -116,11 +125,15 @@ export function Account() {
       <section>
         <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Signed in</h3>
         <div className="flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
-          <div className="min-w-0">
-            <p className="truncate text-[14px] font-medium">{email || 'Unknown account'}</p>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-muted">Log out only ends this session.</p>
+          <div className="flex min-w-0 items-start gap-2.5">
+            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-medium">{email || 'Unknown account'}</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">Log out only ends this session.</p>
+            </div>
           </div>
           <Button variant="outline" size="sm" disabled={Boolean(busy)} loading={busy === 'logout'} onClick={() => void run('logout', () => logout(), 'Signed out.')}>
+            <LogOut className="h-3.5 w-3.5" />
             Log out
           </Button>
         </div>
@@ -144,15 +157,18 @@ export function Account() {
               const seen = formatMemoryDate(device.lastSeen)
               return (
                 <li key={device.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-medium">
-                      {platformLabel(device.platform)}
-                      {current ? ' · This device' : ''}
-                    </p>
-                    <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
-                      {device.appVersion || 'Unknown version'}
-                      {seen ? ` · ${seen}` : ''}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-2.5">
+                    <span className="mt-0.5 text-muted">{platformIcon(device.platform)}</span>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium">
+                        {platformLabel(device.platform)}
+                        {current ? ' · This device' : ''}
+                      </p>
+                      <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+                        {device.appVersion || 'Unknown version'}
+                        {seen ? ` · ${seen}` : ''}
+                      </p>
+                    </div>
                   </div>
                   {current ? (
                     <p className="shrink-0 text-[11px] text-muted">Current</p>
@@ -180,9 +196,12 @@ export function Account() {
         )}
         {devices.some((device) => !isCurrent(device)) ? (
           <div className="mt-2 flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
-            <div>
-              <p className="text-[13px] font-medium">Sign out other sessions</p>
-              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">End every session except this one.</p>
+            <div className="flex min-w-0 items-start gap-2.5">
+              <LogOut className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
+              <div>
+                <p className="text-[13px] font-medium">Sign out other sessions</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted">End every session except this one.</p>
+              </div>
             </div>
             <Button
               variant="outline"
@@ -207,11 +226,14 @@ export function Account() {
         <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Security</h3>
         <div className="space-y-2">
           <div className="rounded-md bg-surface-2 p-3">
-            <p className="text-[13px] font-medium">PIN lock</p>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+            <div className="flex items-start gap-2.5">
+              <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+              <div>
+                <p className="text-[13px] font-medium">PIN lock</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
               {lockEnabled
-                ? 'Tudso asks for this PIN when it opens. Enter the current PIN to change or turn it off.'
-                : 'Require a 4 to 8 digit PIN when Tudso opens on this device.'}
+                ? 'Tudso asks for this PIN when it opens. Kept only on this device. Enter the current PIN to change or turn it off.'
+                : 'Require a 4 to 8 digit PIN when Tudso opens. Kept only on this device.'}
             </p>
             <div className="mt-3 space-y-2">
               {lockEnabled ? (
@@ -268,6 +290,8 @@ export function Account() {
                 ) : null}
               </div>
             </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -275,9 +299,12 @@ export function Account() {
       <section>
         <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Data</h3>
         <div className="flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
-          <div>
-            <p className="text-[13px] font-medium">Export my data</p>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-muted">Download profile, chats, and memories as JSON.</p>
+          <div className="flex min-w-0 items-start gap-2.5">
+            <Download className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
+            <div>
+              <p className="text-[13px] font-medium">Export my data</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">Download profile, chats, and memories from this device, plus billing from your account.</p>
+            </div>
           </div>
           <Button
             variant="outline"
@@ -285,9 +312,24 @@ export function Account() {
             disabled={Boolean(busy)}
             loading={busy === 'export'}
             onClick={() => {
-              if (!window.confirm('Export includes chats, profile, and memories. Continue?')) return
+              if (!window.confirm('Export includes chats, profile, and memories stored on this device. Continue?')) return
               void run('export', async () => {
-                const data = await api.me.export()
+                const userId = session?.userId
+                const [account, local, conversations] = await Promise.all([
+                  api.me.export(),
+                  userId ? desktop.profile.get(userId) : Promise.resolve(null),
+                  desktop.conversations.list(),
+                ])
+                const data = {
+                  ...(account as object),
+                  profile: local?.profile ?? null,
+                  resume: local?.resume ? { fileName: local.resume.fileName, mimeType: local.resume.mimeType } : null,
+                  onboardingComplete: local?.complete === true,
+                  memories: local?.memories ?? [],
+                  memoryEnabled: local?.memoryEnabled !== false,
+                  conversations,
+                  note: 'Profile, resume, chats, memories, and PIN stay on this device. Billing is from the account.',
+                }
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
@@ -306,9 +348,12 @@ export function Account() {
       <section>
         <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Delete account</h3>
         <div className="rounded-md bg-surface-2 p-3">
-          <p className="text-[13px] font-medium">Delete this account</p>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
-            Permanently removes profile, chats, memories, devices, and billing records. Type {email || 'your email'} to confirm.
+          <div className="flex items-start gap-2.5">
+            <Trash2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
+            <div>
+              <p className="text-[13px] font-medium">Delete this account</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+            Permanently removes this account, devices, and billing. Chats, profile, memories, and PIN stay on this device until you clear local data. Type {email || 'your email'} to confirm.
           </p>
           <Input
             className="mt-3"
@@ -331,8 +376,11 @@ export function Account() {
                 }, 'Account deleted.')
               }}
             >
+              <Trash2 className="h-3.5 w-3.5" />
               Delete account
             </Button>
+          </div>
+            </div>
           </div>
         </div>
       </section>

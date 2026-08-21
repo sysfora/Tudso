@@ -19,7 +19,7 @@ export function emptyLocalProfile(): LocalProfile {
 }
 
 export function emptyLocalUser(): LocalUserData {
-  return { complete: false, profile: emptyLocalProfile() }
+  return { complete: false, profile: emptyLocalProfile(), memories: [], memoryEnabled: true }
 }
 
 export function safeUserId(userId: string): string {

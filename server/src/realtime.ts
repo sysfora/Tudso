@@ -37,7 +37,7 @@ export function attachRealtimeAudio(server: Server): void {
     const entitlement = await getEntitlementForUser(user.userId)
     if (!isPaidPlan(entitlement.plan, entitlement.status)) {
       log.warn('Realtime audio rejected', { user: user.userId, reason: 'plan' })
-      ws.close(1008, 'Live copilot requires an active Pro or Premium subscription')
+      ws.close(1008, 'Live copilot requires an active subscription')
       return
     }
 

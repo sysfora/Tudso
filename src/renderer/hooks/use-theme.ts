@@ -1,6 +1,30 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store/app-store'
 
+let previewRaf = 0
+let pendingFontSize: number | null = null
+let pendingTransparency: number | null = null
+
+function flushAppearancePreview() {
+  previewRaf = 0
+  const root = document.documentElement
+  if (pendingFontSize != null) {
+    root.style.setProperty('--app-font-size', `${pendingFontSize}px`)
+    pendingFontSize = null
+  }
+  if (pendingTransparency != null) {
+    const amount = Math.min(80, Math.max(5, pendingTransparency))
+    root.style.setProperty('--transparency', `${amount}%`)
+    pendingTransparency = null
+  }
+}
+
+export function previewAppearance(partial: { fontSize?: number; transparencyAmount?: number }) {
+  if (partial.fontSize != null) pendingFontSize = partial.fontSize
+  if (partial.transparencyAmount != null) pendingTransparency = partial.transparencyAmount
+  if (!previewRaf) previewRaf = requestAnimationFrame(flushAppearancePreview)
+}
+
 export function useTheme() {
   const theme = useAppStore((state) => state.settings.theme)
   const fontSize = useAppStore((state) => state.settings.fontSize)

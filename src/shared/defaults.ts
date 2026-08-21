@@ -61,7 +61,6 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = {
   nextConversation: 'Control+Alt+]',
   previousConversation: 'Control+Alt+[',
   askScreen: 'Control+Alt+S',
-  liveCopilotScreen: 'Control+Alt+L',
   liveCopilotAudio: 'Control+Alt+A',
   stopGeneration: 'Control+Alt+.',
   copyLastAnswer: 'Control+Alt+C',
@@ -104,7 +103,6 @@ export const SHORTCUT_LABELS: Record<keyof ShortcutMap, string> = {
   nextConversation: 'Next session',
   previousConversation: 'Previous session',
   askScreen: 'Answer from screen',
-  liveCopilotScreen: 'Live copilot with screen',
   liveCopilotAudio: 'Live copilot',
   stopGeneration: 'Stop listening or generating',
   copyLastAnswer: 'Copy last answer, markdown',
@@ -147,8 +145,7 @@ export const SHORTCUT_DESCRIPTIONS: Record<keyof ShortcutMap, string> = {
   nextConversation: 'Jump to the next session in the list.',
   previousConversation: 'Jump to the previous session in the list.',
   askScreen: 'Capture the screen and answer what is on it.',
-  liveCopilotScreen: 'Listen and watch the screen, then answer after you pause.',
-  liveCopilotAudio: 'Listen only, then answer after you pause.',
+  liveCopilotAudio: 'Listen, then answer after you pause.',
   stopGeneration: 'Stop voice, live copilot, or an answer in progress.',
   copyLastAnswer: 'Copy the latest assistant reply as markdown.',
   copyLastAnswerPlain: 'Copy the latest assistant reply as plain text.',
@@ -219,7 +216,7 @@ export const SHORTCUT_GROUPS: { title: string; ids: (keyof ShortcutMap)[] }[] = 
   },
   {
     title: 'Copilot',
-    ids: ['askScreen', 'liveCopilotScreen', 'liveCopilotAudio', 'stopGeneration'],
+    ids: ['askScreen', 'liveCopilotAudio', 'stopGeneration'],
   },
   {
     title: 'Copy last',
@@ -365,14 +362,44 @@ export const SCREEN_ASK_PROMPT =
 export const REALTIME_ASK_PROMPT =
   'Answer from this live transcript. If there is a question, interview prompt, coding task, or anything to solve, output the words or code to use immediately. Concise. No coaching wrapper.'
 
-export const REALTIME_SCREEN_ASK_PROMPT =
-  'Answer from this screenshot and live transcript. Reply as the user to the latest interviewer question or task. Ignore recording, stop-sharing, and chrome. Do not restate the question. Concise. No coaching wrapper.'
-
 export const QUICK_ACTIONS = [
-  { id: 'explain', label: 'Explain', prompt: 'Explain this clearly:\n\n' },
-  { id: 'summarize', label: 'Summarize', prompt: 'Summarize the following:\n\n' },
-  { id: 'rewrite', label: 'Rewrite', prompt: 'Rewrite this more clearly:\n\n' },
-  { id: 'generate', label: 'Generate', prompt: 'Generate the following:\n\n' },
-  { id: 'analyze', label: 'Analyze', prompt: 'Analyze this:\n\n' },
-  { id: 'code', label: 'Code', prompt: 'Help me with this code:\n\n' },
+  {
+    id: 'answer',
+    label: 'Answer',
+    prompt:
+      'Answer this interview question as the candidate in first person. Concise and spoken, ready to say out loud. No coaching. Do not restate the question.\n\nQuestion:\n',
+  },
+  {
+    id: 'star',
+    label: 'STAR',
+    prompt:
+      'Answer this behavioral interview question in first person using STAR (Situation, Task, Action, Result). Keep it tight and spoken. No coaching.\n\nQuestion:\n',
+  },
+  {
+    id: 'code',
+    label: 'Code',
+    prompt:
+      'Solve this coding interview problem. Output working code the candidate can type now. Add brief complexity only if useful. No lecture and no coaching wrapper.\n\nProblem:\n',
+  },
+  {
+    id: 'explain',
+    label: 'Explain',
+    prompt:
+      'Explain this as an interview answer: clear, structured, and short enough to say out loud. Use first person where it fits. No coaching.\n\nTopic:\n',
+  },
+  {
+    id: 'design',
+    label: 'Design',
+    prompt:
+      'Answer this system-design interview prompt. Cover requirements, approach, and key tradeoffs. First person, concise, spoken. No coaching.\n\nPrompt:\n',
+  },
 ] as const
+
+export type QuickActionId = (typeof QUICK_ACTIONS)[number]['id']
+
+export function applyQuickActionPrompt(id: QuickActionId | null | undefined, message: string) {
+  const action = QUICK_ACTIONS.find((item) => item.id === id)
+  if (!action) return message
+  const body = message.trim()
+  return body ? `${action.prompt}${body}` : action.prompt.trim()
+}

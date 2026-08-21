@@ -6,11 +6,13 @@ import type {
   Conversation,
   LocalProfile,
   LocalUserData,
+  MemoryEntry,
   Settings,
   ShortcutMap,
   WindowBounds,
 } from '../shared/types'
 import { emptyLocalProfile, emptyLocalUser, removeAllProfiles, removeResumeFile, writeResumeFile } from './local-profile'
+import { normalizeMemoryEntries } from '../shared/memory'
 
 interface PersistedState {
   settings: Settings
@@ -104,7 +106,19 @@ export class AppStore {
 
   getUserData(userId: string): LocalUserData {
     const existing = this.state.users[userId]
-    return existing ? structuredClone(existing) : emptyLocalUser()
+    if (!existing) return emptyLocalUser()
+    return {
+      complete: existing.complete === true,
+      profile: {
+        ...emptyLocalProfile(),
+        ...existing.profile,
+        skills: existing.profile?.skills ?? [],
+        goals: existing.profile?.goals ?? [],
+      },
+      resume: existing.resume,
+      memories: normalizeMemoryEntries(existing.memories),
+      memoryEnabled: existing.memoryEnabled !== false,
+    }
   }
 
   setUserProfile(userId: string, partial: Partial<LocalProfile>): LocalUserData {
@@ -127,6 +141,18 @@ export class AppStore {
   completeUserOnboarding(userId: string): LocalUserData {
     const current = this.getUserData(userId)
     const next: LocalUserData = { ...current, complete: true }
+    this.state.users[userId] = next
+    this.queueWrite()
+    return structuredClone(next)
+  }
+
+  setUserMemory(userId: string, patch: { entries?: MemoryEntry[]; enabled?: boolean }): LocalUserData {
+    const current = this.getUserData(userId)
+    const next: LocalUserData = {
+      ...current,
+      memories: patch.entries !== undefined ? normalizeMemoryEntries(patch.entries) : current.memories,
+      memoryEnabled: patch.enabled ?? current.memoryEnabled,
+    }
     this.state.users[userId] = next
     this.queueWrite()
     return structuredClone(next)

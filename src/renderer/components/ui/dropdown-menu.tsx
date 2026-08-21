@@ -15,13 +15,23 @@ export function DropdownMenuGroup(props: ComponentProps<typeof DropdownMenuPrimi
   return <DropdownMenuPrimitive.Group {...props} />
 }
 
-export function DropdownMenuContent({ className, sideOffset = 6, ...props }: ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+export function DropdownMenuContent({
+  className,
+  sideOffset = 6,
+  collisionPadding = 8,
+  sticky = 'always',
+  ...props
+}: ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
+        sticky={sticky}
+        avoidCollisions
         className={cn(
-          'z-50 min-w-44 overflow-hidden rounded-lg border border-border bg-surface p-1 text-sm anim-fade',
+          'z-50 min-w-44 max-w-[min(var(--radix-dropdown-menu-content-available-width),calc(100vw-16px))] overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-surface p-1 text-sm anim-fade',
+          'max-h-[min(var(--radix-dropdown-menu-content-available-height),calc(100vh-16px))]',
           className,
         )}
         {...props}

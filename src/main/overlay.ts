@@ -548,6 +548,19 @@ function lowLevelMouseProc(nCode: number, wParam: number, lParam: unknown): numb
 
     if (!cursorInWindow(win, cursor)) {
       if (wParam === WM_LBUTTONDOWN || wParam === WM_RBUTTONDOWN) overlayTyping = false
+      if (overlayPointerDown && !overlayDrag) {
+        const outside = localPoint(win)
+        if (wParam === WM_MOUSEMOVE) {
+          injectPointer(win, { type: 'move', button: 0, ...outside })
+          return api.CallNextHookEx(null, nCode, wParam, lParam)
+        }
+        if (wParam === WM_LBUTTONUP) {
+          overlayPointerDown = false
+          clearDrag()
+          injectPointer(win, { type: 'up', button: 0, ...outside })
+          return 1
+        }
+      }
       return api.CallNextHookEx(null, nCode, wParam, lParam)
     }
     const point = localPoint(win)

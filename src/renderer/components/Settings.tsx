@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch'
 import { desktop } from '@/lib/desktop'
 import { cn } from '@/lib/cn'
 import { createId, formatMemoryDate } from '@/lib/format'
+import { previewAppearance } from '@/hooks/use-theme'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
 
@@ -171,7 +172,7 @@ function SettingsPages({ section, searching }: { section: SettingsSection; searc
         </SearchSection>
       ) : null}
       {searching || section === 'subscription' ? (
-        <SearchablePanel title="Subscription" terms={['plan', 'billing', 'upgrade', 'pro', 'premium', 'manage', 'cancel', 'subscribe']}>
+          <SearchablePanel title="Subscription" terms={['plan', 'billing', 'upgrade', 'weekly', 'monthly', 'yearly', 'manage', 'cancel', 'subscribe']}>
           <SubscriptionSection />
         </SearchablePanel>
       ) : null}
@@ -347,13 +348,28 @@ function AiSection() {
 }
 
 function AppearanceSection() {
-  const settings = useAppStore((state) => state.settings)
+  const theme = useAppStore((state) => state.settings.theme)
+  const compactMode = useAppStore((state) => state.settings.compactMode)
+  const fontSize = useAppStore((state) => state.settings.fontSize)
+  const transparency = useAppStore((state) => state.settings.transparency)
+  const transparencyAmount = useAppStore((state) => state.settings.transparencyAmount)
   const setSettings = useAppStore((state) => state.setSettings)
+  const [liveFontSize, setLiveFontSize] = useState(fontSize)
+  const [liveTransparency, setLiveTransparency] = useState(transparencyAmount)
+  const draggingFont = useRef(false)
+  const draggingTransparency = useRef(false)
+
+  useEffect(() => {
+    if (!draggingFont.current) setLiveFontSize(fontSize)
+  }, [fontSize])
+  useEffect(() => {
+    if (!draggingTransparency.current) setLiveTransparency(transparencyAmount)
+  }, [transparencyAmount])
 
   return (
     <div>
       <Row title="Theme">
-        <Select value={settings.theme} onValueChange={(value) => void setSettings({ theme: value as ThemeMode })}>
+        <Select value={theme} onValueChange={(value) => void setSettings({ theme: value as ThemeMode })}>
           <SelectTrigger className="w-[140px]">
             <SelectValue />
           </SelectTrigger>
@@ -365,34 +381,58 @@ function AppearanceSection() {
         </Select>
       </Row>
       <Row title="Compact mode" description="Reduce padding for smaller screens.">
-        <Switch checked={settings.compactMode} onCheckedChange={(value) => void setSettings({ compactMode: value })} />
+        <Switch checked={compactMode} onCheckedChange={(value) => void setSettings({ compactMode: value })} />
       </Row>
-      <Row title="Font size" description={`${settings.fontSize}px`}>
+      <Row title="Font size" description={`${liveFontSize}px`}>
         <div className="w-[140px]">
           <Slider
             min={FONT_SIZE_MIN}
             max={FONT_SIZE_MAX}
             step={1}
-            value={[settings.fontSize]}
-            onValueChange={([value]) => void setSettings({ fontSize: value ?? 14 })}
+            value={[liveFontSize]}
+            onValueChange={([value]) => {
+              const next = value ?? liveFontSize
+              draggingFont.current = true
+              setLiveFontSize(next)
+              previewAppearance({ fontSize: next })
+            }}
+            onValueCommit={([value]) => {
+              const next = value ?? liveFontSize
+              draggingFont.current = false
+              setLiveFontSize(next)
+              previewAppearance({ fontSize: next })
+              void setSettings({ fontSize: next })
+            }}
           />
         </div>
       </Row>
       <Row title="Transparency" description="See the desktop through the window.">
         <Switch
-          checked={settings.transparency}
+          checked={transparency}
           onCheckedChange={(value) => void setSettings({ transparency: value })}
         />
       </Row>
-      <Row title="Amount" description={settings.transparency ? `${settings.transparencyAmount}% see-through` : 'Turn on transparency to adjust.'}>
+      <Row title="Amount" description={transparency ? `${liveTransparency}% see-through` : 'Turn on transparency to adjust.'}>
         <div className="w-[140px]">
           <Slider
             min={5}
             max={80}
             step={1}
-            disabled={!settings.transparency}
-            value={[settings.transparencyAmount]}
-            onValueChange={([value]) => void setSettings({ transparencyAmount: value ?? 40 })}
+            disabled={!transparency}
+            value={[liveTransparency]}
+            onValueChange={([value]) => {
+              const next = value ?? liveTransparency
+              draggingTransparency.current = true
+              setLiveTransparency(next)
+              previewAppearance({ transparencyAmount: next })
+            }}
+            onValueCommit={([value]) => {
+              const next = value ?? liveTransparency
+              draggingTransparency.current = false
+              setLiveTransparency(next)
+              previewAppearance({ transparencyAmount: next })
+              void setSettings({ transparencyAmount: next })
+            }}
           />
         </div>
       </Row>
@@ -924,7 +964,7 @@ function MemorySection() {
     <div className="space-y-6">
       {searching ? null : (
         <p className="text-[12px] leading-relaxed text-muted">
-          Tudso learns durable facts from your chats — tools, preferences, constraints — and uses them in later answers. You can add or remove anything here.
+          Tudso learns durable facts from your chats — tools, preferences, constraints — and uses them in later answers. Saved on this device. You can add or remove anything here.
         </p>
       )}
 
@@ -1029,7 +1069,7 @@ function MemorySection() {
           <div className="flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
             <div>
               <p className="text-[13px] font-medium">Clear all</p>
-              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">Remove every saved memory from this account.</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">Remove every saved memory from this device.</p>
             </div>
             <Button variant="danger" size="sm" disabled={busy} loading={busy} onClick={clear}>
               Clear

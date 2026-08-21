@@ -5,6 +5,7 @@ import type {
   ChatRequest,
   Conversation,
   LocalProfile,
+  MemoryEntry,
   PickedFile,
   Settings,
   ShortcutId,
@@ -188,6 +189,9 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
     store.setUserProfile(userId, profile),
   )
   ipcMain.handle(CHANNELS.profileComplete, (_event, userId: string) => store.completeUserOnboarding(userId))
+  ipcMain.handle(CHANNELS.profileSetMemory, (_event, userId: string, patch: { entries?: MemoryEntry[]; enabled?: boolean }) =>
+    store.setUserMemory(userId, patch),
+  )
   ipcMain.handle(CHANNELS.profileSaveResume, async (_event, userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => {
     const data = await store.saveUserResume(userId, file)
     if (!data.resume) throw new Error('Could not save resume')

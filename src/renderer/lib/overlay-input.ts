@@ -128,6 +128,7 @@ function applyEdit(el: HTMLInputElement | HTMLTextAreaElement, event: OverlayKey
   }
   if (event.key === 'Enter') {
     if (el instanceof HTMLTextAreaElement) insertText(el, '\n')
+    else el.form?.requestSubmit()
     return
   }
   if (event.key === 'Tab') {
@@ -338,6 +339,8 @@ function applyDomSelection(x: number, y: number, count: number, anchor: Range | 
 const DOUBLE_CLICK_MS = 500
 const DOUBLE_CLICK_PX = 6
 
+const OVERLAY_SLIDER_EVENT = 'overlay:slider'
+
 let pointerDownTarget: Element | null = null
 let clickCount = 0
 let lastClickAt = 0
@@ -347,6 +350,57 @@ let dragAnchor = 0
 let dragCount = 1
 let domAnchor: Range | null = null
 let selecting = false
+let sliderDrag: HTMLElement | null = null
+
+function snapSliderValue(value: number, min: number, max: number, step: number) {
+  const clamped = Math.min(max, Math.max(min, value))
+  if (!step || step <= 0) return clamped
+  const snapped = min + Math.round((clamped - min) / step) * step
+  return Math.min(max, Math.max(min, Number(snapped.toFixed(8))))
+}
+
+function overlaySliderRoot(el: Element | null): HTMLElement | null {
+  if (!el) return null
+  if (el instanceof HTMLInputElement && el.type === 'range') return el
+  return el.closest('[data-slider]')
+}
+
+function sliderDisabled(root: HTMLElement) {
+  if (root instanceof HTMLInputElement) return root.disabled
+  return root.hasAttribute('data-disabled') || root.getAttribute('aria-disabled') === 'true'
+}
+
+function applySliderPointer(root: HTMLElement, clientX: number, commit = false) {
+  if (sliderDisabled(root)) return
+  const rect = root.getBoundingClientRect()
+  const ratio = rect.width <= 0 ? 0 : (clientX - rect.left) / rect.width
+  const clamped = Math.min(1, Math.max(0, ratio))
+  if (root instanceof HTMLInputElement && root.type === 'range') {
+    const min = Number(root.min || 0)
+    const max = Number(root.max || 100)
+    const step = root.step === 'any' ? 0 : Number(root.step || 1)
+    const value = snapSliderValue(min + clamped * (max - min), min, max, step)
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(root, String(value))
+    root.dispatchEvent(new Event('input', { bubbles: true }))
+    root.dispatchEvent(new Event('change', { bubbles: true }))
+    return
+  }
+  const thumb = root.querySelector('[role="slider"]')
+  const min = Number(thumb?.getAttribute('aria-valuemin') ?? root.getAttribute('data-min') ?? 0)
+  const max = Number(thumb?.getAttribute('aria-valuemax') ?? root.getAttribute('data-max') ?? 100)
+  const step = Number(root.getAttribute('data-step') ?? 1)
+  const value = snapSliderValue(min + clamped * (max - min), min, max, step)
+  root.dispatchEvent(new CustomEvent(OVERLAY_SLIDER_EVENT, { detail: { value, commit } }))
+}
+
+function dispatchPointer(target: EventTarget, type: 'pointermove' | 'mousemove', event: OverlayPointerEvent) {
+  const init = mouseInit(event)
+  if (type === 'pointermove') {
+    target.dispatchEvent(new PointerEvent('pointermove', { ...init, pointerId: 1, pointerType: 'mouse' }))
+    return
+  }
+  target.dispatchEvent(new MouseEvent('mousemove', init))
+}
 
 function nextClickCount(x: number, y: number) {
   const now = Date.now()
@@ -362,6 +416,15 @@ function nextClickCount(x: number, y: number) {
 export function applyOverlayPointer(event: OverlayPointerEvent) {
   const hit = document.elementFromPoint(event.x, event.y)
   if (event.type === 'move') {
+    if (sliderDrag) {
+      applySliderPointer(sliderDrag, event.x)
+      dispatchPointer(sliderDrag, 'pointermove', event)
+      dispatchPointer(sliderDrag, 'mousemove', event)
+      return
+    }
+    const moveTarget = pointerDownTarget ?? hit ?? document.body
+    dispatchPointer(moveTarget, 'pointermove', event)
+    dispatchPointer(moveTarget, 'mousemove', event)
     if (!selecting) return
     if (pointerDownTarget instanceof Element && isEditable(pointerDownTarget)) {
       selectEditable(pointerDownTarget, offsetFromPoint(pointerDownTarget, event.x, event.y), dragCount, dragAnchor)
@@ -371,15 +434,17 @@ export function applyOverlayPointer(event: OverlayPointerEvent) {
     return
   }
   if (event.type === 'down') {
+    const slider = overlaySliderRoot(hit)
     const interactive = hit?.closest(
-      'button, a, input, textarea, select, [role="button"], [role="menuitem"], [role="switch"]',
+      'button, a, input, textarea, select, [role="button"], [role="menuitem"], [role="switch"], [role="slider"], [data-slider]',
     )
-    if (interactive) {
+    if (interactive || slider) {
       desktop.window.cancelOverlayDrag()
     } else if (hit?.closest('.drag-region')) {
       desktop.window.beginOverlayDrag()
       pointerDownTarget = null
       selecting = false
+      sliderDrag = null
       return
     } else {
       desktop.window.cancelOverlayDrag()
@@ -389,7 +454,11 @@ export function applyOverlayPointer(event: OverlayPointerEvent) {
     const count = event.button === 0 ? nextClickCount(event.x, event.y) : 1
     dragCount = count
     selecting = event.button === 0
-    if (target instanceof Element && isEditable(target)) {
+    sliderDrag = slider && event.button === 0 && !sliderDisabled(slider) ? slider : null
+    if (sliderDrag) {
+      selecting = false
+      applySliderPointer(sliderDrag, event.x)
+    } else if (target instanceof Element && isEditable(target)) {
       lastEditable = target
       target.focus()
       const index = offsetFromPoint(target, event.x, event.y)
@@ -413,16 +482,18 @@ export function applyOverlayPointer(event: OverlayPointerEvent) {
     return
   }
   if (event.type === 'up') {
-    const target = pointerDownTarget ?? hit ?? document.body
+    if (sliderDrag) applySliderPointer(sliderDrag, event.x, true)
+    const target = sliderDrag ?? pointerDownTarget ?? hit ?? document.body
     const init = mouseInit(event, { detail: dragCount })
     target.dispatchEvent(new PointerEvent('pointerup', { ...init, pointerId: 1, pointerType: 'mouse' }))
     target.dispatchEvent(new MouseEvent('mouseup', init))
-    if (event.button === 0) {
+    if (event.button === 0 && !sliderDrag) {
       target.dispatchEvent(new MouseEvent('click', init))
       if (dragCount === 2) target.dispatchEvent(new MouseEvent('dblclick', init))
     }
     pointerDownTarget = null
     selecting = false
+    sliderDrag = null
     return
   }
   if (event.type === 'wheel') {

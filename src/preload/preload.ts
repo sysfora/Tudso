@@ -78,6 +78,7 @@ const api: ElectronAPI = {
     get: (userId: string) => ipcRenderer.invoke(CHANNELS.profileGet, userId),
     set: (userId: string, profile) => ipcRenderer.invoke(CHANNELS.profileSet, userId, profile),
     complete: (userId: string) => ipcRenderer.invoke(CHANNELS.profileComplete, userId),
+    setMemory: (userId, patch) => ipcRenderer.invoke(CHANNELS.profileSetMemory, userId, patch),
     saveResume: (userId: string, file) => ipcRenderer.invoke(CHANNELS.profileSaveResume, userId, file),
     deleteResume: (userId: string) => ipcRenderer.invoke(CHANNELS.profileDeleteResume, userId),
   },

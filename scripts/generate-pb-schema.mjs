@@ -221,17 +221,12 @@ function collection(id, name, fields, extra = {}) {
 }
 
 const USERS = '_pb_users_auth_'
-const PROFILES = 'pbc_1000000001'
 const RESUMES = 'pbc_1000000002'
-const CONVERSATIONS = 'pbc_1000000003'
-const MESSAGES = 'pbc_1000000004'
 const SUBSCRIPTIONS = 'pbc_1000000005'
 const ENTITLEMENTS = 'pbc_1000000006'
 const USAGE = 'pbc_1000000007'
 const DEVICES = 'pbc_1000000008'
 const DESKTOP_SESSIONS = 'pbc_1000000009'
-const USER_CONTEXT = 'pbc_1000000010'
-const ONBOARDING = 'pbc_1000000011'
 
 const emailTemplate = (subject, body) => ({ subject, body })
 
@@ -242,7 +237,7 @@ function usersCollection() {
     listRule: owner,
     viewRule: owner,
     createRule: '',
-    updateRule: 'id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.freeAccess:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false && @request.body.onboardingComplete:isset = false',
+    updateRule: 'id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.freeAccess:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false',
     deleteRule: owner,
     name: 'users',
     type: 'auth',
@@ -408,15 +403,6 @@ function usersCollection() {
         system: false,
         type: 'date',
       },
-      {
-        hidden: false,
-        id: 'bool4100000911',
-        name: 'onboardingComplete',
-        presentable: false,
-        required: false,
-        system: false,
-        type: 'bool',
-      },
       createdField,
       updatedField,
     ],
@@ -468,25 +454,6 @@ function usersCollection() {
 
 const collections = [
   usersCollection(),
-  collection(PROFILES, 'profiles', [
-    relation('user', USERS, { cascadeDelete: true }),
-    text('preferredName', { max: 120 }),
-    text('profession', { max: 160 }),
-    text('role', { max: 160 }),
-    text('industry', { max: 160 }),
-    text('education'),
-    json('skills'),
-    json('goals'),
-    select('communicationStyle', ['concise', 'balanced', 'detailed']),
-    select('technicalLevel', ['beginner', 'intermediate', 'advanced']),
-    bool('formal'),
-    bool('stepByStep'),
-    bool('examples'),
-    bool('explainTerms'),
-    text('customContext'),
-  ], {
-    indexes: ['CREATE UNIQUE INDEX `idx_profiles_user` ON `profiles` (`user`)'],
-  }),
   collection(RESUMES, 'resumes', [
     relation('user', USERS, { cascadeDelete: true }),
     file('file', {
@@ -503,24 +470,6 @@ const collections = [
     json('parsedData'),
   ], {
     indexes: ['CREATE UNIQUE INDEX `idx_resumes_user` ON `resumes` (`user`)'],
-  }),
-  collection(CONVERSATIONS, 'conversations', [
-    relation('user', USERS, { cascadeDelete: true }),
-    text('title', { required: true, max: 255 }),
-  ], {
-    indexes: ['CREATE INDEX `idx_conversations_user` ON `conversations` (`user`)'],
-  }),
-  collection(MESSAGES, 'messages', [
-    relation('user', USERS, { cascadeDelete: true }),
-    relation('conversation', CONVERSATIONS, { cascadeDelete: true }),
-    select('role', ['user', 'assistant', 'system'], { required: true }),
-    text('content', { required: true, max: 100000 }),
-    json('metadata'),
-  ], {
-    indexes: [
-      'CREATE INDEX `idx_messages_conversation` ON `messages` (`conversation`)',
-      'CREATE INDEX `idx_messages_user` ON `messages` (`user`)',
-    ],
   }),
   collection(SUBSCRIPTIONS, 'subscriptions', [
     relation('user', USERS, { cascadeDelete: true }),
@@ -563,6 +512,7 @@ const collections = [
     number('screenAnalyses', { onlyInt: true }),
     number('realtimeMinutes'),
     number('audioMinutes'),
+    number('sessions', { onlyInt: true }),
   ], {
     ...ownerReadAdminWrite(),
     indexes: ['CREATE UNIQUE INDEX `idx_usage_user_date` ON `usage` (`user`, `date`)'],
@@ -587,19 +537,6 @@ const collections = [
       'CREATE UNIQUE INDEX `idx_desktop_sessions_token` ON `desktop_sessions` (`token`)',
       'CREATE INDEX `idx_desktop_sessions_user_device` ON `desktop_sessions` (`user`, `deviceId`)',
     ],
-  }),
-  collection(USER_CONTEXT, 'user_context', [
-    relation('user', USERS, { cascadeDelete: true }),
-    json('entries'),
-  ], {
-    indexes: ['CREATE UNIQUE INDEX `idx_user_context_user` ON `user_context` (`user`)'],
-  }),
-  collection(ONBOARDING, 'onboarding', [
-    relation('user', USERS, { cascadeDelete: true }),
-    bool('complete'),
-    text('step', { max: 64 }),
-  ], {
-    indexes: ['CREATE UNIQUE INDEX `idx_onboarding_user` ON `onboarding` (`user`)'],
   }),
 ]
 

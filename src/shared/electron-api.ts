@@ -7,6 +7,7 @@ import type {
   LocalProfile,
   LocalResumeMeta,
   LocalUserData,
+  MemoryEntry,
   OverlayKeyEvent,
   OverlayPointerEvent,
   PickedFile,
@@ -74,6 +75,7 @@ export interface ElectronAPI {
     get: (userId: string) => Promise<LocalUserData>
     set: (userId: string, profile: Partial<LocalProfile>) => Promise<LocalUserData>
     complete: (userId: string) => Promise<LocalUserData>
+    setMemory: (userId: string, patch: { entries?: MemoryEntry[]; enabled?: boolean }) => Promise<LocalUserData>
     saveResume: (userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalResumeMeta>
     deleteResume: (userId: string) => Promise<LocalUserData>
   }

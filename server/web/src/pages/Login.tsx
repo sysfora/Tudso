@@ -1,0 +1,212 @@
+import * as React from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Eye, EyeOff, Lock, LogIn, Mail, User, UserPlus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { api } from '@/lib/api'
+import { AppShell, ThemeToggle } from '@/components/app/AppShell'
+import { BrandMark } from '@/components/app/BrandMark'
+
+const GOOGLE_MARK = (
+  <svg className="h-4 w-4" viewBox="0 0 48 48" aria-hidden="true">
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+  </svg>
+)
+
+export default function Login() {
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const [mode, setMode] = React.useState(params.get('mode') === 'register' ? 'register' : 'login')
+  const [email, setEmail] = React.useState('')
+  const [name, setName] = React.useState('')
+  const [password, setPassword] = React.useState('')
+  const [passwordConfirm, setPasswordConfirm] = React.useState('')
+  const [showPassword, setShowPassword] = React.useState(false)
+  const [error, setError] = React.useState(queryError(params.get('error'), params.get('verify')))
+  const [busy, setBusy] = React.useState(false)
+  const next = params.get('next') || '/dashboard'
+
+  React.useEffect(() => {
+    void api.session().then((result) => {
+      if (result.user) navigate(next, { replace: true })
+    }).catch(() => undefined)
+  }, [navigate, next])
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      if (mode === 'register') {
+        const result = await api.register({ email, password, passwordConfirm, name: name || undefined })
+        if (result.needsVerification) {
+          setError('Check your email for a verification link, then sign in.')
+          setMode('login')
+          return
+        }
+      } else {
+        await api.login(email, password)
+      }
+      navigate(next, { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not sign in.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const google = async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const { url } = await api.google()
+      window.location.assign(url)
+    } catch (err) {
+      setBusy(false)
+      setError(err instanceof Error ? err.message : 'Google sign-in is unavailable.')
+    }
+  }
+
+  const register = mode === 'register'
+
+  return (
+    <AppShell className="flex min-h-screen flex-col">
+      <ThemeToggle className="fixed right-4 top-4 z-20" />
+      <main className="mx-auto flex w-full max-w-[360px] flex-1 flex-col justify-center px-5 py-16">
+        <Link to="/" className="mb-7 inline-flex">
+          <BrandMark className="h-12 w-12" alt="Tudso" />
+        </Link>
+        <h1 className="text-[22px] font-semibold tracking-tight">
+          {register ? 'Create your account' : 'Sign in'}
+        </h1>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+          {register
+            ? 'Use this account in the Tudso app without entering your password again.'
+            : 'After you sign in here, the Tudso app can connect without asking for your password.'}
+        </p>
+
+        {error ? <p className="mt-4 text-[13px] text-danger" role="alert">{error}</p> : null}
+
+        <form onSubmit={(e) => void submit(e)} className="mt-6 space-y-3">
+          {register ? (
+            <Field icon={<User className="h-3.5 w-3.5" />} label="Name" htmlFor="name">
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Your name" autoComplete="name" />
+            </Field>
+          ) : null}
+          <Field icon={<Mail className="h-3.5 w-3.5" />} label="Email" htmlFor="email">
+            <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" />
+          </Field>
+          <Field
+            icon={<Lock className="h-3.5 w-3.5" />}
+            label="Password"
+            htmlFor="password"
+            extra={
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-fg"
+                onClick={() => setShowPassword((value) => !value)}
+              >
+                {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            }
+          >
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              required
+              minLength={register ? 8 : 1}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={register ? 'At least 8 characters' : 'Your password'}
+              autoComplete={register ? 'new-password' : 'current-password'}
+            />
+          </Field>
+          {register ? (
+            <Field icon={<Lock className="h-3.5 w-3.5" />} label="Confirm password" htmlFor="passwordConfirm">
+              <Input
+                id="passwordConfirm"
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={8}
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                placeholder="Re-enter your password"
+                autoComplete="new-password"
+              />
+            </Field>
+          ) : null}
+          <Button type="submit" variant="fill" size="compact" className="h-10 w-full" disabled={busy} loading={busy}>
+            {register ? <UserPlus className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+            {register ? 'Create account' : 'Sign in'}
+          </Button>
+        </form>
+
+        <div className="my-4 flex items-center gap-3 text-[12px] text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          or
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <Button type="button" variant="soft" size="compact" className="h-10 w-full" disabled={busy} onClick={() => void google()}>
+          {GOOGLE_MARK}
+          Continue with Google
+        </Button>
+
+        {mode === 'login' ? (
+          <p className="mt-4 text-center text-[13px] text-muted-foreground">
+            <a className="text-accent hover:underline" href="/auth/desktop/forgot">Forgot password?</a>
+          </p>
+        ) : null}
+
+        <p className="mt-6 text-center text-[13px] text-muted-foreground">
+          {register ? (
+            <>Already have an account? <button type="button" className="font-medium text-fg hover:underline" onClick={() => setMode('login')}>Sign in</button></>
+          ) : (
+            <>New here? <button type="button" className="font-medium text-fg hover:underline" onClick={() => setMode('register')}>Create an account</button></>
+          )}
+        </p>
+      </main>
+    </AppShell>
+  )
+}
+
+function Field({
+  icon,
+  label,
+  htmlFor,
+  extra,
+  children,
+}: {
+  icon: React.ReactNode
+  label: string
+  htmlFor: string
+  extra?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={htmlFor} className="inline-flex items-center gap-1.5 text-[13px] font-medium">
+          <span className="text-muted-foreground">{icon}</span>
+          {label}
+        </Label>
+        {extra}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function queryError(error: string | null, verify: string | null) {
+  if (verify) return 'Check your email for a verification link, then sign in.'
+  if (error === 'expired') return 'That sign-in link expired. Try Google again.'
+  if (error === 'oauth') return 'Google sign-in failed. Try email instead.'
+  return null
+}

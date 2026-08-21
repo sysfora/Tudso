@@ -33,7 +33,9 @@ export const config = {
     webhookSecret: required('STRIPE_WEBHOOK_SECRET'),
     publishableKey: required('STRIPE_PUBLISHABLE_KEY'),
     priceIds: {
-      free: optional('STRIPE_PRICE_FREE', ''),
+      weekly: optional('STRIPE_PRICE_WEEKLY', ''),
+      monthly: optional('STRIPE_PRICE_MONTHLY', ''),
+      yearly: optional('STRIPE_PRICE_YEARLY', ''),
       pro: optional('STRIPE_PRICE_PRO', ''),
       premium: optional('STRIPE_PRICE_PREMIUM', ''),
     },

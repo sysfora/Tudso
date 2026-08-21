@@ -1,5 +1,5 @@
 import { modifierCount } from '@shared/accelerator'
-import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap, REALTIME_ASK_PROMPT, REALTIME_SCREEN_ASK_PROMPT, SCREEN_ASK_PROMPT, SHORTCUT_LABELS, resolveChatModel } from '@shared/defaults'
+import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap, REALTIME_ASK_PROMPT, SCREEN_ASK_PROMPT, SHORTCUT_LABELS, applyQuickActionPrompt, resolveChatModel, type QuickActionId } from '@shared/defaults'
 import { isActionableTranscript } from '@shared/transcript'
 import { isPaidPlan } from '@shared/plans'
 import type {
@@ -17,8 +17,9 @@ import { api } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import { useAuthStore } from '@/store/auth-store'
 import { toPromptProfile } from '@/types/api'
+import { MAX_MEMORIES, mergeAutoMemories, shouldLearnFromMessage, storedUserContent } from '@shared/memory'
 import { codeFromAnswer, markdownToPlain } from '@/lib/clipboard-format'
-import { createId, makeTitle } from '@/lib/format'
+import { createId, isPlaceholderSessionTitle, MAX_SESSION_TITLE, sessionTitleFromChat } from '@/lib/format'
 
 interface AppState {
   ready: boolean
@@ -42,6 +43,7 @@ interface AppState {
   windowCollapsed: boolean
   screenContext: boolean
   audioContext: boolean
+  quickActionId: QuickActionId | null
   appVersion: string
   updateAvailable: boolean
   latestVersion: string | null
@@ -70,7 +72,8 @@ interface AppActions {
   selectConversation: (id: string) => void
   cycleConversation: (delta: number) => void
   deleteConversation: (id: string) => Promise<void>
-  sendMessage: (text?: string, options?: { fromScreen?: boolean; fromRealtime?: boolean; audioText?: string; audioSource?: 'mic' | 'system'; withScreen?: boolean }) => Promise<void>
+  renameConversation: (id: string, title: string) => Promise<void>
+  sendMessage: (text?: string, options?: { fromScreen?: boolean; fromRealtime?: boolean; audioText?: string; audioSource?: 'mic' | 'system' }) => Promise<void>
   askFromScreen: () => Promise<void>
   stopGeneration: () => void
   endSession: () => void
@@ -95,6 +98,7 @@ interface AppActions {
   loadMessages: (id: string) => Promise<void>
   toggleScreenContext: () => void
   toggleAudioContext: () => void
+  toggleQuickAction: (id: QuickActionId) => void
   captureScreen: () => Promise<string | null>
 }
 
@@ -102,6 +106,55 @@ function upsert(list: Conversation[], conversation: Conversation) {
   const next = list.filter((item) => item.id !== conversation.id)
   next.unshift(conversation)
   return next.sort((a, b) => b.updatedAt - a.updatedAt)
+}
+
+function persistLocal(conversation: Conversation) {
+  void desktop.conversations.save(conversation)
+}
+
+function chatHistory(messages: ChatMessage[]) {
+  return messages
+    .filter((item) => (item.role === 'user' || item.role === 'assistant') && item.content.trim())
+    .slice(-12)
+    .map((item) => ({ role: item.role as 'user' | 'assistant', content: item.content }))
+}
+
+function promptMemories() {
+  const { memoryEnabled, memories } = useAuthStore.getState()
+  if (!memoryEnabled) return undefined
+  const texts = memories.map((entry) => entry.text).filter(Boolean)
+  return texts.length ? texts : undefined
+}
+
+function learnFromChat(userText: string, assistantContent: string) {
+  const auth = useAuthStore.getState()
+  if (!auth.memoryEnabled || !auth.session?.userId) return
+  const source = storedUserContent(userText)
+  if (!shouldLearnFromMessage(source) || !assistantContent.trim()) return
+  if (auth.memories.length >= MAX_MEMORIES && auth.memories.every((entry) => entry.source !== 'auto')) return
+  void api.ai
+    .extractMemory(source, assistantContent, auth.memories.map((entry) => entry.text))
+    .then(async ({ facts }) => {
+      if (!facts.length) return
+      const merged = mergeAutoMemories(useAuthStore.getState().memories, facts)
+      await useAuthStore.getState().saveMemories(merged)
+    })
+    .catch(() => undefined)
+}
+
+function trackSession() {
+  void api.usage.trackSession().catch(() => undefined)
+}
+
+function createLocalConversation(): Conversation {
+  const now = Date.now()
+  return {
+    id: createId(),
+    title: 'New session',
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+  }
 }
 
 export const useAppStore = create<AppState & AppActions>((set, get) => ({
@@ -126,6 +179,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   windowCollapsed: false,
   screenContext: false,
   audioContext: false,
+  quickActionId: null,
   appVersion: '0.1.0',
   updateAvailable: false,
   latestVersion: null,
@@ -135,70 +189,41 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   sessionEndedAtById: {},
 
   hydrate: async () => {
-    const [settings, shortcuts, lock, appVersion, blockedShortcuts] = await Promise.all([
+    const [settings, shortcuts, lock, appVersion, blockedShortcuts, conversations] = await Promise.all([
       desktop.settings.get(),
       desktop.shortcuts.get(),
       desktop.app.getLockState(),
       desktop.app.getVersion(),
       desktop.shortcuts.getFailed(),
+      desktop.conversations.list(),
     ])
-    try {
-      const remote = await api.conversations.list()
-      const conversations: Conversation[] = remote.map((item) => ({
-        id: item.id,
-        title: item.title,
-        createdAt: new Date(item.created).getTime(),
-        updatedAt: new Date(item.updated).getTime(),
-        messages: [],
-      }))
-      set({
-        ready: true,
-        settings: { ...settings, privacyMode: false },
-        shortcuts: normalizeShortcutMap(shortcuts),
-        blockedShortcuts,
-        conversations,
-        activeId: conversations[0]?.id ?? null,
-        locked: lock.locked,
-        lockEnabled: lock.enabled,
-        appVersion,
-      })
-      void get().checkForUpdates()
-    } catch {
-      set({
-        ready: true,
-        settings: { ...settings, privacyMode: false },
-        shortcuts: normalizeShortcutMap(shortcuts),
-        blockedShortcuts,
-        conversations: [],
-        activeId: null,
-        locked: lock.locked,
-        lockEnabled: lock.enabled,
-        appVersion,
-      })
-    }
+    set({
+      ready: true,
+      settings: { ...settings, privacyMode: false },
+      shortcuts: normalizeShortcutMap(shortcuts),
+      blockedShortcuts,
+      conversations,
+      activeId: conversations[0]?.id ?? null,
+      locked: lock.locked,
+      lockEnabled: lock.enabled,
+      appVersion,
+    })
+    void get().checkForUpdates()
   },
 
   toggleScreenContext: () => set((state) => ({ screenContext: !state.screenContext })),
   toggleAudioContext: () => set((state) => ({ audioContext: !state.audioContext })),
+  toggleQuickAction: (id) =>
+    set((state) => ({ quickActionId: state.quickActionId === id ? null : id })),
   captureScreen: async () => desktop.capture.screen(),
 
   loadMessages: async (id: string) => {
     const state = get()
     const conversation = state.conversations.find((item) => item.id === id)
-    if (!conversation || conversation.messages.length > 0) return
-    try {
-      const remote = await api.conversations.getMessages(id)
-      const messages: ChatMessage[] = remote.map((item) => ({
-        id: item.id,
-        role: item.role as 'user' | 'assistant',
-        content: item.content,
-        createdAt: new Date(item.created).getTime(),
-      }))
-      const next = { ...conversation, messages }
-      set({ conversations: upsert(state.conversations, next) })
-    } catch {
-      // ignore
-    }
+    if (conversation?.messages.length) return
+    const stored = await desktop.conversations.get(id)
+    if (!stored) return
+    set({ conversations: upsert(state.conversations, stored) })
   },
 
   setSettings: async (partial) => {
@@ -268,14 +293,9 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   newConversation: async () => {
     if (get().runningSessionId) return
-    const remote = await api.conversations.create('New session')
-    const conversation: Conversation = {
-      id: remote.id,
-      title: remote.title,
-      createdAt: new Date(remote.created).getTime(),
-      updatedAt: new Date(remote.updated).getTime(),
-      messages: [],
-    }
+    const conversation = createLocalConversation()
+    persistLocal(conversation)
+    trackSession()
     set({
       conversations: upsert(get().conversations, conversation),
       activeId: conversation.id,
@@ -301,14 +321,33 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   deleteConversation: async (id) => {
-    await api.conversations.delete(id)
-    const conversations = get().conversations.filter((item) => item.id !== id)
+    const wasActive = get().activeId === id
     const stopping = get().runningSessionId === id
+    if (stopping) get().stopGeneration()
+    try {
+      await desktop.conversations.delete(id)
+    } catch {
+      desktop.app.notify('Delete session', 'Could not delete this session.')
+      return
+    }
+    const conversations = get().conversations.filter((item) => item.id !== id)
+    const nextActive = wasActive ? (conversations[0]?.id ?? null) : get().activeId
     set({
       conversations,
-      activeId: get().activeId === id ? (conversations[0]?.id ?? null) : get().activeId,
+      activeId: nextActive,
       ...(stopping ? { runningSessionId: null, sessionStartedAt: null } : {}),
     })
+    if (nextActive && wasActive) void get().loadMessages(nextActive)
+  },
+
+  renameConversation: async (id, title) => {
+    const nextTitle = title.replace(/\s+/g, ' ').trim().slice(0, MAX_SESSION_TITLE)
+    if (!nextTitle) return
+    const conversation = get().conversations.find((item) => item.id === id)
+    if (!conversation || conversation.title === nextTitle) return
+    const next = { ...conversation, title: nextTitle, updatedAt: Date.now() }
+    persistLocal(next)
+    set({ conversations: upsert(get().conversations, next) })
   },
 
   abortController: null as AbortController | null,
@@ -317,7 +356,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     if (get().generatingId) return
     const entitlement = useAuthStore.getState().entitlement
     if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-      desktop.app.notify('Answer from screen', 'Screen answers require an active Pro or Premium subscription.')
+      desktop.app.notify('Answer from screen', 'Screen answers require an active subscription.')
       return
     }
     await get().sendMessage(undefined, { fromScreen: true })
@@ -328,29 +367,29 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     if (state.generatingId) return
     const entitlement = useAuthStore.getState().entitlement
     if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-      desktop.app.notify('Subscription required', 'This feature needs an active Pro or Premium subscription.')
+      desktop.app.notify('Subscription required', 'This feature needs an active subscription.')
       return
     }
     const fromScreen = options?.fromScreen === true
     const fromRealtime = options?.fromRealtime === true
-    const withScreen = options?.withScreen === true
     const audioText = options?.audioText?.trim() ?? ''
     const audioSource = options?.audioSource === 'system' ? 'Computer Audio (Interviewer)' : 'Microphone (You)'
     const content = (text ?? (fromRealtime ? '' : state.composer)).trim()
     if (!fromScreen && !fromRealtime && !content && state.attachments.length === 0) return
     if (fromRealtime && !isActionableTranscript(audioText)) return
 
-    const captureScreen = fromScreen || (fromRealtime && withScreen) || (!fromScreen && !fromRealtime && state.screenContext)
+    const captureScreen = fromScreen || (!fromScreen && !fromRealtime && state.screenContext)
     const displayContent = fromRealtime
       ? audioText
       : fromScreen
         ? content
         : content
-    const apiMessage = fromScreen
+    let apiMessage = fromScreen
       ? (content || SCREEN_ASK_PROMPT)
       : fromRealtime
-        ? `${withScreen ? REALTIME_SCREEN_ASK_PROMPT : REALTIME_ASK_PROMPT}\n\nAudio source: ${audioSource}\nTranscript:\n${audioText}`
+        ? `${REALTIME_ASK_PROMPT}\n\nAudio source: ${audioSource}\nTranscript:\n${audioText}`
         : content
+    apiMessage = applyQuickActionPrompt(state.quickActionId, apiMessage)
 
     if (captureScreen) set({ generatingId: 'capturing' })
 
@@ -369,15 +408,12 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       : state.conversations.find((item) => item.id === get().activeId)
     if (!conversation) {
       if (state.runningSessionId) return
-      const remote = await api.conversations.create('New session')
-      conversation = {
-        id: remote.id,
-        title: remote.title,
-        createdAt: new Date(remote.created).getTime(),
-        updatedAt: new Date(remote.updated).getTime(),
-        messages: [],
-      }
+      conversation = createLocalConversation()
+      persistLocal(conversation)
+      trackSession()
     }
+
+    const history = chatHistory(conversation.messages)
 
     const screenshot = image
       ? {
@@ -392,6 +428,9 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       ? (screenshot ? [screenshot] : [])
       : [...state.attachments, ...(screenshot ? [screenshot] : [])]
     const titleSource = displayContent || (screenshot ? 'Answer from screen' : 'New session')
+    const nextTitle = isPlaceholderSessionTitle(conversation.title)
+      ? (sessionTitleFromChat(titleSource) ?? conversation.title)
+      : conversation.title
 
     const userMessage: ChatMessage = {
       id: createId(),
@@ -409,7 +448,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
     const next: Conversation = {
       ...conversation,
-      title: conversation.messages.length === 0 ? makeTitle(titleSource) : conversation.title,
+      title: nextTitle,
       messages: [...conversation.messages, userMessage, assistantMessage],
       updatedAt: Date.now(),
     }
@@ -426,13 +465,15 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       runningSessionId: next.id,
       sessionStartedAt: get().sessionStartedAt ?? Date.now(),
     })
+    persistLocal(next)
 
     try {
       const model = resolveChatModel(get().settings.model)
       const profile = toPromptProfile(useAuthStore.getState().profile)
+      const memories = promptMemories()
       const stream = image
-        ? await api.ai.vision(image, apiMessage, next.id, abortController.signal, model, profile)
-        : await api.ai.chat(apiMessage, next.id, abortController.signal, model, profile)
+        ? await api.ai.vision(image, apiMessage, history, abortController.signal, model, profile, memories)
+        : await api.ai.chat(apiMessage, history, abortController.signal, model, profile, memories)
       if (!stream) throw new Error('No response stream')
       const reader = stream.getReader()
       const decoder = new TextDecoder()
@@ -469,6 +510,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       )
       const next = { ...conversation, messages, updatedAt: Date.now() }
       set({ conversations: upsert(conversations, next), generatingId: null })
+      persistLocal(next)
       return
     }
     set({ generatingId: null })
@@ -516,13 +558,15 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       conversations: upsert(state.conversations, next),
       generatingId: assistantMessage.id,
     })
+    persistLocal(next)
     try {
       const stream = await api.ai.chat(
-        lastUser.content,
-        next.id,
+        applyQuickActionPrompt(get().quickActionId, lastUser.content),
+        chatHistory(prior),
         abortController.signal,
         resolveChatModel(get().settings.model),
         toPromptProfile(useAuthStore.getState().profile),
+        promptMemories(),
       )
       if (!stream) throw new Error('No response stream')
       const reader = stream.getReader()
@@ -589,6 +633,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       updatedAt: Date.now(),
     }
     set({ conversations: upsert(state.conversations, next) })
+    persistLocal(next)
   },
 
   retryLast: async () => {
@@ -596,14 +641,13 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   clearConversations: async () => {
-    const conversations = get().conversations
-    await Promise.all(conversations.map((c) => api.conversations.delete(c.id)))
+    await desktop.conversations.clear()
     set({ conversations: [], activeId: null, runningSessionId: null, sessionStartedAt: null, sessionEndedAtById: {} })
   },
 
   deleteLocalData: async () => {
     await desktop.app.deleteLocalData()
-    useAuthStore.setState({ profile: null, onboardingComplete: false })
+    useAuthStore.setState({ profile: null, onboardingComplete: false, memories: [], memoriesLoaded: true, memoryEnabled: true })
     set({
       settings: DEFAULT_SETTINGS,
       shortcuts: DEFAULT_SHORTCUTS,
@@ -621,27 +665,49 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   appendStream: (conversationId, messageId, delta) => {
+    let updated: Conversation | null = null
     const conversations = get().conversations.map((conversation) => {
       if (conversation.id !== conversationId) return conversation
-      return {
+      updated = {
         ...conversation,
         messages: conversation.messages.map((message) =>
           message.id === messageId ? { ...message, content: message.content + delta } : message,
         ),
         updatedAt: Date.now(),
       }
+      return updated
     })
     set({ conversations })
+    if (updated) persistLocal(updated)
   },
 
-  finishStream: async (_conversationId, messageId) => {
+  finishStream: async (conversationId, messageId) => {
     if (get().generatingId === messageId) set({ generatingId: null })
+    const conversation = get().conversations.find((item) => item.id === conversationId)
+    if (!conversation) return
+    let next = conversation
+    if (isPlaceholderSessionTitle(conversation.title)) {
+      const assistant = conversation.messages.find((item) => item.id === messageId)
+      const user = [...conversation.messages].reverse().find((item) => item.role === 'user')
+      const title = sessionTitleFromChat(user?.content ?? '') ?? sessionTitleFromChat(assistant?.content ?? '')
+      if (title) {
+        next = { ...conversation, title, updatedAt: Date.now() }
+        set({ conversations: upsert(get().conversations, next) })
+      }
+    }
+    persistLocal(next)
+    const assistant = next.messages.find((item) => item.id === messageId)
+    const user = [...next.messages].reverse().find((item) => item.role === 'user')
+    if (assistant?.content && user?.content && !assistant.error) {
+      learnFromChat(user.content, assistant.content)
+    }
   },
 
   failStream: async (conversationId, messageId, message) => {
+    let updated: Conversation | null = null
     const conversations = get().conversations.map((conversation) => {
       if (conversation.id !== conversationId) return conversation
-      return {
+      updated = {
         ...conversation,
         messages: conversation.messages.map((item) =>
           item.id === messageId
@@ -650,8 +716,10 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
         ),
         updatedAt: Date.now(),
       }
+      return updated
     })
     set({ conversations, generatingId: get().generatingId === messageId ? null : get().generatingId })
+    if (updated) persistLocal(updated)
   },
 }))
 
