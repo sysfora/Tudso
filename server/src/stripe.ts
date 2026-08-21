@@ -1,7 +1,7 @@
 import Stripe from 'stripe'
 import { config } from './config.js'
 import { log } from './log.js'
-import { getSubscription, upsertEntitlement, upsertSubscription, type UserBilling } from './pocketbase.js'
+import { getSubscription, upsertSubscription, syncUserBilling, type UserBilling } from './pocketbase.js'
 import { CHECKOUT_PLANS, isCheckoutPlan, type PaidPlan } from './plans.js'
 import type { EntitlementRecord, Plan, SubscriptionRecord } from './types.js'
 
@@ -331,9 +331,9 @@ export async function syncSubscriptionFromStripe(stripeSubscription: Stripe.Subs
     currentPeriodEnd: mapped.currentPeriodEnd,
     cancelAtPeriodEnd: mapped.cancelAtPeriodEnd,
   })
-  await upsertEntitlement(userId, {
+  await syncUserBilling(userId, {
     plan: mapped.plan,
-    status: mapped.planStatus,
+    planStatus: mapped.planStatus,
     expiresAt: mapped.currentPeriodEnd,
   })
   invalidateLiveEntitlement(userId)

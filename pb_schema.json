@@ -176,7 +176,7 @@
     "listRule": "id = @request.auth.id",
     "viewRule": "id = @request.auth.id",
     "createRule": "",
-    "updateRule": "id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.freeAccess:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false",
+    "updateRule": "id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.freeAccess:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false && @request.body.onboardingComplete:isset = false",
     "deleteRule": "id = @request.auth.id",
     "name": "users",
     "type": "auth",
@@ -375,6 +375,15 @@
         "required": false,
         "system": false,
         "type": "date"
+      },
+      {
+        "hidden": false,
+        "id": "bool4100000913",
+        "name": "onboardingComplete",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "bool"
       },
       {
         "hidden": false,
@@ -1080,248 +1089,6 @@
     ],
     "indexes": [
       "CREATE UNIQUE INDEX `idx_devices_user_device` ON `devices` (`user`, `deviceId`)"
-    ],
-    "system": false
-  },
-  {
-    "id": "pbc_1000000006",
-    "listRule": "user = @request.auth.id",
-    "viewRule": "user = @request.auth.id",
-    "createRule": null,
-    "updateRule": null,
-    "deleteRule": null,
-    "name": "entitlements",
-    "type": "base",
-    "fields": [
-      {
-        "autogeneratePattern": "[a-z0-9]{15}",
-        "hidden": false,
-        "id": "text3208210256",
-        "max": 15,
-        "min": 15,
-        "name": "id",
-        "pattern": "^[a-z0-9]+$",
-        "presentable": false,
-        "primaryKey": true,
-        "required": true,
-        "system": true,
-        "type": "text"
-      },
-      {
-        "cascadeDelete": true,
-        "collectionId": "_pb_users_auth_",
-        "hidden": false,
-        "id": "relation4100000037",
-        "maxSelect": 1,
-        "minSelect": 0,
-        "name": "user",
-        "presentable": false,
-        "required": true,
-        "system": false,
-        "type": "relation"
-      },
-      {
-        "hidden": false,
-        "id": "select4100000038",
-        "maxSelect": 1,
-        "name": "plan",
-        "presentable": false,
-        "required": true,
-        "system": false,
-        "type": "select",
-        "values": [
-          "free",
-          "weekly",
-          "monthly",
-          "yearly",
-          "pro",
-          "premium"
-        ]
-      },
-      {
-        "hidden": false,
-        "id": "select4100000039",
-        "maxSelect": 1,
-        "name": "status",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "select",
-        "values": [
-          "active",
-          "trialing",
-          "past_due",
-          "canceled",
-          "unpaid"
-        ]
-      },
-      {
-        "hidden": false,
-        "id": "date4100000045",
-        "max": "",
-        "min": "",
-        "name": "expiresAt",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "date"
-      },
-      {
-        "hidden": false,
-        "id": "autodate2990389176",
-        "name": "created",
-        "onCreate": true,
-        "onUpdate": false,
-        "presentable": false,
-        "system": false,
-        "type": "autodate"
-      },
-      {
-        "hidden": false,
-        "id": "autodate3332085495",
-        "name": "updated",
-        "onCreate": true,
-        "onUpdate": true,
-        "presentable": false,
-        "system": false,
-        "type": "autodate"
-      }
-    ],
-    "indexes": [
-      "CREATE UNIQUE INDEX `idx_entitlements_user` ON `entitlements` (`user`)"
-    ],
-    "system": false
-  },
-  {
-    "id": "pbc_1000000002",
-    "listRule": "user = @request.auth.id",
-    "viewRule": "user = @request.auth.id",
-    "createRule": "@request.auth.id != \"\" && user = @request.auth.id",
-    "updateRule": "user = @request.auth.id",
-    "deleteRule": "user = @request.auth.id",
-    "name": "resumes",
-    "type": "base",
-    "fields": [
-      {
-        "autogeneratePattern": "[a-z0-9]{15}",
-        "hidden": false,
-        "id": "text3208210256",
-        "max": 15,
-        "min": 15,
-        "name": "id",
-        "pattern": "^[a-z0-9]+$",
-        "presentable": false,
-        "primaryKey": true,
-        "required": true,
-        "system": true,
-        "type": "text"
-      },
-      {
-        "cascadeDelete": true,
-        "collectionId": "_pb_users_auth_",
-        "hidden": false,
-        "id": "relation4100000016",
-        "maxSelect": 1,
-        "minSelect": 0,
-        "name": "user",
-        "presentable": false,
-        "required": true,
-        "system": false,
-        "type": "relation"
-      },
-      {
-        "hidden": false,
-        "id": "file4100000017",
-        "maxSelect": 1,
-        "maxSize": 10485760,
-        "mimeTypes": [
-          "application/pdf",
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          "text/plain"
-        ],
-        "name": "file",
-        "presentable": false,
-        "protected": true,
-        "required": false,
-        "system": false,
-        "thumbs": null,
-        "type": "file"
-      },
-      {
-        "autogeneratePattern": "",
-        "hidden": false,
-        "id": "text4100000018",
-        "max": 100000,
-        "min": 0,
-        "name": "extractedText",
-        "pattern": "",
-        "presentable": false,
-        "primaryKey": false,
-        "required": false,
-        "system": false,
-        "type": "text"
-      },
-      {
-        "autogeneratePattern": "",
-        "hidden": false,
-        "id": "text4100000019",
-        "max": 500,
-        "min": 0,
-        "name": "filePath",
-        "pattern": "",
-        "presentable": false,
-        "primaryKey": false,
-        "required": false,
-        "system": false,
-        "type": "text"
-      },
-      {
-        "hidden": false,
-        "id": "select4100000020",
-        "maxSelect": 1,
-        "name": "storage",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "select",
-        "values": [
-          "r2",
-          "local"
-        ]
-      },
-      {
-        "hidden": false,
-        "id": "json4100000021",
-        "maxSize": 2000000,
-        "name": "parsedData",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "json"
-      },
-      {
-        "hidden": false,
-        "id": "autodate2990389176",
-        "name": "created",
-        "onCreate": true,
-        "onUpdate": false,
-        "presentable": false,
-        "system": false,
-        "type": "autodate"
-      },
-      {
-        "hidden": false,
-        "id": "autodate3332085495",
-        "name": "updated",
-        "onCreate": true,
-        "onUpdate": true,
-        "presentable": false,
-        "system": false,
-        "type": "autodate"
-      }
-    ],
-    "indexes": [
-      "CREATE UNIQUE INDEX `idx_resumes_user` ON `resumes` (`user`)"
     ],
     "system": false
   },

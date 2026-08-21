@@ -1,5 +1,5 @@
 import { config } from '@/config'
-import type { BillingPlanPrice, Entitlement, MemoryEntry, Subscription, UserProfile } from '@/types/api'
+import type { BillingPlanPrice, Entitlement, Subscription } from '@/types/api'
 import { toPromptProfile } from '@/types/api'
 import type { PaidPlan } from '@shared/plans'
 
@@ -90,11 +90,6 @@ export const api = {
   },
   me: {
     get: () => fetchJson<{ userId: string; email: string; name?: string; avatarUrl?: string | null; onboardingComplete?: boolean }>('/me'),
-    getProfile: () => fetchJson<UserProfile>('/me/profile'),
-    completeOnboarding: () =>
-      fetchJson<{ onboardingComplete: boolean }>('/me/onboarding/complete', { method: 'POST' }),
-    updateProfile: (profile: Partial<UserProfile>) =>
-      fetchJson<UserProfile>('/me/profile', { method: 'PATCH', body: JSON.stringify(profile) }),
     getAccount: () => fetchJson<{ userId: string; email: string; name: string; avatarUrl: string | null }>('/me/account'),
     updateName: (name: string) =>
       fetchJson<{ userId: string; email: string; name: string; avatarUrl: string | null }>('/me/account', {
@@ -125,15 +120,6 @@ export const api = {
     list: () => fetchJson<Array<{ id: string; deviceId: string; platform: string; appVersion: string; lastSeen: string; current?: boolean }>>('/me/devices'),
     delete: (deviceId: string) => fetchJson<{ ok: true; current?: boolean }>(`/me/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),
     revokeOthers: () => fetchJson<{ ok: true; revoked: number }>('/me/sessions/revoke-others', { method: 'POST' }),
-  },
-  context: {
-    get: () => fetchJson<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean }>('/me/context'),
-    update: (patch: { entries?: MemoryEntry[]; enabled?: boolean }) =>
-      fetchJson<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean }>('/me/context', {
-        method: 'PATCH',
-        body: JSON.stringify(patch),
-      }),
-    delete: () => fetchJson<{ ok: true; entries: MemoryEntry[]; enabled: boolean }>('/me/context', { method: 'DELETE' }),
   },
   ai: {
     chat: async (

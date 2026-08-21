@@ -1,20 +1,15 @@
 import PocketBase from 'pocketbase'
 import { config } from './config.js'
-import { log, logError } from './log.js'
+import { log } from './log.js'
 import { isFreeAccessPlan, isPlan } from './plans.js'
 import { pbQuote } from './pb-filter.js'
-import { deleteStoredObject, type StorageBackend } from './storage.js'
-import { parseUserContext, serializeUserContext, type MemoryEntry } from './memory.js'
 import {
-  DEFAULT_PROFILE_PREFERENCES,
   type DesktopSession,
   type DeviceRecord,
   type EntitlementRecord,
   type Plan,
-  type ResumeRecord,
   type SubscriptionRecord,
   type UsageRecord,
-  type UserProfile,
 } from './types.js'
 
 let adminPb: PocketBase | null = null
@@ -131,144 +126,6 @@ export async function ensureUserBilling(userId: string): Promise<void> {
   }
 }
 
-export async function getProfileIfExists(userId: string): Promise<UserProfile | null> {
-  const pb = await getAdminPb()
-  try {
-    const record = await pb.collection('profiles').getFirstListItem(`user="${userId}"`)
-    return record as unknown as UserProfile
-  } catch {
-    return null
-  }
-}
-
-export async function getOrCreateProfile(userId: string): Promise<UserProfile> {
-  const existing = await getProfileIfExists(userId)
-  if (existing) return await applyProfileDefaults(existing)
-  const pb = await getAdminPb()
-  const record = await pb.collection('profiles').create({
-    user: userId,
-    skills: [],
-    goals: [],
-    ...DEFAULT_PROFILE_PREFERENCES,
-  })
-  return record as unknown as UserProfile
-}
-
-function answerPrefsLookUnset(profile: UserProfile) {
-  return profile.formal !== true && profile.stepByStep !== true && profile.examples !== true && profile.explainTerms !== true
-}
-
-async function applyProfileDefaults(profile: UserProfile): Promise<UserProfile> {
-  const patch: Partial<UserProfile> = {}
-  if (!profile.communicationStyle) patch.communicationStyle = DEFAULT_PROFILE_PREFERENCES.communicationStyle
-  if (!profile.technicalLevel) patch.technicalLevel = DEFAULT_PROFILE_PREFERENCES.technicalLevel
-  if (answerPrefsLookUnset(profile)) {
-    patch.stepByStep = DEFAULT_PROFILE_PREFERENCES.stepByStep
-    patch.examples = DEFAULT_PROFILE_PREFERENCES.examples
-    patch.explainTerms = DEFAULT_PROFILE_PREFERENCES.explainTerms
-    patch.formal = DEFAULT_PROFILE_PREFERENCES.formal
-  }
-  if (!Object.keys(patch).length) return profile
-  const pb = await getAdminPb()
-  const record = await pb.collection('profiles').update(profile.id, patch)
-  return record as unknown as UserProfile
-}
-
-export async function updateProfile(userId: string, data: Partial<UserProfile>): Promise<UserProfile> {
-  const pb = await getAdminPb()
-  const profile = await getOrCreateProfile(userId)
-  const record = await pb.collection('profiles').update(profile.id, data)
-  return record as unknown as UserProfile
-}
-
-export async function getResume(userId: string): Promise<ResumeRecord | null> {
-  const pb = await getAdminPb()
-  try {
-    const record = await pb.collection('resumes').getFirstListItem(`user="${userId}"`)
-    return record as unknown as ResumeRecord
-  } catch {
-    return null
-  }
-}
-
-export function resumeStorageRef(record: ResumeRecord | null | undefined): { backend?: StorageBackend; key?: string } {
-  if (!record) return {}
-  return {
-    backend: record.storage ?? record.parsedData?.storage,
-    key: record.filePath ?? record.parsedData?.filePath,
-  }
-}
-
-export async function upsertResume(
-  userId: string,
-  input: {
-    extractedText: string
-    parsedData: ResumeRecord['parsedData']
-    filePath: string
-    storage: StorageBackend
-    fileName: string
-    mimeType: string
-  },
-): Promise<ResumeRecord> {
-  const pb = await getAdminPb()
-  const extractedText = sanitizeResumeText(input.extractedText)
-  const parsedData = {
-    ...input.parsedData,
-    rawText: extractedText,
-    filePath: input.filePath,
-    storage: input.storage,
-    fileName: input.fileName,
-    mimeType: input.mimeType,
-  }
-  const payload: Record<string, unknown> = {
-    user: userId,
-    extractedText: extractedText.slice(0, 4000),
-    parsedData,
-    filePath: input.filePath,
-    storage: input.storage,
-  }
-
-  try {
-    return await saveResumeRecord(pb, userId, payload)
-  } catch (error) {
-    const details = pocketbaseDetails(error)
-    if (details.includes('extractedText')) {
-      payload.extractedText = ''
-    }
-    if (details.includes('filePath') || details.includes('storage')) {
-      delete payload.filePath
-      delete payload.storage
-    }
-    if (details.includes('extractedText') || details.includes('filePath') || details.includes('storage')) {
-      return saveResumeRecord(pb, userId, payload)
-    }
-    throw new Error(details)
-  }
-}
-
-async function saveResumeRecord(
-  pb: PocketBase,
-  userId: string,
-  payload: Record<string, unknown>,
-): Promise<ResumeRecord> {
-  const existing = await getResume(userId)
-  if (existing) {
-    const record = await pb.collection('resumes').update(existing.id, payload)
-    return record as unknown as ResumeRecord
-  }
-  const record = await pb.collection('resumes').create(payload)
-  return record as unknown as ResumeRecord
-}
-
-function sanitizeResumeText(text: string): string {
-  return text
-    .replaceAll('\0', '')
-    .replace(/[\uD800-\uDFFF]/g, '')
-    .replace(/[^\S\n\t]+/g, ' ')
-    .trim()
-    .slice(0, 200_000)
-}
-
 function pocketbaseDetails(error: unknown): string {
   const err = error as { response?: { data?: Record<string, { message?: string }>; message?: string }; message?: string }
   const fields = err.response?.data
@@ -280,16 +137,6 @@ function pocketbaseDetails(error: unknown): string {
     if (parts.length) return parts.join('; ')
   }
   return err.response?.message ?? err.message ?? 'PocketBase request failed'
-}
-
-export async function deleteResume(userId: string): Promise<void> {
-  const pb = await getAdminPb()
-  const existing = await getResume(userId)
-  if (!existing) return
-  await deleteStoredObject(resumeStorageRef(existing)).catch((error) => {
-    logError('Failed to delete stored resume file', error)
-  })
-  await pb.collection('resumes').delete(existing.id)
 }
 
 export async function getSubscription(userId: string): Promise<SubscriptionRecord | null> {
@@ -313,16 +160,6 @@ export async function upsertSubscription(userId: string, data: Partial<Subscript
     stripeSubscriptionId: data.stripeSubscriptionId ?? (record as unknown as SubscriptionRecord).stripeSubscriptionId,
   })
   return record as unknown as SubscriptionRecord
-}
-
-export async function getEntitlement(userId: string): Promise<EntitlementRecord | null> {
-  const pb = await getAdminPb()
-  try {
-    const record = await pb.collection('entitlements').getFirstListItem(`user="${userId}"`)
-    return record as unknown as EntitlementRecord
-  } catch {
-    return null
-  }
 }
 
 export function unpaidEntitlement(userId: string, extra?: Partial<EntitlementRecord>): EntitlementRecord {
@@ -433,9 +270,9 @@ export async function persistLiveBilling(
       cancelAtPeriodEnd: data.cancelAtPeriodEnd,
     })
   }
-  await upsertEntitlement(userId, {
+  await syncUserBilling(userId, {
     plan: data.plan,
-    status: data.planStatus,
+    planStatus: data.planStatus,
     expiresAt: data.currentPeriodEnd,
   })
 }
@@ -456,11 +293,6 @@ async function ensureEntitlementRealtime(): Promise<void> {
     const pb = await getAdminPb()
     await pb.collection('users').subscribe('*', (event) => {
       const userId = event.record?.id
-      if (typeof userId === 'string') emitEntitlement(userId)
-    })
-    await pb.collection('entitlements').subscribe('*', (event) => {
-      const related = event.record?.user
-      const userId = typeof related === 'string' ? related : related && typeof related === 'object' && 'id' in related ? String((related as { id: string }).id) : undefined
       if (typeof userId === 'string') emitEntitlement(userId)
     })
   })().catch((error) => {
@@ -488,26 +320,6 @@ export async function watchEntitlement(
     listeners?.delete(listener)
     if (listeners && listeners.size === 0) entitlementWatchers.delete(userId)
   }
-}
-
-export async function upsertEntitlement(userId: string, data: Partial<EntitlementRecord>): Promise<EntitlementRecord> {
-  const pb = await getAdminPb()
-  const existing = await getEntitlement(userId)
-  const payload: Record<string, unknown> = {}
-  if (data.plan !== undefined) payload.plan = data.plan
-  if (data.status !== undefined) payload.status = data.status
-  if (data.expiresAt !== undefined) payload.expiresAt = data.expiresAt
-  const record = existing
-    ? await pb.collection('entitlements').update(existing.id, payload)
-    : await pb.collection('entitlements').create({ user: userId, ...payload })
-  const billing = await getUserBilling(userId)
-  if (billing?.freeAccess) return record as unknown as EntitlementRecord
-  await syncUserBilling(userId, {
-    plan: data.plan ?? (record as unknown as EntitlementRecord).plan,
-    planStatus: data.status ?? (record as unknown as EntitlementRecord).status,
-    expiresAt: data.expiresAt ?? (record as unknown as EntitlementRecord).expiresAt,
-  })
-  return record as unknown as EntitlementRecord
 }
 
 function utcDay(): string {
@@ -623,59 +435,6 @@ export async function deleteDevice(userId: string, deviceId: string): Promise<vo
   await deleteDesktopSessionsForDevice(userId, deviceId)
 }
 
-export async function getContext(userId: string): Promise<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean } | null> {
-  const pb = await getAdminPb()
-  try {
-    const record = await pb.collection('user_context').getFirstListItem(`user="${userId}"`)
-    const parsed = parseUserContext(record.entries)
-    return {
-      id: record.id,
-      user: String(record.user),
-      entries: parsed.entries,
-      enabled: parsed.enabled,
-    }
-  } catch {
-    return null
-  }
-}
-
-export async function updateContext(
-  userId: string,
-  patch: { entries?: MemoryEntry[]; enabled?: boolean },
-): Promise<{ id: string; user: string; entries: MemoryEntry[]; enabled: boolean }> {
-  const pb = await getAdminPb()
-  const existing = await getContext(userId)
-  const entries = patch.entries ?? existing?.entries ?? []
-  const enabled = patch.enabled ?? existing?.enabled ?? true
-  const payload = serializeUserContext(entries, enabled)
-  if (existing) {
-    const record = await pb.collection('user_context').update(existing.id, { entries: payload })
-    const parsed = parseUserContext(record.entries)
-    return {
-      id: record.id,
-      user: String(record.user),
-      entries: parsed.entries,
-      enabled: parsed.enabled,
-    }
-  }
-  const record = await pb.collection('user_context').create({ user: userId, entries: payload })
-  const parsed = parseUserContext(record.entries)
-  return {
-    id: record.id,
-    user: String(record.user),
-    entries: parsed.entries,
-    enabled: parsed.enabled,
-  }
-}
-
-export async function deleteContext(userId: string): Promise<void> {
-  const pb = await getAdminPb()
-  const existing = await getContext(userId)
-  if (existing) {
-    await pb.collection('user_context').delete(existing.id)
-  }
-}
-
 export async function storeDesktopSession(session: DesktopSession): Promise<void> {
   const pb = await getAdminPb()
   const payload = {
@@ -744,8 +503,7 @@ export async function deleteOtherDesktopSessions(userId: string, keepToken: stri
 
 export async function deleteUserData(userId: string): Promise<void> {
   const pb = await getAdminPb()
-  await deleteResume(userId).catch(() => undefined)
-  const collections = ['profiles', 'subscriptions', 'entitlements', 'usage', 'devices', 'desktop_sessions', 'preferences', 'shortcut_preferences', 'privacy_preferences', 'user_context', 'onboarding']
+  const collections = ['subscriptions', 'usage', 'devices', 'desktop_sessions']
   for (const collection of collections) {
     try {
       const records = await pb.collection(collection).getFullList({ filter: `user="${userId}"`, batch: 500 })

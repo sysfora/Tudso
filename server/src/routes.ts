@@ -11,7 +11,7 @@ import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
 import { aiRateLimiter, rateLimiter, requireAuth, sensitiveRateLimiter } from './middleware.js'
 import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAccount, updateAccountAvatar, updateAccountName } from './account.js'
-import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getContext, getDevices, getEntitlementForUser, getProfileIfExists, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, watchEntitlement } from './pocketbase.js'
+import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
 import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
 import { isPaidPlan, CHECKOUT_PLANS } from './plans.js'
@@ -848,18 +848,7 @@ function localUserDataGone(_req: Request, res: Response) {
   res.status(410).json({ error: 'Profile, onboarding, and memory are stored on the device, not the server' })
 }
 router.post('/me/onboarding/complete', requireAuth, localUserDataGone)
-router.get('/me/profile', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const profile = await getProfileIfExists(req.userId!)
-    if (!profile) {
-      res.status(404).json({ error: 'No profile on the server' })
-      return
-    }
-    res.json(profile)
-  } catch {
-    localUserDataGone(req, res)
-  }
-})
+router.get('/me/profile', requireAuth, localUserDataGone)
 router.patch('/me/profile', requireAuth, localUserDataGone)
 
 // Resume files stay on the device. These routes remain so old clients fail clearly.
@@ -1241,15 +1230,7 @@ router.post('/me/sessions/revoke-others', requireAuth, sensitiveRateLimiter, asy
   res.json({ ok: true, revoked })
 })
 
-// Memory — read leftover server records for one-time device migration. Writes stay on the device.
-router.get('/me/context', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const context = await getContext(req.userId!)
-    res.json(context ?? { id: '', user: req.userId, entries: [], enabled: true })
-  } catch {
-    localUserDataGone(req, res)
-  }
-})
+router.get('/me/context', requireAuth, localUserDataGone)
 router.patch('/me/context', requireAuth, localUserDataGone)
 router.delete('/me/context', requireAuth, localUserDataGone)
 

@@ -14,29 +14,6 @@ function stopEntitlementStream() {
   entitlementStream = null
 }
 
-function profileLooksEmpty(profile: {
-  preferredName?: string
-  profession?: string
-  role?: string
-  industry?: string
-  education?: string
-  skills?: string[]
-  goals?: string[]
-  customContext?: string
-} | null | undefined) {
-  if (!profile) return true
-  return (
-    !profile.preferredName &&
-    !profile.profession &&
-    !profile.role &&
-    !profile.industry &&
-    !profile.education &&
-    !profile.customContext &&
-    !(profile.skills?.length) &&
-    !(profile.goals?.length)
-  )
-}
-
 function startEntitlementStream(onUpdate: (entitlement: Entitlement | null) => void) {
   stopEntitlementStream()
   const controller = new AbortController()
@@ -185,44 +162,6 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     let local = await desktop.profile.get(session.userId)
     if (!local.complete && me.onboardingComplete) {
       local = await desktop.profile.complete(session.userId)
-    }
-    if (profileLooksEmpty(local.profile)) {
-      try {
-        const remote = await api.me.getProfile()
-        if (!profileLooksEmpty(remote)) {
-          local = await desktop.profile.set(session.userId, {
-            preferredName: remote.preferredName,
-            profession: remote.profession,
-            role: remote.role,
-            industry: remote.industry,
-            education: remote.education,
-            skills: remote.skills,
-            goals: remote.goals,
-            communicationStyle: remote.communicationStyle,
-            technicalLevel: remote.technicalLevel,
-            formal: remote.formal,
-            stepByStep: remote.stepByStep,
-            examples: remote.examples,
-            explainTerms: remote.explainTerms,
-            customContext: remote.customContext,
-          })
-        }
-      } catch {
-        // Profile now lives on this device. Ignore old-server misses.
-      }
-    }
-    if (!local.memories?.length) {
-      try {
-        const remote = await api.context.get()
-        if (remote.entries?.length || remote.enabled === false) {
-          local = await desktop.profile.setMemory(session.userId, {
-            entries: normalizeMemoryEntries(remote.entries),
-            enabled: remote.enabled !== false,
-          })
-        }
-      } catch {
-        // Memories now live on this device.
-      }
     }
     await get().loadEntitlement()
     startEntitlementStream((entitlement) => set({ entitlement }))
