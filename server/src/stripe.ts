@@ -98,6 +98,21 @@ function isStripeMissing(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'resource_missing')
 }
 
+function stripeSecretMode(): 'test' | 'live' {
+  return config.stripe.secretKey.startsWith('sk_live_') ? 'live' : 'test'
+}
+
+function missingPriceError(plan: string, priceId: string, error: unknown): Error {
+  if (!isStripeMissing(error)) {
+    return error instanceof Error ? error : new Error('Could not start checkout')
+  }
+  const mode = stripeSecretMode()
+  const other = mode === 'test' ? 'live' : 'test'
+  return new Error(
+    `Stripe has no ${plan} price in ${mode} mode. Copy the Price ID from Dashboard with ${mode} mode on (not ${other}), using the same account as STRIPE_SECRET_KEY.`,
+  )
+}
+
 async function fetchStripeSubscription(subscriptionId?: string, customerId?: string): Promise<Stripe.Subscription | null> {
   if (subscriptionId) {
     try {
@@ -190,17 +205,21 @@ export async function createCheckoutSession(
   }
   const priceId = config.stripe.priceIds[plan]
   if (!priceId) throw new Error('Invalid plan selected')
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    line_items: [{ price: priceId, quantity: 1 }],
-    mode: 'subscription',
-    success_url: urls?.successUrl ?? `${config.app.url}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: urls?.cancelUrl ?? `${config.app.url}/dashboard/subscription?billing=cancel`,
-    client_reference_id: userId,
-    metadata: { userId },
-    subscription_data: { metadata: { userId } },
-  })
-  return { url: session.url ?? `${config.app.url}/billing/error` }
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: 'subscription',
+      success_url: urls?.successUrl ?? `${config.app.url}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: urls?.cancelUrl ?? `${config.app.url}/dashboard/subscription?billing=cancel`,
+      client_reference_id: userId,
+      metadata: { userId },
+      subscription_data: { metadata: { userId } },
+    })
+    return { url: session.url ?? `${config.app.url}/billing/error` }
+  } catch (error) {
+    throw missingPriceError(plan, priceId, error)
+  }
 }
 
 export async function createCustomerPortalSession(
