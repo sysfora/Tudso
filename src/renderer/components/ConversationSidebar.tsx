@@ -79,6 +79,7 @@ export function ConversationSidebar() {
                       item={item}
                       active={item.id === activeId}
                       live={item.id === runningSessionId}
+                      locked={Boolean(runningSessionId) && item.id !== runningSessionId}
                       onSelect={() => selectConversation(item.id)}
                       onRename={(title) => void renameConversation(item.id, title)}
                       onDelete={() => void deleteConversation(item.id)}
@@ -98,6 +99,7 @@ function SessionRow({
   item,
   active,
   live,
+  locked,
   onSelect,
   onRename,
   onDelete,
@@ -105,6 +107,7 @@ function SessionRow({
   item: Conversation
   active: boolean
   live: boolean
+  locked: boolean
   onSelect: () => void
   onRename: (title: string) => void
   onDelete: () => void
@@ -152,7 +155,9 @@ function SessionRow({
           <div
             className={cn(
               'group relative rounded-md transition-colors duration-150',
+              locked && 'opacity-40',
               active ? 'bg-raised text-fg' : 'text-muted hover:bg-lift hover:text-fg',
+              locked && 'hover:bg-transparent hover:text-muted',
             )}
           >
             {editing ? (
@@ -210,15 +215,21 @@ function SessionRow({
               <>
                 <button
                   type="button"
-                  onClick={onSelect}
+                  onClick={locked ? undefined : onSelect}
+                  disabled={locked}
+                  title={locked ? 'End the current session first' : undefined}
                   onDoubleClick={(event) => {
                     event.preventDefault()
+                    if (locked) return
                     startRename()
                   }}
                   aria-current={active ? 'page' : undefined}
-                  className="w-full rounded-md bg-transparent py-1.5 pr-8 pl-2 text-left"
+                  className="w-full rounded-md bg-transparent py-1.5 pr-8 pl-2 text-left disabled:pointer-events-none"
                 >
-                  <span className={cn('block truncate text-[13px]', active && 'font-medium')}>{item.title}</span>
+                  <span className={cn('flex items-center gap-2 text-[13px]', active && 'font-medium')}>
+                    {live ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-fill" aria-hidden /> : null}
+                    <span className="min-w-0 truncate">{item.title}</span>
+                  </span>
                   <span className="mt-0.5 block text-[11px] font-normal tabular-nums text-muted">
                     {live ? 'Live' : formatSessionTime(item.createdAt)}
                   </span>

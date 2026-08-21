@@ -11,6 +11,7 @@
   --color-border: var(--border);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-field: var(--field);
   --color-raised: var(--raised);
   --color-lift: var(--lift);
   --color-accent: var(--accent);
@@ -35,6 +36,7 @@
   --border: color-mix(in srgb, #000000 8%, transparent);
   --surface: #ffffff;
   --surface-2: #ececee;
+  --field: #ffffff;
   --raised: #e2e2e8;
   --lift: #d0d0d8;
   --accent: #5b5fee;
@@ -68,6 +70,7 @@
   --border: color-mix(in srgb, #ffffff 8%, transparent);
   --surface: #26262b;
   --surface-2: #303036;
+  --field: #44444e;
   --raised: #44444e;
   --lift: #5c5c68;
   --accent: #c4c6ff;

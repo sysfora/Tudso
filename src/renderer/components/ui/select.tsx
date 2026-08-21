@@ -15,7 +15,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        'group flex h-8 w-full items-center justify-between gap-2 rounded-md bg-surface-2 px-2.5 text-[13px] outline-none transition-colors duration-150 hover:bg-lift data-[state=open]:bg-lift',
+        'group flex h-8 w-full items-center justify-between gap-2 rounded-md bg-field px-2.5 text-[13px] outline-none transition-colors duration-150 hover:bg-lift data-[state=open]:bg-lift',
         className,
       )}
       {...props}

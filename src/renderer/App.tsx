@@ -10,6 +10,7 @@ import { Settings } from '@/components/Settings'
 import { GuestWindowChrome } from '@/components/GuestWindowChrome'
 import { Welcome } from '@/components/Welcome'
 import { WindowHeader } from '@/components/WindowHeader'
+import { Logo } from '@/components/Logo'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppShortcuts } from '@/hooks/use-app-shortcuts'
 import { useDesktopEvents } from '@/hooks/use-desktop-events'
@@ -89,15 +90,19 @@ export default function App() {
 }
 
 function LoadingState() {
+  const wave = [22, 36, 28, 52, 40, 68, 44, 60, 34, 72, 48, 58, 32, 50]
   return (
-    <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 px-6 py-8" aria-label="Loading" aria-busy="true">
-      <div className="skeleton-bar h-3 w-24" />
-      <div className="skeleton-bar h-3 w-full" style={{ animationDelay: '80ms' }} />
-      <div className="skeleton-bar h-3 w-5/6" style={{ animationDelay: '160ms' }} />
-      <div className="mt-6 skeleton-bar h-3 w-16" style={{ animationDelay: '80ms' }} />
-      <div className="skeleton-bar h-3 w-full" style={{ animationDelay: '160ms' }} />
-      <div className="skeleton-bar h-3 w-2/3" style={{ animationDelay: '240ms' }} />
-      <div className="mt-4 skeleton-bar h-[88px] w-full rounded-xl" style={{ animationDelay: '120ms' }} />
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6" aria-label="Loading" aria-busy="true">
+      <Logo className="h-8 w-8" />
+      <div className="flex h-11 items-end gap-1">
+        {wave.map((height, index) => (
+          <div
+            key={index}
+            className="skeleton-bar w-1.5 rounded-sm"
+            style={{ height, animationDelay: `${index * 70}ms` }}
+          />
+        ))}
+      </div>
     </div>
   )
 }

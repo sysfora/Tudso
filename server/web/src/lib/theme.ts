@@ -15,14 +15,23 @@ function readTheme(): WebTheme {
 }
 
 export function useAppTheme() {
-  const [theme, setTheme] = React.useState<WebTheme>('light')
+  const [theme, setThemeState] = React.useState<WebTheme>('light')
 
   React.useEffect(() => {
-    setTheme(readTheme())
+    setThemeState(readTheme())
+  }, [])
+
+  const setTheme = React.useCallback((next: WebTheme) => {
+    try {
+      localStorage.setItem(KEY, next)
+    } catch {
+      /* ignore */
+    }
+    setThemeState(next)
   }, [])
 
   const toggle = React.useCallback(() => {
-    setTheme((current) => {
+    setThemeState((current) => {
       const next = current === 'dark' ? 'light' : 'dark'
       try {
         localStorage.setItem(KEY, next)
@@ -33,5 +42,5 @@ export function useAppTheme() {
     })
   }, [])
 
-  return { theme, dark: theme === 'dark', toggle }
+  return { theme, dark: theme === 'dark', toggle, setTheme }
 }

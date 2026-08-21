@@ -38,6 +38,16 @@ async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+export async function fetchAccountAvatar(avatarUrl: string | null): Promise<string | null> {
+  if (!avatarUrl) return null
+  const token = getToken()
+  const response = await fetch(`${API_BASE}${avatarUrl}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) return null
+  return URL.createObjectURL(await response.blob())
+}
+
 async function subscribeSse<T>(path: string, onUpdate: (value: T) => void, signal: AbortSignal): Promise<void> {
   const token = getToken()
   const response = await fetch(`${API_BASE}${path}`, {
@@ -79,12 +89,35 @@ export const api = {
     logout: () => fetchJson<void>('/auth/logout', { method: 'POST' }),
   },
   me: {
-    get: () => fetchJson<{ userId: string; email: string; onboardingComplete?: boolean }>('/me'),
+    get: () => fetchJson<{ userId: string; email: string; name?: string; avatarUrl?: string | null; onboardingComplete?: boolean }>('/me'),
     getProfile: () => fetchJson<UserProfile>('/me/profile'),
     completeOnboarding: () =>
       fetchJson<{ onboardingComplete: boolean }>('/me/onboarding/complete', { method: 'POST' }),
     updateProfile: (profile: Partial<UserProfile>) =>
       fetchJson<UserProfile>('/me/profile', { method: 'PATCH', body: JSON.stringify(profile) }),
+    getAccount: () => fetchJson<{ userId: string; email: string; name: string; avatarUrl: string | null }>('/me/account'),
+    updateName: (name: string) =>
+      fetchJson<{ userId: string; email: string; name: string; avatarUrl: string | null }>('/me/account', {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      }),
+    changePassword: (currentPassword: string, password: string, passwordConfirm: string) =>
+      fetchJson<{ ok: true }>('/me/account/password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, password, passwordConfirm }),
+      }),
+    uploadAvatar: (file: File) => {
+      const body = new FormData()
+      body.append('avatar', file)
+      return fetchJson<{ userId: string; email: string; name: string; avatarUrl: string | null }>('/me/account/avatar', {
+        method: 'POST',
+        body,
+      })
+    },
+    removeAvatar: () =>
+      fetchJson<{ userId: string; email: string; name: string; avatarUrl: string | null }>('/me/account/avatar', {
+        method: 'DELETE',
+      }),
     deleteAccount: (confirm: string) => fetchJson<void>('/me/account', { method: 'DELETE', body: JSON.stringify({ confirm }) }),
     export: () => fetchJson<unknown>('/me/export'),
   },
@@ -168,6 +201,22 @@ export const api = {
       fetchJson<{ url: string }>('/billing/portal', { method: 'POST', body: JSON.stringify(payload ?? { action: 'manage' }) }),
     subscription: () => fetchJson<Subscription | null>('/billing/subscription'),
     plans: () => fetchJson<{ plans: BillingPlanPrice[] }>('/billing/plans'),
+    overview: () => fetchJson<{
+      invoices: Array<{
+        id: string
+        number: string | null
+        created: string
+        amount: number
+        currency: string
+        status: string
+        hostedUrl: string | null
+        pdfUrl: string | null
+        periodStart: string
+        periodEnd: string
+      }>
+      paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null
+      nextPayment: { amount: number; currency: string; date: string } | null
+    }>('/billing/overview'),
   },
   updates: {
     latest: (currentVersion: string, channel: string) =>

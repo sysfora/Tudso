@@ -2,10 +2,9 @@ import { Maximize2, Minus, PanelLeft, Plus, Settings, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
 import { IconButton } from '@/components/ui/icon-button'
 import { Logo } from '@/components/Logo'
-import { SessionStatus } from '@/components/SessionStatus'
+import { SessionNav } from '@/components/SessionNav'
 import { TitleBarMenu } from '@/components/TitleBarMenu'
 import { desktop } from '@/lib/desktop'
-import { APP_NAME } from '@shared/defaults'
 import { useAppStore, windowModeFromWidth } from '@/store/app-store'
 
 export function WindowHeader() {
@@ -26,12 +25,9 @@ export function WindowHeader() {
     return (
       <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 bg-transparent px-2.5">
         <div className="drag-region flex min-h-0 min-w-0 flex-1 items-center gap-2">
-          <div className="flex min-w-0 items-center gap-2 pl-1">
-            <Logo className="text-accent" />
-            <span className="text-[13px] font-semibold tracking-tight">{APP_NAME}</span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <SessionStatus />
+          <Logo className="ml-1 shrink-0 text-accent" />
+          <div className="flex min-w-0 flex-1 justify-center px-1">
+            <SessionNav />
           </div>
         </div>
         <div className="flex items-center gap-0.5">
@@ -61,12 +57,9 @@ export function WindowHeader() {
       ) : null}
 
       <div className="drag-region flex min-h-0 min-w-0 flex-1 items-center gap-2">
-          <div className="flex min-w-0 items-center gap-2 pl-1">
-            <Logo className="text-accent" />
-            <span className="text-[13px] font-semibold tracking-tight">{APP_NAME}</span>
-          </div>
-        <div className="min-w-0 flex-1 px-3">
-          <SessionStatus />
+        <Logo className="ml-1 shrink-0 text-accent" />
+        <div className="flex min-w-0 flex-1 justify-center px-2">
+          <SessionNav />
         </div>
       </div>
 

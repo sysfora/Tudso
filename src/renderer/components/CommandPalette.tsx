@@ -96,13 +96,24 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const [selected, setSelected] = useState(0)
   const listRef = useRef<HTMLUListElement>(null)
   const shortcuts = useAppStore((state) => state.shortcuts)
+  const runningSessionId = useAppStore((state) => state.runningSessionId)
   const entitlement = useAuthStore((state) => state.entitlement)
   const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
 
   const filtered = useMemo(() => {
-    const available = hideAllowed
+    let available = hideAllowed
       ? COMMANDS
       : COMMANDS.filter((command) => command.id !== 'toggle-hide-from-capture')
+    if (runningSessionId) {
+      available = available.filter(
+        (command) =>
+          command.id !== 'new-conversation' &&
+          command.id !== 'next-conversation' &&
+          command.id !== 'previous-conversation',
+      )
+    } else {
+      available = available.filter((command) => command.id !== 'end-session')
+    }
     if (!query) return available
     const lower = query.toLowerCase()
     return available.filter((command) => {
@@ -113,7 +124,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         accelerator.toLowerCase().includes(lower)
       )
     })
-  }, [query, shortcuts, hideAllowed])
+  }, [query, shortcuts, hideAllowed, runningSessionId])
 
   const clamped = Math.min(selected, Math.max(0, filtered.length - 1))
 

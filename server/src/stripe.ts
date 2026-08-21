@@ -195,7 +195,7 @@ export async function createCheckoutSession(
     line_items: [{ price: priceId, quantity: 1 }],
     mode: 'subscription',
     success_url: urls?.successUrl ?? `${config.app.url}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: urls?.cancelUrl ?? `${config.app.url}/dashboard?billing=cancel`,
+    cancel_url: urls?.cancelUrl ?? `${config.app.url}/dashboard/subscription?billing=cancel`,
     client_reference_id: userId,
     metadata: { userId },
     subscription_data: { metadata: { userId } },
@@ -210,7 +210,7 @@ export async function createCustomerPortalSession(
   const sub = await getSubscription(userId)
   if (!sub?.stripeCustomerId) throw new Error('No billing account yet. Subscribe first.')
 
-  const returnUrl = `${config.app.url}/dashboard`
+  const returnUrl = `${config.app.url}/dashboard/subscription`
   const action = options.action ?? 'manage'
 
   if (action === 'cancel') {
@@ -342,4 +342,113 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
     default:
       break
   }
+}
+
+export type BillingInvoice = {
+  id: string
+  number: string | null
+  created: string
+  amount: number
+  currency: string
+  status: string
+  hostedUrl: string | null
+  pdfUrl: string | null
+  periodStart: string
+  periodEnd: string
+}
+
+export type BillingPaymentMethod = {
+  brand: string
+  last4: string
+  expMonth: number
+  expYear: number
+}
+
+export type BillingOverview = {
+  invoices: BillingInvoice[]
+  paymentMethod: BillingPaymentMethod | null
+  nextPayment: { amount: number; currency: string; date: string } | null
+}
+
+type StripeInvoiceLike = {
+  id?: string | null
+  number?: string | null
+  created?: number | null
+  amount_paid?: number | null
+  amount_due?: number | null
+  total?: number | null
+  currency?: string | null
+  status?: string | null
+  hosted_invoice_url?: string | null
+  invoice_pdf?: string | null
+  period_start?: number | null
+  period_end?: number | null
+}
+
+export function publicInvoice(invoice: StripeInvoiceLike): BillingInvoice | null {
+  const id = invoice.id
+  if (!id || invoice.status === 'draft') return null
+  const paid = invoice.status === 'paid'
+  const amount = paid ? (invoice.amount_paid ?? invoice.total ?? 0) : (invoice.amount_due ?? invoice.total ?? 0)
+  return {
+    id,
+    number: invoice.number ?? null,
+    created: unixToIso(invoice.created),
+    amount,
+    currency: invoice.currency ?? 'usd',
+    status: invoice.status ?? 'open',
+    hostedUrl: invoice.hosted_invoice_url ?? null,
+    pdfUrl: invoice.invoice_pdf ?? null,
+    periodStart: unixToIso(invoice.period_start),
+    periodEnd: unixToIso(invoice.period_end),
+  }
+}
+
+function cardFromPaymentMethod(method: Stripe.PaymentMethod | string | null | undefined): BillingPaymentMethod | null {
+  if (!method || typeof method === 'string' || !method.card) return null
+  return {
+    brand: method.card.brand || 'card',
+    last4: method.card.last4 || '',
+    expMonth: method.card.exp_month || 0,
+    expYear: method.card.exp_year || 0,
+  }
+}
+
+async function nextInvoicePreview(customerId: string, subscriptionId?: string): Promise<BillingOverview['nextPayment']> {
+  try {
+    const invoices = stripe.invoices as unknown as {
+      createPreview?: (params: { customer: string; subscription?: string }) => Promise<Stripe.Invoice>
+      retrieveUpcoming?: (params: { customer: string; subscription?: string }) => Promise<Stripe.Invoice>
+    }
+    const params = { customer: customerId, subscription: subscriptionId }
+    const invoice = invoices.createPreview
+      ? await invoices.createPreview(params)
+      : invoices.retrieveUpcoming
+        ? await invoices.retrieveUpcoming(params)
+        : null
+    if (!invoice) return null
+    const amount = invoice.amount_due ?? invoice.total ?? 0
+    const nextAttempt = 'next_payment_attempt' in invoice ? Number(invoice.next_payment_attempt) : 0
+    const date = unixToIso(invoice.period_end || nextAttempt || invoice.created)
+    if (!amount || !date) return null
+    return { amount, currency: invoice.currency ?? 'usd', date }
+  } catch {
+    return null
+  }
+}
+
+export async function getBillingOverview(userId: string): Promise<BillingOverview> {
+  const sub = await getSubscription(userId)
+  const customerId = sub?.stripeCustomerId
+  if (!customerId) return { invoices: [], paymentMethod: null, nextPayment: null }
+
+  const [invoiceList, methods, nextPayment] = await Promise.all([
+    stripe.invoices.list({ customer: customerId, limit: 24 }),
+    stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 3 }),
+    nextInvoicePreview(customerId, sub.stripeSubscriptionId || undefined),
+  ])
+
+  const invoices = invoiceList.data.map(publicInvoice).filter((item): item is BillingInvoice => Boolean(item))
+  const paymentMethod = cardFromPaymentMethod(methods.data[0])
+  return { invoices, paymentMethod, nextPayment }
 }

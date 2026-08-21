@@ -16,7 +16,7 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         fill: 'bg-accent-fill text-accent-fill-fg hover:bg-accent-fill-hover text-[13px]',
-        soft: 'bg-surface-2 text-fg hover:bg-lift text-[13px]',
+        soft: 'bg-raised text-fg hover:bg-lift text-[13px]',
         quiet: 'bg-transparent text-fg hover:bg-lift text-[13px]',
         danger: 'bg-transparent text-danger hover:bg-danger/20 text-[13px]',
       },

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Download, Globe, KeyRound, Laptop, LogOut, Mail, Monitor, Terminal, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Camera, Download, Eye, EyeOff, Globe, KeyRound, Laptop, Lock, LogOut, Mail, Monitor, Terminal, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { api } from '@/lib/api'
+import { Input, Label } from '@/components/ui/input'
+import { api, fetchAccountAvatar } from '@/lib/api'
+import { LogoutButton } from '@/components/LogoutButton'
 import { formatMemoryDate } from '@/lib/format'
 import { desktop } from '@/lib/desktop'
 import { useAppStore } from '@/store/app-store'
@@ -32,6 +33,12 @@ function platformLabel(value: string) {
   return value || 'Unknown'
 }
 
+function initials(name: string, email: string) {
+  const source = name.trim() || email.trim()
+  const parts = source.split(/[\s@.]+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? 'U') + (parts[1]?.[0] ?? '')).toUpperCase().slice(0, 2)
+}
+
 async function refreshLock() {
   const lock = await desktop.app.getLockState()
   const settings = useAppStore.getState().settings
@@ -54,6 +61,16 @@ export function Account() {
   const [pin, setPin] = useState('')
   const [pinConfirm, setPinConfirm] = useState('')
   const [currentPin, setCurrentPin] = useState('')
+  const [name, setName] = useState('')
+  const [savedName, setSavedName] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [avatarSrc, setAvatarSrc] = useState<string | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const loadDevices = async () => {
     try {
@@ -70,7 +87,35 @@ export function Account() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDevices()
+    void api.me.getAccount().then((account) => {
+      setName(account.name)
+      setSavedName(account.name)
+      setAvatarUrl(account.avatarUrl)
+    }).catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    let objectUrl: string | null = null
+    let cancelled = false
+    void fetchAccountAvatar(avatarUrl).then((url) => {
+      if (cancelled) {
+        if (url) URL.revokeObjectURL(url)
+        return
+      }
+      objectUrl = url
+      setAvatarSrc(url)
+    })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [avatarUrl])
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview)
+    }
+  }, [preview])
 
   const run = async (key: string, work: () => Promise<unknown>, message: string) => {
     if (busy) return
@@ -90,6 +135,8 @@ export function Account() {
   const isCurrent = (device: Device) => Boolean(device.current || (session?.deviceId && device.deviceId === session.deviceId))
   const email = session?.email ?? ''
   const canDelete = deleteEmail.trim().toLowerCase() === email.trim().toLowerCase()
+  const shownAvatar = preview || avatarSrc
+  const nameDirty = name.trim() !== savedName.trim()
 
   const savePin = () => {
     if (pin !== pinConfirm) {
@@ -119,24 +166,185 @@ export function Account() {
   return (
     <div className="space-y-6">
       <p className="text-[12px] leading-relaxed text-muted">
-        This account, signed-in devices, and actions that change access. Destructive steps ask for confirmation here.
+        Name, avatar, and password. Email cannot be changed. Devices and PIN stay on this page.
       </p>
 
       <section>
-        <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Signed in</h3>
-        <div className="flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
-            <div className="min-w-0">
-              <p className="truncate text-[14px] font-medium">{email || 'Unknown account'}</p>
-              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">Log out only ends this session.</p>
+        <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Profile</h3>
+        <div className="rounded-md bg-surface-2 px-3 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <button
+                type="button"
+                className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-lift"
+                onClick={() => fileRef.current?.click()}
+                aria-label="Change avatar"
+              >
+                {shownAvatar ? (
+                  <img src={shownAvatar} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-[16px] font-medium">
+                    {initials(name, email)}
+                  </span>
+                )}
+                <span className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-fg py-0.5 text-bg">
+                  <Camera className="h-3 w-3" />
+                </span>
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (!file) return
+                  if (preview) URL.revokeObjectURL(preview)
+                  const url = URL.createObjectURL(file)
+                  setPreview(url)
+                  void run('avatar', async () => {
+                    const account = await api.me.uploadAvatar(file)
+                    setSavedName(account.name)
+                    setAvatarUrl(account.avatarUrl)
+                    URL.revokeObjectURL(url)
+                    setPreview(null)
+                  }, 'Avatar updated.')
+                }}
+              />
+              <div className="min-w-0 pt-0.5">
+                <p className="text-[13px] font-medium">Avatar</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted">JPEG, PNG, WebP, or GIF. 2 MB or smaller.</p>
+                {avatarUrl ? (
+                  <Button
+                    className="mt-2"
+                    variant="ghost"
+                    size="sm"
+                    disabled={Boolean(busy)}
+                    loading={busy === 'avatar-remove'}
+                    onClick={() => {
+                      void run('avatar-remove', async () => {
+                        const account = await api.me.removeAvatar()
+                        setAvatarUrl(account.avatarUrl)
+                        setPreview(null)
+                      }, 'Avatar removed.')
+                    }}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <LogoutButton className="shrink-0 text-muted hover:bg-danger/20 hover:text-danger" />
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-name" className="inline-flex items-center gap-1.5 text-[13px]">
+                <User className="h-3.5 w-3.5 text-muted" />
+                Name
+              </Label>
+              <Input id="profile-name" value={name} maxLength={80} autoComplete="name" onChange={(event) => setName(event.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-email" className="inline-flex items-center gap-1.5 text-[13px]">
+                <Mail className="h-3.5 w-3.5 text-muted" />
+                Email
+              </Label>
+              <Input id="profile-email" value={email} readOnly disabled autoComplete="email" />
             </div>
           </div>
-          <Button variant="outline" size="sm" disabled={Boolean(busy)} loading={busy === 'logout'} onClick={() => void run('logout', () => logout(), 'Signed out.')}>
-            <LogOut className="h-3.5 w-3.5" />
-            Log out
+          <Button
+            className="mt-3"
+            size="sm"
+            disabled={Boolean(busy) || !nameDirty || !name.trim()}
+            loading={busy === 'name'}
+            onClick={() => {
+              void run('name', async () => {
+                const account = await api.me.updateName(name.trim())
+                setName(account.name)
+                setSavedName(account.name)
+              }, 'Name updated.')
+            }}
+          >
+            Save name
           </Button>
         </div>
+      </section>
+
+      <section>
+        <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">Password</h3>
+        <form
+          className="space-y-3 rounded-md bg-surface-2 px-3 py-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void run('password', async () => {
+              await api.me.changePassword(currentPassword, password, passwordConfirm)
+              setCurrentPassword('')
+              setPassword('')
+              setPasswordConfirm('')
+            }, 'Password updated.')
+          }}
+        >
+          <p className="text-[12px] leading-relaxed text-muted">
+            If you signed in with Google and never set a password, reset it from the sign-in page first.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="current-password" className="inline-flex items-center gap-1.5 text-[13px]">
+              <Lock className="h-3.5 w-3.5 text-muted" />
+              Current password
+            </Label>
+            <Input
+              id="current-password"
+              type={showPassword ? 'text' : 'password'}
+              value={currentPassword}
+              autoComplete="current-password"
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="new-password" className="inline-flex items-center gap-1.5 text-[13px]">
+                  <Lock className="h-3.5 w-3.5 text-muted" />
+                  New password
+                </Label>
+                <button type="button" className="text-muted hover:text-fg" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}>
+                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+              <Input
+                id="new-password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                minLength={8}
+                autoComplete="new-password"
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm-password" className="inline-flex items-center gap-1.5 text-[13px]">
+                <Lock className="h-3.5 w-3.5 text-muted" />
+                Confirm password
+              </Label>
+              <Input
+                id="confirm-password"
+                type={showPassword ? 'text' : 'password'}
+                value={passwordConfirm}
+                minLength={8}
+                autoComplete="new-password"
+                onChange={(event) => setPasswordConfirm(event.target.value)}
+              />
+            </div>
+          </div>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={Boolean(busy) || !currentPassword || password.length < 8 || password !== passwordConfirm}
+            loading={busy === 'password'}
+          >
+            Change password
+          </Button>
+        </form>
       </section>
 
       <section>

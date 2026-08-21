@@ -11,8 +11,8 @@ const buttonVariants = cva(
       variant: {
         default: 'bg-accent-fill text-accent-fill-fg hover:bg-accent-fill-hover active:bg-accent-fill-hover',
         ghost: 'bg-transparent text-fg hover:bg-lift hover:text-fg active:bg-raised',
-        outline: 'bg-surface-2 text-fg hover:bg-lift active:bg-raised',
-        muted: 'bg-surface-2 text-fg hover:bg-lift active:bg-raised',
+        outline: 'bg-raised text-fg hover:bg-lift active:bg-lift',
+        muted: 'bg-raised text-fg hover:bg-lift active:bg-lift',
         danger: 'bg-transparent text-danger hover:bg-danger/20 hover:text-danger active:bg-danger/30',
       },
       size: {

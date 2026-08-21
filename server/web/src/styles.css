@@ -38,7 +38,9 @@
   --color-brand-cream: var(--brand-cream);
   --color-brand-sky: var(--brand-sky);
   --color-fg: var(--app-fg, var(--foreground));
+  --color-surface: var(--app-surface, var(--card));
   --color-surface-2: var(--app-surface-2, var(--secondary));
+  --color-field: var(--app-field, #ffffff);
   --color-raised: var(--app-raised, var(--secondary));
   --color-lift: var(--app-lift, var(--secondary));
   --color-accent-fill: var(--app-accent-fill, var(--primary));
@@ -115,6 +117,7 @@
   --app-fg: #1a1a1e;
   --app-surface: #ffffff;
   --app-surface-2: #ececee;
+  --app-field: #ffffff;
   --app-raised: #e2e2e8;
   --app-lift: #d0d0d8;
   --app-accent-fill: #5b5fee;
@@ -137,7 +140,7 @@
   --destructive: #c44444;
   --destructive-foreground: #c44444;
   --border: color-mix(in srgb, #000000 8%, transparent);
-  --input: #ececee;
+  --input: var(--app-field);
   --ring: #5b5fee;
   min-height: 100vh;
   background: var(--background);
@@ -150,6 +153,7 @@
   --app-fg: #f3f3f5;
   --app-surface: #26262b;
   --app-surface-2: #303036;
+  --app-field: #44444e;
   --app-raised: #44444e;
   --app-lift: #5c5c68;
   --app-accent-fill: #5b5fee;
@@ -172,21 +176,51 @@
   --destructive: #e07070;
   --destructive-foreground: #e07070;
   --border: color-mix(in srgb, #ffffff 8%, transparent);
-  --input: #303036;
+  --input: var(--app-field);
   --ring: #c4c6ff;
 }
 
-.app-ui input:not([type='checkbox']):not([type='radio']):not([type='hidden']) {
+.app-ui input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+.app-ui textarea {
   height: 32px;
   border: 0;
-  background: var(--app-surface-2);
+  background: var(--app-field);
   font-size: 13px;
   box-shadow: none;
 }
 
+.app-ui textarea {
+  height: auto;
+}
+
 .app-ui input:not([type='checkbox']):not([type='radio']):hover,
-.app-ui input:not([type='checkbox']):not([type='radio']):focus-visible {
+.app-ui input:not([type='checkbox']):not([type='radio']):focus-visible,
+.app-ui textarea:hover,
+.app-ui textarea:focus-visible {
   background: var(--app-lift);
   outline: none;
   box-shadow: none;
+}
+
+.app-ui input::placeholder,
+.app-ui textarea::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.app-ui .skeleton-bar {
+  background-color: var(--app-raised);
+  border-radius: 6px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-ui .skeleton-bar {
+    animation: none;
+  }
 }

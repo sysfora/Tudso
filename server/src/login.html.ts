@@ -24,8 +24,8 @@ const STYLES = `
     --quiet: #8a8a94;
     --border: color-mix(in srgb, #ffffff 8%, transparent);
     --surface: #26262b;
-    --field: #303036;
-    --lift: #3a3a42;
+    --field: #44444e;
+    --lift: #5c5c68;
     --accent: #c4c6ff;
     --fill: #5b5fee;
     --fill-hover: color-mix(in srgb, #5b5fee 82%, #ffffff);
@@ -46,7 +46,7 @@ const STYLES = `
     --quiet: #8a8a94;
     --border: color-mix(in srgb, #000000 8%, transparent);
     --surface: #ffffff;
-    --field: #ececee;
+    --field: #ffffff;
     --lift: #d0d0d8;
     --accent: #5b5fee;
     --fill: #5b5fee;
@@ -630,8 +630,10 @@ export function sessionExpiredPage(): string {
 }
 
 function signInLink(state?: string): string {
-  if (!state) return ''
-  return `<p class="switch"><a href="/auth/desktop?state=${encodeURIComponent(state)}">Back to sign in</a></p>`
+  const href = state
+    ? `/auth/desktop?state=${encodeURIComponent(state)}`
+    : '/login'
+  return `<p class="switch"><a href="${href}">Back to sign in</a></p>`
 }
 
 export function forgotPasswordPage(params: { state?: string; error?: string; email?: string }): string {
@@ -701,6 +703,7 @@ export function resetPasswordPage(params: { token: string; error?: string }): st
         <button type="submit">Update password</button>
       </div>
     </form>
+    ${signInLink()}
   </main>`
   return documentPage('Reset password', body)
 }

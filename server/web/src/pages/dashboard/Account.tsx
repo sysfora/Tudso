@@ -1,12 +1,30 @@
 import * as React from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { Download, Globe, Laptop, LogOut, Mail, Monitor, Terminal, Trash2 } from 'lucide-react'
+import {
+  Camera,
+  Download,
+  Eye,
+  EyeOff,
+  Globe,
+  Laptop,
+  Lock,
+  LogOut,
+  Mail,
+  Monitor,
+  Terminal,
+  Trash2,
+  User,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { api, type Device } from '@/lib/api'
+import { Label } from '@/components/ui/label'
+import { api, type Account as AccountRecord, type Device } from '@/lib/api'
+import { SkeletonBar } from '@/components/app/Loader'
+
+type DashboardContext = AccountRecord & { setAccount: (account: AccountRecord) => void }
 
 export default function Account() {
-  const session = useOutletContext<{ email: string; userId: string }>()
+  const session = useOutletContext<DashboardContext>()
   const navigate = useNavigate()
   const [devices, setDevices] = React.useState<Device[]>([])
   const [loaded, setLoaded] = React.useState(false)
@@ -14,6 +32,23 @@ export default function Account() {
   const [error, setError] = React.useState<string | null>(null)
   const [status, setStatus] = React.useState<string | null>(null)
   const [deleteEmail, setDeleteEmail] = React.useState('')
+  const [name, setName] = React.useState(session.name ?? '')
+  const [currentPassword, setCurrentPassword] = React.useState('')
+  const [password, setPassword] = React.useState('')
+  const [passwordConfirm, setPasswordConfirm] = React.useState('')
+  const [showPassword, setShowPassword] = React.useState(false)
+  const [preview, setPreview] = React.useState<string | null>(null)
+  const fileRef = React.useRef<HTMLInputElement>(null)
+
+  React.useEffect(() => {
+    setName(session.name ?? '')
+  }, [session.name])
+
+  React.useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview)
+    }
+  }, [preview])
 
   const loadDevices = async () => {
     try {
@@ -45,36 +80,202 @@ export default function Account() {
     }
   }
 
+  const applyAccount = (account: AccountRecord) => {
+    session.setAccount(account)
+    setName(account.name)
+    if (preview) {
+      URL.revokeObjectURL(preview)
+      setPreview(null)
+    }
+  }
+
   const email = session.email ?? ''
   const canDelete = deleteEmail.trim().toLowerCase() === email.trim().toLowerCase()
   const isCurrent = (device: Device) => Boolean(device.current || device.deviceId === 'web-dashboard')
+  const avatarSrc = preview || session.avatarUrl
+  const nameDirty = name.trim() !== (session.name ?? '').trim()
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-[18px] font-semibold tracking-tight">Account</h1>
         <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-          Devices, export, and deletion. These are the same server records the Tudso app uses.
+          Name, avatar, and password. Email cannot be changed. Devices and deletion use the same records as the Tudso app.
         </p>
       </div>
 
       <section>
-        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Signed in</h2>
-        <div className="flex items-start gap-2.5 rounded-md bg-surface-2 px-3 py-2.5">
-          <Mail className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div>
-            <p className="text-[14px] font-medium">{email || 'Unknown account'}</p>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
-              Open the Tudso app while this tab is signed in to connect without a password.
-            </p>
+        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Profile</h2>
+        <div className="rounded-md bg-surface-2 px-3 py-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-lift"
+                onClick={() => fileRef.current?.click()}
+                aria-label="Change avatar"
+              >
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-[16px] font-medium">
+                    {initials(name, email)}
+                  </span>
+                )}
+                <span className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-fg py-0.5 text-background">
+                  <Camera className="h-3 w-3" />
+                </span>
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (!file) return
+                  if (preview) URL.revokeObjectURL(preview)
+                  setPreview(URL.createObjectURL(file))
+                  void run('avatar', async () => {
+                    applyAccount(await api.uploadAvatar(file))
+                  }, 'Avatar updated.')
+                }}
+              />
+              <div className="min-w-0 pt-0.5">
+                <p className="text-[13px] font-medium">Avatar</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+                  JPEG, PNG, WebP, or GIF. 2 MB or smaller.
+                </p>
+                {session.avatarUrl ? (
+                  <Button
+                    className="mt-2"
+                    variant="quiet"
+                    size="compact"
+                    disabled={Boolean(busy)}
+                    loading={busy === 'avatar-remove'}
+                    onClick={() => {
+                      void run('avatar-remove', async () => {
+                        applyAccount(await api.removeAvatar())
+                      }, 'Avatar removed.')
+                    }}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <Field icon={<User className="h-3.5 w-3.5" />} label="Name" htmlFor="profile-name">
+              <Input
+                id="profile-name"
+                value={name}
+                maxLength={80}
+                autoComplete="name"
+                onChange={(event) => setName(event.target.value)}
+              />
+            </Field>
+            <Field icon={<Mail className="h-3.5 w-3.5" />} label="Email" htmlFor="profile-email">
+              <Input id="profile-email" value={email} readOnly disabled autoComplete="email" />
+            </Field>
+          </div>
+          <Button
+            className="mt-3"
+            variant="fill"
+            size="compact"
+            disabled={Boolean(busy) || !nameDirty || !name.trim()}
+            loading={busy === 'name'}
+            onClick={() => {
+              void run('name', async () => {
+                applyAccount(await api.updateName(name.trim()))
+              }, 'Name updated.')
+            }}
+          >
+            Save name
+          </Button>
         </div>
       </section>
 
       <section>
+        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Password</h2>
+        <form
+          className="space-y-3 rounded-md bg-surface-2 px-3 py-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void run('password', async () => {
+              await api.changePassword(currentPassword, password, passwordConfirm)
+              setCurrentPassword('')
+              setPassword('')
+              setPasswordConfirm('')
+            }, 'Password updated.')
+          }}
+        >
+          <p className="text-[12px] leading-relaxed text-muted-foreground">
+            If you signed in with Google and never set a password, use Forgot password first.
+          </p>
+          <Field icon={<Lock className="h-3.5 w-3.5" />} label="Current password" htmlFor="current-password">
+            <Input
+              id="current-password"
+              type={showPassword ? 'text' : 'password'}
+              value={currentPassword}
+              autoComplete="current-password"
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              icon={<Lock className="h-3.5 w-3.5" />}
+              label="New password"
+              htmlFor="new-password"
+              extra={
+                <button type="button" className="text-muted-foreground hover:text-fg" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}>
+                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              }
+            >
+              <Input
+                id="new-password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                minLength={8}
+                autoComplete="new-password"
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </Field>
+            <Field icon={<Lock className="h-3.5 w-3.5" />} label="Confirm password" htmlFor="confirm-password">
+              <Input
+                id="confirm-password"
+                type={showPassword ? 'text' : 'password'}
+                value={passwordConfirm}
+                minLength={8}
+                autoComplete="new-password"
+                onChange={(event) => setPasswordConfirm(event.target.value)}
+              />
+            </Field>
+          </div>
+          <Button
+            type="submit"
+            variant="fill"
+            size="compact"
+            disabled={Boolean(busy) || !currentPassword || password.length < 8 || password !== passwordConfirm}
+            loading={busy === 'password'}
+          >
+            Change password
+          </Button>
+        </form>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+      <section>
         <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Devices</h2>
         {!loaded ? (
-          <p className="rounded-md bg-surface-2 px-3 py-6 text-center text-[13px] text-muted-foreground">Loading devices…</p>
+          <div className="space-y-2 rounded-md bg-surface-2 p-3" aria-busy="true" aria-label="Loading devices">
+            <SkeletonBar className="h-3 w-5/6" />
+            <SkeletonBar className="h-3 w-2/3" delay={80} />
+            <SkeletonBar className="h-3 w-3/4" delay={160} />
+          </div>
         ) : devices.length === 0 ? (
           <p className="rounded-md bg-surface-2 px-3 py-6 text-center text-[13px] text-muted-foreground">No devices on this account yet.</p>
         ) : (
@@ -148,6 +349,7 @@ export default function Account() {
         ) : null}
       </section>
 
+      <div className="space-y-6">
       <section>
         <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Data</h2>
         <div className="flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
@@ -211,11 +413,46 @@ export default function Account() {
           </Button>
         </div>
       </section>
+      </div>
+      </div>
 
       {error ? <p className="text-[12px] text-danger">{error}</p> : null}
       {!error && status ? <p className="text-[12px] text-muted-foreground">{status}</p> : null}
     </div>
   )
+}
+
+function Field({
+  icon,
+  label,
+  htmlFor,
+  extra,
+  children,
+}: {
+  icon: React.ReactNode
+  label: string
+  htmlFor: string
+  extra?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={htmlFor} className="inline-flex items-center gap-1.5 text-[13px] font-medium">
+          <span className="text-muted-foreground">{icon}</span>
+          {label}
+        </Label>
+        {extra}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function initials(name: string, email: string) {
+  const source = name.trim() || email.trim()
+  const parts = source.split(/[\s@.]+/).filter(Boolean)
+  return ((parts[0]?.[0] ?? 'U') + (parts[1]?.[0] ?? '')).toUpperCase().slice(0, 2)
 }
 
 function platformIcon(value: string) {

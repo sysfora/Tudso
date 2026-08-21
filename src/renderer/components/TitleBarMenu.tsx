@@ -7,6 +7,7 @@ import {
   LogOut,
   MonitorOff,
   MoreHorizontal,
+  Play,
   Square,
   User,
 } from 'lucide-react'
@@ -42,6 +43,7 @@ export function TitleBarMenu() {
   const settings = useAppStore((state) => state.settings)
   const shortcuts = useAppStore((state) => state.shortcuts)
   const runningSessionId = useAppStore((state) => state.runningSessionId)
+  const activeId = useAppStore((state) => state.activeId)
   const endSession = useAppStore((state) => state.endSession)
   const setSettingsOpen = useAppStore((state) => state.setSettingsOpen)
   const windowWidth = useAppStore((state) => state.windowWidth)
@@ -111,7 +113,21 @@ export function TitleBarMenu() {
             </span>
             <MenuHint>{hint(shortcuts.endSession)}</MenuHint>
           </DropdownMenuItem>
-        ) : null}
+        ) : (
+          <DropdownMenuItem onSelect={() => useAppStore.getState().continueSession()}>
+            <span className="flex items-center gap-2">
+              <Play className="h-3.5 w-3.5 fill-current" />
+              {activeId ? 'Continue session' : 'Start session'}
+            </span>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem
+          disabled={Boolean(runningSessionId)}
+          onSelect={() => useAppStore.getState().newConversation()}
+        >
+          New session
+          <MenuHint>{hint(shortcuts.newConversation)}</MenuHint>
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void useAppStore.getState().copyAnswer(1, 'markdown')}>
           <span className="flex items-center gap-2">
             <Copy className="h-3.5 w-3.5 text-muted" />

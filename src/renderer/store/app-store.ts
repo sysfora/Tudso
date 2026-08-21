@@ -70,6 +70,7 @@ interface AppActions {
   checkForUpdates: () => Promise<void>
   newConversation: () => void
   selectConversation: (id: string) => void
+  continueSession: (id?: string) => void
   cycleConversation: (delta: number) => void
   deleteConversation: (id: string) => Promise<void>
   renameConversation: (id: string, title: string) => Promise<void>
@@ -308,11 +309,31 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   },
 
   selectConversation: (id) => {
+    if (get().runningSessionId && get().runningSessionId !== id) return
     set({ activeId: id, settingsOpen: false })
     void get().loadMessages(id)
   },
 
+  continueSession: (id) => {
+    const target = id ?? get().activeId
+    if (get().runningSessionId && get().runningSessionId !== target) return
+    if (!target) {
+      void get().newConversation()
+      return
+    }
+    const conversation = get().conversations.find((item) => item.id === target)
+    if (!conversation) return
+    set({
+      activeId: target,
+      runningSessionId: target,
+      sessionStartedAt: get().runningSessionId === target ? get().sessionStartedAt : Date.now(),
+      settingsOpen: false,
+    })
+    void get().loadMessages(target)
+  },
+
   cycleConversation: (delta) => {
+    if (get().runningSessionId) return
     const { conversations, activeId } = get()
     if (!conversations.length) return
     const index = Math.max(0, conversations.findIndex((item) => item.id === activeId))

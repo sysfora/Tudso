@@ -3,10 +3,11 @@ import { Search, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
 import { FONT_SIZE_MAX, FONT_SIZE_MIN, DEFAULT_SETTINGS, MODEL_OPTIONS, resolveChatModel } from '@shared/defaults'
 import { canHideFromCapture } from '@shared/plans'
-import type { Settings, SettingsSection, ThemeMode } from '@shared/types'
+import type { Settings, SettingsSection } from '@shared/types'
 import { ShortcutManager } from '@/components/ShortcutManager'
 import { Subscription } from '@/components/Subscription'
 import { Account } from '@/components/Account'
+import { ThemePicker } from '@/components/ThemePicker'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { IconButton } from '@/components/ui/icon-button'
@@ -348,7 +349,6 @@ function AiSection() {
 }
 
 function AppearanceSection() {
-  const theme = useAppStore((state) => state.settings.theme)
   const compactMode = useAppStore((state) => state.settings.compactMode)
   const fontSize = useAppStore((state) => state.settings.fontSize)
   const transparency = useAppStore((state) => state.settings.transparency)
@@ -369,16 +369,7 @@ function AppearanceSection() {
   return (
     <div>
       <Row title="Theme">
-        <Select value={theme} onValueChange={(value) => void setSettings({ theme: value as ThemeMode })}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="dark">Dark</SelectItem>
-            <SelectItem value="light">Light</SelectItem>
-            <SelectItem value="system">System</SelectItem>
-          </SelectContent>
-        </Select>
+        <ThemePicker className="w-[210px] shrink-0" />
       </Row>
       <Row title="Compact mode" description="Reduce padding for smaller screens.">
         <Switch checked={compactMode} onCheckedChange={(value) => void setSettings({ compactMode: value })} />
@@ -575,7 +566,7 @@ function ProfileSection() {
               onBlur={() => save()}
               placeholder="Alex"
               maxLength={120}
-              className="bg-surface hover:bg-lift focus-visible:bg-lift"
+              className="bg-field hover:bg-lift focus-visible:bg-lift"
               aria-label="Preferred name"
             />
           </ProfileField>
@@ -586,7 +577,7 @@ function ProfileSection() {
               onBlur={() => save()}
               placeholder="Software engineer"
               maxLength={160}
-              className="bg-surface hover:bg-lift focus-visible:bg-lift"
+              className="bg-field hover:bg-lift focus-visible:bg-lift"
               aria-label="Profession"
             />
           </ProfileField>
@@ -597,7 +588,7 @@ function ProfileSection() {
               onBlur={() => save()}
               placeholder="Staff engineer"
               maxLength={160}
-              className="bg-surface hover:bg-lift focus-visible:bg-lift"
+              className="bg-field hover:bg-lift focus-visible:bg-lift"
               aria-label="Role"
             />
           </ProfileField>
@@ -608,7 +599,7 @@ function ProfileSection() {
               onBlur={() => save()}
               placeholder="Healthcare"
               maxLength={160}
-              className="bg-surface hover:bg-lift focus-visible:bg-lift"
+              className="bg-field hover:bg-lift focus-visible:bg-lift"
               aria-label="Industry"
             />
           </ProfileField>
@@ -618,7 +609,7 @@ function ProfileSection() {
               onChange={(event) => setEducation(event.target.value)}
               onBlur={() => save()}
               placeholder="B.S. Computer Science"
-              className="bg-surface hover:bg-lift focus-visible:bg-lift"
+              className="bg-field hover:bg-lift focus-visible:bg-lift"
               aria-label="Education"
             />
           </ProfileField>
@@ -634,7 +625,7 @@ function ProfileSection() {
               onChange={(event) => setSkills(event.target.value)}
               onBlur={() => save()}
               placeholder="React, TypeScript, public speaking"
-              className="bg-surface hover:bg-lift focus-visible:bg-lift"
+              className="bg-field hover:bg-lift focus-visible:bg-lift"
               aria-label="Skills"
             />
           </ProfileField>
@@ -666,7 +657,7 @@ function ProfileSection() {
                 save({ communicationStyle: next })
               }}
             >
-              <SelectTrigger className="w-[148px] bg-surface hover:bg-lift data-[state=open]:bg-lift">
+              <SelectTrigger className="w-[148px] bg-field hover:bg-lift data-[state=open]:bg-lift">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -688,7 +679,7 @@ function ProfileSection() {
                 save({ technicalLevel: next })
               }}
             >
-              <SelectTrigger className="w-[148px] bg-surface hover:bg-lift data-[state=open]:bg-lift">
+              <SelectTrigger className="w-[148px] bg-field hover:bg-lift data-[state=open]:bg-lift">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -999,7 +990,7 @@ function MemorySection() {
               maxLength={MAX_MEMORY_CHARS}
               disabled={busy || atLimit}
               placeholder="I prefer TypeScript. I work in UTC+5. Never use class components."
-              className="min-h-[72px] bg-surface hover:bg-lift focus-visible:bg-lift"
+              className="min-h-[72px] bg-field hover:bg-lift focus-visible:bg-lift"
               onChange={(event) => {
                 setDraft(event.target.value)
                 if (error) setError(null)
@@ -1116,7 +1107,7 @@ function MemoryRow({
           maxLength={MAX_MEMORY_CHARS}
           disabled={disabled}
           aria-label="Memory"
-          className="min-h-[44px] bg-surface hover:bg-lift focus-visible:bg-lift"
+          className="min-h-[44px] bg-field hover:bg-lift focus-visible:bg-lift"
           onChange={(event) => setText(event.target.value)}
           onBlur={() => onSave(text)}
           onKeyDown={(event) => {

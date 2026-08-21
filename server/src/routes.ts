@@ -10,9 +10,10 @@ import { config } from './config.js'
 import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
 import { aiRateLimiter, rateLimiter, requireAuth, sensitiveRateLimiter } from './middleware.js'
+import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAccount, updateAccountAvatar, updateAccountName } from './account.js'
 import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getContext, getDevices, getEntitlementForUser, getProfileIfExists, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
-import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
+import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
 import { isPaidPlan, CHECKOUT_PLANS } from './plans.js'
 import type { AIStreamHandler, ChatMessage, UserProfile } from './types.js'
 import { WEB_DEVICE_ID, clearWebSessionCookie, setWebSessionCookie } from './web-session.js'
@@ -25,6 +26,39 @@ function bearerToken(req: Request): string {
 }
 
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 10 * 1024 * 1024 } })
+
+const AVATAR_MIME: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+}
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!AVATAR_MIME[file.mimetype]) {
+      cb(new Error('Use a JPEG, PNG, WebP, or GIF image.'))
+      return
+    }
+    cb(null, true)
+  },
+})
+
+function acceptAvatar(req: Request, res: Response, next: () => void) {
+  avatarUpload.single('avatar')(req, res, (err: unknown) => {
+    if (!err) {
+      next()
+      return
+    }
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      res.status(400).json({ error: 'Image must be 2 MB or smaller.' })
+      return
+    }
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Could not upload that image.' })
+  })
+}
 
 const clientProfileSchema = z.object({
   preferredName: z.string().max(120).optional(),
@@ -594,7 +628,12 @@ router.get('/auth/web/session', async (req: Request, res: Response) => {
     res.json({ user: null })
     return
   }
-  res.json({ user: { userId: resolved.userId, email: resolved.email } })
+  try {
+    const identity = await getAccountIdentity(resolved.userId)
+    res.json({ user: publicAccount(identity) })
+  } catch {
+    res.json({ user: { userId: resolved.userId, email: resolved.email, name: '', avatarUrl: null } })
+  }
 })
 
 router.post('/auth/web/login', rateLimiter, async (req: Request, res: Response) => {
@@ -691,11 +730,118 @@ router.post('/auth/logout', requireAuth, async (req: Request, res: Response) => 
 // Me
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
   const billing = await getUserBilling(req.userId!).catch(() => null)
-  res.json({
-    userId: req.userId,
-    email: req.email,
-    onboardingComplete: Boolean(billing?.onboardingComplete),
-  })
+  try {
+    const identity = await getAccountIdentity(req.userId!)
+    res.json({
+      ...publicAccount(identity),
+      onboardingComplete: Boolean(billing?.onboardingComplete),
+    })
+  } catch {
+    res.json({
+      userId: req.userId,
+      email: req.email,
+      name: '',
+      avatarUrl: null,
+      onboardingComplete: Boolean(billing?.onboardingComplete),
+    })
+  }
+})
+
+router.get('/me/account', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const identity = await getAccountIdentity(req.userId!)
+    res.json(publicAccount(identity))
+  } catch {
+    res.status(500).json({ error: 'Could not load your profile.' })
+  }
+})
+
+router.patch('/me/account', requireAuth, async (req: Request, res: Response) => {
+  const parsed = z.object({ name: z.string().trim().min(1).max(80) }).strict().safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Enter a name up to 80 characters.' })
+    return
+  }
+  try {
+    const identity = await updateAccountName(req.userId!, parsed.data.name)
+    res.json(publicAccount(identity))
+  } catch {
+    res.status(400).json({ error: 'Could not update your name.' })
+  }
+})
+
+router.post('/me/account/password', requireAuth, sensitiveRateLimiter, async (req: Request, res: Response) => {
+  const parsed = z.object({
+    currentPassword: z.string().min(1).max(128),
+    password: z.string().min(8).max(128),
+    passwordConfirm: z.string().min(8).max(128),
+  }).strict().safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Enter your current password and a new password of at least 8 characters.' })
+    return
+  }
+  if (parsed.data.password !== parsed.data.passwordConfirm) {
+    res.status(400).json({ error: 'New password and confirmation do not match.' })
+    return
+  }
+  const email = req.email ?? ''
+  if (!email) {
+    res.status(400).json({ error: 'Could not update the password.' })
+    return
+  }
+  try {
+    await changeAccountPassword(email, parsed.data.currentPassword, parsed.data.password)
+    res.json({ ok: true })
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Could not update the password.' })
+  }
+})
+
+router.get('/me/avatar', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const file = await getAccountAvatar(req.userId!)
+    if (!file) {
+      res.status(404).json({ error: 'No avatar' })
+      return
+    }
+    res.setHeader('Content-Type', file.contentType)
+    res.setHeader('Cache-Control', 'private, max-age=120')
+    res.send(file.body)
+  } catch {
+    res.status(404).json({ error: 'No avatar' })
+  }
+})
+
+router.post('/me/account/avatar', requireAuth, rateLimiter, acceptAvatar, async (req: Request, res: Response) => {
+  const file = req.file
+  if (!file?.buffer?.length) {
+    res.status(400).json({ error: 'Choose an image.' })
+    return
+  }
+  const ext = AVATAR_MIME[file.mimetype]
+  if (!ext) {
+    res.status(400).json({ error: 'Use a JPEG, PNG, WebP, or GIF image.' })
+    return
+  }
+  try {
+    const identity = await updateAccountAvatar(req.userId!, {
+      buffer: file.buffer,
+      mime: file.mimetype,
+      filename: `avatar.${ext}`,
+    })
+    res.json(publicAccount(identity))
+  } catch {
+    res.status(400).json({ error: 'Could not update your avatar.' })
+  }
+})
+
+router.delete('/me/account/avatar', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const identity = await updateAccountAvatar(req.userId!, null)
+    res.json(publicAccount(identity))
+  } catch {
+    res.status(400).json({ error: 'Could not remove your avatar.' })
+  }
 })
 
 function localUserDataGone(_req: Request, res: Response) {
@@ -993,15 +1139,15 @@ router.get('/billing/success', async (req: Request, res: Response) => {
       logError('Failed to finalize web checkout', error, { user: resolved.userId })
     }
   }
-  res.redirect('/dashboard?billing=success')
+  res.redirect('/dashboard/subscription?billing=success')
 })
 
 router.get('/billing/cancel', (_req: Request, res: Response) => {
-  res.redirect('/dashboard?billing=cancel')
+  res.redirect('/dashboard/subscription?billing=cancel')
 })
 
 router.get('/billing/return', (_req: Request, res: Response) => {
-  res.redirect('/dashboard')
+  res.redirect('/dashboard/subscription')
 })
 
 // Billing
@@ -1036,6 +1182,16 @@ router.post('/billing/portal', requireAuth, async (req: Request, res: Response) 
 router.get('/billing/subscription', requireAuth, async (req: Request, res: Response) => {
   const subscription = await getSubscription(req.userId!)
   res.json(subscription)
+})
+
+router.get('/billing/overview', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const overview = await getBillingOverview(req.userId!)
+    res.json(overview)
+  } catch (error) {
+    logError('Failed to load billing overview', error, { user: req.userId })
+    res.status(400).json({ error: 'Could not load invoices from Stripe.' })
+  }
 })
 
 // Stripe webhook
