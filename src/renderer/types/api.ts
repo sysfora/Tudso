@@ -1,3 +1,5 @@
+import type { LocalProfile } from '@shared/types'
+
 export type Plan = 'free' | 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
 
 export interface UserProfile {
@@ -64,23 +66,61 @@ export function toUserProfile(userId: string, profile: {
   }
 }
 
-export function toPromptProfile(profile?: UserProfile | null) {
-  if (!profile) return undefined
+type PromptProfileSource = Pick<
+  UserProfile,
+  | 'preferredName'
+  | 'profession'
+  | 'role'
+  | 'industry'
+  | 'education'
+  | 'skills'
+  | 'goals'
+  | 'communicationStyle'
+  | 'technicalLevel'
+  | 'formal'
+  | 'stepByStep'
+  | 'examples'
+  | 'explainTerms'
+  | 'customContext'
+>
+
+export function snapshotLocalProfile(profile?: PromptProfileSource | null): LocalProfile {
   return {
-    preferredName: profile.preferredName,
-    profession: profile.profession,
-    role: profile.role,
-    industry: profile.industry,
-    education: profile.education,
-    skills: profile.skills ?? [],
-    goals: profile.goals ?? [],
-    communicationStyle: profile.communicationStyle,
-    technicalLevel: profile.technicalLevel,
-    formal: profile.formal,
-    stepByStep: profile.stepByStep,
-    examples: profile.examples,
-    explainTerms: profile.explainTerms,
-    customContext: profile.customContext,
+    preferredName: profile?.preferredName,
+    profession: profile?.profession,
+    role: profile?.role,
+    industry: profile?.industry,
+    education: profile?.education,
+    skills: [...(profile?.skills ?? [])],
+    goals: [...(profile?.goals ?? [])],
+    communicationStyle: profile?.communicationStyle ?? DEFAULT_PROFILE_PREFERENCES.communicationStyle,
+    technicalLevel: profile?.technicalLevel ?? DEFAULT_PROFILE_PREFERENCES.technicalLevel,
+    formal: profile?.formal ?? DEFAULT_PROFILE_PREFERENCES.formal,
+    stepByStep: profile?.stepByStep ?? DEFAULT_PROFILE_PREFERENCES.stepByStep,
+    examples: profile?.examples ?? DEFAULT_PROFILE_PREFERENCES.examples,
+    explainTerms: profile?.explainTerms ?? DEFAULT_PROFILE_PREFERENCES.explainTerms,
+    customContext: profile?.customContext,
+  }
+}
+
+export function toPromptProfile(profile?: PromptProfileSource | null) {
+  if (!profile) return undefined
+  const snapshot = snapshotLocalProfile(profile)
+  return {
+    preferredName: snapshot.preferredName,
+    profession: snapshot.profession,
+    role: snapshot.role,
+    industry: snapshot.industry,
+    education: snapshot.education,
+    skills: snapshot.skills,
+    goals: snapshot.goals,
+    communicationStyle: snapshot.communicationStyle,
+    technicalLevel: snapshot.technicalLevel,
+    formal: snapshot.formal,
+    stepByStep: snapshot.stepByStep,
+    examples: snapshot.examples,
+    explainTerms: snapshot.explainTerms,
+    customContext: snapshot.customContext,
   }
 }
 

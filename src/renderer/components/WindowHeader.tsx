@@ -1,11 +1,21 @@
 import { Maximize2, Minus, PanelLeft, Plus, Settings, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
+import { APP_NAME } from '@shared/defaults'
 import { IconButton } from '@/components/ui/icon-button'
 import { Logo } from '@/components/Logo'
 import { SessionNav } from '@/components/SessionNav'
 import { TitleBarMenu } from '@/components/TitleBarMenu'
 import { desktop } from '@/lib/desktop'
 import { useAppStore, windowModeFromWidth } from '@/store/app-store'
+
+function NavBrand() {
+  return (
+    <div className="ml-1 flex shrink-0 items-center gap-2">
+      <Logo className="h-7 w-7 text-accent" />
+      <span className="text-[14px] font-semibold tracking-tight">{APP_NAME}</span>
+    </div>
+  )
+}
 
 export function WindowHeader() {
   const shortcuts = useAppStore((state) => state.shortcuts)
@@ -23,14 +33,14 @@ export function WindowHeader() {
 
   if (windowCollapsed) {
     return (
-      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 bg-transparent px-2.5">
-        <div className="drag-region flex min-h-0 min-w-0 flex-1 items-center gap-2">
-          <Logo className="ml-1 shrink-0 text-accent" />
-          <div className="flex min-w-0 flex-1 justify-center px-1">
+      <header className="z-20 flex h-full min-h-0 flex-1 items-center gap-2 bg-transparent px-2.5">
+        <div className="drag-region flex h-full min-w-0 flex-1 items-center gap-2">
+          <NavBrand />
+          <div className="flex h-full min-w-0 flex-1 items-center justify-center px-1">
             <SessionNav />
           </div>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex h-full items-center gap-0.5">
           <TitleBarMenu />
           <IconButton label="Expand" shortcut={shortcutHint(shortcuts.toggleCollapsed)} onClick={() => desktop.window.minimize()}>
             <Maximize2 className="h-4 w-4" />
@@ -57,7 +67,7 @@ export function WindowHeader() {
       ) : null}
 
       <div className="drag-region flex min-h-0 min-w-0 flex-1 items-center gap-2">
-        <Logo className="ml-1 shrink-0 text-accent" />
+        <NavBrand />
         <div className="flex min-w-0 flex-1 justify-center px-2">
           <SessionNav />
         </div>

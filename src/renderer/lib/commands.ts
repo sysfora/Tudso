@@ -26,7 +26,6 @@ export function runAppCommand(command: AppCommand) {
     case 'new-conversation':
       if (store.runningSessionId) return
       store.newConversation()
-      requestAnimationFrame(focusComposer)
       return
     case 'end-session':
       useRealtimeStore.getState().stop()
@@ -99,6 +98,12 @@ export function runAppCommand(command: AppCommand) {
       return
     case 'open-subscription':
       store.setSettingsOpen(true, 'subscription')
+      return
+    case 'open-shortcuts':
+      store.setSettingsOpen(true, 'shortcuts')
+      return
+    case 'continue-session':
+      store.continueSession()
       return
     case 'next-conversation':
       store.cycleConversation(1)

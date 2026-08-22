@@ -19,6 +19,7 @@ import type {
   StreamError,
   WindowBounds,
   WindowMode,
+  AppMenuPopup,
 } from './types'
 
 export interface ElectronAPI {
@@ -43,6 +44,7 @@ export interface ElectronAPI {
     nudge: (direction: 'left' | 'right' | 'up' | 'down') => Promise<void>
     restoreTaskbar: () => Promise<void>
     setSignedInReady: (ready: boolean) => Promise<void>
+    popupAppMenu: (opts: AppMenuPopup) => Promise<void>
     setHideFromCaptureAllowed: (allowed: boolean) => Promise<void>
     onCollapsed: (callback: (collapsed: boolean) => void) => () => void
     onOverlayKey: (callback: (event: OverlayKeyEvent) => void) => () => void
@@ -79,6 +81,10 @@ export interface ElectronAPI {
     saveResume: (userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalResumeMeta>
     deleteResume: (userId: string) => Promise<LocalUserData>
   }
+  sessions: {
+    saveResume: (sessionId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalResumeMeta>
+    copyDefaultResume: (userId: string, sessionId: string) => Promise<LocalResumeMeta | null>
+  }
   ai: {
     chat: (request: ChatRequest) => void
     stop: () => void
@@ -90,6 +96,7 @@ export interface ElectronAPI {
     quit: () => void
     openExternal: (url: string) => Promise<void>
     pickFiles: () => Promise<PickedFile[]>
+    confirm: (message: string) => boolean
     notify: (title: string, body: string) => void
     deleteLocalData: () => Promise<void>
     getApiKeyStatus: () => Promise<ApiKeyStatus>

@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
 import { AppShell, ThemeToggle } from '@/components/app/AppShell'
 import { BrandMark } from '@/components/app/BrandMark'
+import { PageLoader } from '@/components/app/Loader'
 
 const GOOGLE_MARK = (
   <svg className="h-4 w-4" viewBox="0 0 48 48" aria-hidden="true">
@@ -17,9 +18,14 @@ const GOOGLE_MARK = (
   </svg>
 )
 
+function appContinueUrl(state: string) {
+  return `/auth/desktop?state=${encodeURIComponent(state)}`
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
+  const desktopState = params.get('state')
   const [mode, setMode] = React.useState(params.get('mode') === 'register' ? 'register' : 'login')
   const [email, setEmail] = React.useState('')
   const [name, setName] = React.useState('')
@@ -28,13 +34,37 @@ export default function Login() {
   const [showPassword, setShowPassword] = React.useState(false)
   const [error, setError] = React.useState(queryError(params.get('error'), params.get('verify')))
   const [busy, setBusy] = React.useState(false)
+  const [checking, setChecking] = React.useState(Boolean(params.get('state')))
   const next = params.get('next') || '/dashboard'
 
   React.useEffect(() => {
+    let cancelled = false
     void api.session().then((result) => {
-      if (result.user) navigate(next, { replace: true })
-    }).catch(() => undefined)
-  }, [navigate, next])
+      if (cancelled) return
+      if (result.user && desktopState && params.get('prompt') !== '1') {
+        window.location.assign(appContinueUrl(desktopState))
+        return
+      }
+      if (result.user && !desktopState) {
+        navigate(next, { replace: true })
+        return
+      }
+      setChecking(false)
+    }).catch(() => {
+      if (!cancelled) setChecking(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [desktopState, navigate, next, params])
+
+  const goToApp = () => {
+    if (desktopState) {
+      window.location.assign(appContinueUrl(desktopState))
+      return
+    }
+    navigate(next, { replace: true })
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,7 +82,7 @@ export default function Login() {
       } else {
         await api.login(email, password)
       }
-      navigate(next, { replace: true })
+      goToApp()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not sign in.')
     } finally {
@@ -65,7 +95,7 @@ export default function Login() {
     setBusy(true)
     setError(null)
     try {
-      const { url } = await api.google()
+      const { url } = await api.google(desktopState || undefined)
       window.location.assign(url)
     } catch (err) {
       setBusy(false)
@@ -74,6 +104,14 @@ export default function Login() {
   }
 
   const register = mode === 'register'
+
+  if (checking) {
+    return (
+      <AppShell className="flex min-h-screen flex-col items-center justify-center px-5">
+        <PageLoader label={desktopState ? 'Connecting to the Tudso app' : 'Loading'} />
+      </AppShell>
+    )
+  }
 
   return (
     <AppShell className="flex min-h-screen flex-col">
@@ -161,7 +199,12 @@ export default function Login() {
 
         {mode === 'login' ? (
           <p className="mt-4 text-center text-[13px] text-muted-foreground">
-            <a className="text-accent hover:underline" href="/auth/desktop/forgot">Forgot password?</a>
+            <a
+              className="text-accent hover:underline"
+              href={desktopState ? `/auth/desktop/forgot?state=${encodeURIComponent(desktopState)}` : '/auth/desktop/forgot'}
+            >
+              Forgot password?
+            </a>
           </p>
         ) : null}
 

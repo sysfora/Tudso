@@ -29,7 +29,7 @@ export function generateAuthState(kind: 'desktop' | 'web' = 'desktop'): { state:
   const state = crypto.randomBytes(32).toString('hex')
   const codeVerifier = crypto.randomBytes(32).toString('hex')
   pendingStates.set(state, { state, codeVerifier, createdAt: Date.now(), kind })
-  const url = new URL(kind === 'web' ? '/login' : '/auth/desktop', config.app.url)
+  const url = new URL('/login', config.app.url)
   url.searchParams.set('state', state)
   return { state, codeVerifier, url: url.toString() }
 }
@@ -161,12 +161,13 @@ export async function confirmEmailChange(token: string, password: string): Promi
   }
 }
 
-export async function getOAuthUrl(provider: 'google', state: string): Promise<string> {
+export async function getOAuthUrl(provider: 'google', state: string, oauthKind?: AuthState['kind']): Promise<string> {
   const pending = verifyAuthState(state)
   if (!pending) throw new Error('Sign-in expired. Return to Tudso and try again.')
 
   const pb = createUserPb()
-  const redirectUrl = oauthRedirectUrl(pending.kind)
+  pending.oauthKind = oauthKind ?? pending.kind
+  const redirectUrl = oauthRedirectUrl(pending.oauthKind)
   const authMethods = await pb.collection('users').listAuthMethods()
   const method = findOAuthProvider(authMethods, provider)
   const authURL = method?.authURL || method?.authUrl
@@ -192,7 +193,7 @@ export async function exchangeOAuthCallback(provider: 'google', code: string, st
   const pending = verifyAuthState(state)
   if (!pending) return null
   const pb = createUserPb()
-  const redirectUrl = oauthRedirectUrl(pending.kind)
+  const redirectUrl = oauthRedirectUrl(pending.oauthKind ?? pending.kind)
   try {
     const result = await pb.collection('users').authWithOAuth2Code(provider, code, pending.codeVerifier, redirectUrl)
     const record = result.record as unknown as { id: string; email: string; plan?: string; verified?: boolean }

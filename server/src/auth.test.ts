@@ -24,6 +24,8 @@ describe('auth', () => {
     expect(state).toHaveLength(64)
     expect(codeVerifier).toHaveLength(64)
     expect(url).toContain(state)
+    expect(url).toContain('/login')
+    expect(url).not.toContain('/auth/desktop')
   })
 
   it('verifies a recently created state', () => {

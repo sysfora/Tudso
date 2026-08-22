@@ -111,6 +111,7 @@ let dragCancelled = false
 let overlayPointerDown = false
 let overlayDragCssKey: string | null = null
 let overlayTyping = false
+let overlayPassthrough = 0
 const mods = { shift: false, ctrl: false, alt: false, meta: false, caps: false }
 
 function loadNative(): NativeApi | null {
@@ -447,6 +448,9 @@ function lowLevelKeyboardProc(nCode: number, wParam: number, lParam: unknown): n
         mods.caps = !mods.caps
       }
     }
+    if (overlayShouldPassthrough()) {
+      return api.CallNextHookEx(null, nCode, wParam, lParam)
+    }
     if (info.vkCode === VK_LWIN || info.vkCode === VK_RWIN || mods.meta) {
       return api.CallNextHookEx(null, nCode, wParam, lParam)
     }
@@ -529,6 +533,7 @@ function lowLevelMouseProc(nCode: number, wParam: number, lParam: unknown): numb
       mouseData: number
     }
     if (info.flags & LLMHF_INJECTED) return api.CallNextHookEx(null, nCode, wParam, lParam)
+    if (overlayShouldPassthrough()) return api.CallNextHookEx(null, nCode, wParam, lParam)
     const cursor = { x: info.x, y: info.y }
 
     if (overlayDrag) {
@@ -627,6 +632,38 @@ function lowLevelMouseProc(nCode: number, wParam: number, lParam: unknown): numb
   } catch (error) {
     console.error('[overlay] mouse hook error', error)
     return api ? api.CallNextHookEx(null, nCode, wParam, lParam) : 0
+  }
+}
+
+function overlayShouldPassthrough() {
+  return overlayPassthrough > 0
+}
+
+export function beginOverlayPassthrough() {
+  overlayPassthrough += 1
+  overlayPointerDown = false
+  clearDrag()
+}
+
+export function endOverlayPassthrough() {
+  overlayPassthrough = Math.max(0, overlayPassthrough - 1)
+}
+
+export function withOverlayPassthrough<T>(fn: () => T): T {
+  beginOverlayPassthrough()
+  try {
+    return fn()
+  } finally {
+    endOverlayPassthrough()
+  }
+}
+
+export async function withOverlayPassthroughAsync<T>(fn: () => Promise<T>): Promise<T> {
+  beginOverlayPassthrough()
+  try {
+    return await fn()
+  } finally {
+    endOverlayPassthrough()
   }
 }
 

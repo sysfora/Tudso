@@ -40,6 +40,7 @@ const api: ElectronAPI = {
     nudge: (direction) => ipcRenderer.invoke(CHANNELS.windowNudge, direction),
     restoreTaskbar: () => ipcRenderer.invoke(CHANNELS.windowRestoreTaskbar),
     setSignedInReady: (ready: boolean) => ipcRenderer.invoke(CHANNELS.windowSetSignedInReady, ready),
+    popupAppMenu: (opts) => ipcRenderer.invoke(CHANNELS.windowPopupAppMenu, opts),
     setHideFromCaptureAllowed: (allowed: boolean) => ipcRenderer.invoke(CHANNELS.planVisibility, allowed),
     onCollapsed: (callback) => subscribe(CHANNELS.windowCollapsed, callback),
     onOverlayKey: (callback) => subscribe(CHANNELS.overlayKey, callback),
@@ -82,6 +83,10 @@ const api: ElectronAPI = {
     saveResume: (userId: string, file) => ipcRenderer.invoke(CHANNELS.profileSaveResume, userId, file),
     deleteResume: (userId: string) => ipcRenderer.invoke(CHANNELS.profileDeleteResume, userId),
   },
+  sessions: {
+    saveResume: (sessionId, file) => ipcRenderer.invoke(CHANNELS.sessionSaveResume, sessionId, file),
+    copyDefaultResume: (userId, sessionId) => ipcRenderer.invoke(CHANNELS.sessionCopyDefaultResume, userId, sessionId),
+  },
   ai: {
     chat: (request: ChatRequest) => ipcRenderer.send(CHANNELS.aiChat, request),
     stop: () => ipcRenderer.send(CHANNELS.aiStop),
@@ -93,6 +98,7 @@ const api: ElectronAPI = {
     quit: () => ipcRenderer.send(CHANNELS.appQuit),
     openExternal: (url: string) => ipcRenderer.invoke(CHANNELS.appOpenExternal, url),
     pickFiles: () => ipcRenderer.invoke(CHANNELS.appPickFiles),
+    confirm: (message: string) => ipcRenderer.sendSync(CHANNELS.appConfirm, message) as boolean,
     notify: (title: string, body: string) => ipcRenderer.send(CHANNELS.appNotify, title, body),
     deleteLocalData: () => ipcRenderer.invoke(CHANNELS.appDeleteLocalData),
     getApiKeyStatus: () => ipcRenderer.invoke(CHANNELS.appGetApiKeyStatus),

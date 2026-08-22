@@ -163,20 +163,26 @@ function verifyInboxPage(email: string, state: string) {
 router.get('/auth/desktop', async (req: Request, res: Response) => {
   const state = req.query.state as string | undefined
   if (!state) {
-    res.status(400).send('Missing state')
+    res.redirect('/login')
+    return
+  }
+  if (!verifyAuthState(state)) {
+    res.redirect('/login?error=expired')
     return
   }
   const cookieToken = typeof req.cookies?.token === 'string' ? req.cookies.token : ''
-  if (cookieToken && verifyAuthState(state)) {
+  if (cookieToken) {
     const resolved = await resolveAccessToken(cookieToken)
     if (resolved?.userId) {
       await finishDesktopAuth(res, { token: '', userId: resolved.userId, email: resolved.email }, state)
       return
     }
   }
-  const mode = req.query.mode === 'register' ? 'register' : 'login'
-  res.setHeader('Content-Type', 'text/html')
-  res.send(loginPage({ state, mode }))
+  const login = new URL('/login', config.app.url)
+  login.searchParams.set('state', state)
+  if (req.query.mode === 'register') login.searchParams.set('mode', 'register')
+  login.searchParams.set('prompt', '1')
+  res.redirect(`${login.pathname}${login.search}`)
 })
 
 async function finishDesktopAuth(
@@ -184,6 +190,11 @@ async function finishDesktopAuth(
   auth: { token: string; userId: string; email: string },
   state: string,
 ): Promise<void> {
+  try {
+    await startWebSession(res, { userId: auth.userId, email: auth.email })
+  } catch (error) {
+    logError('Could not persist web session during app sign-in', error)
+  }
   const code = crypto.randomUUID()
   pendingCodeTokens.set(code, { token: auth.token, userId: auth.userId, email: auth.email, state, createdAt: Date.now() })
   res.setHeader('Content-Type', 'text/html')
@@ -607,7 +618,7 @@ router.post('/auth/desktop/start', (req: Request, res: Response) => {
     platform: z.string().max(64).default('unknown'),
     appVersion: z.string().max(64).default('1.0.0'),
   }).parse(req.body)
-  const { state, url } = generateAuthState()
+  const { state, url } = generateAuthState('desktop')
   res.json({ url, state, deviceId, platform, appVersion })
 })
 
@@ -685,9 +696,11 @@ router.post('/auth/web/register', rateLimiter, async (req: Request, res: Respons
 })
 
 router.post('/auth/web/oauth', rateLimiter, async (req: Request, res: Response) => {
-  const { state } = generateAuthState('web')
+  const requested = typeof req.body?.state === 'string' ? req.body.state : ''
+  const existing = requested ? verifyAuthState(requested) : null
+  const state = existing ? requested : generateAuthState('web').state
   try {
-    const url = await getOAuthUrl('google', state)
+    const url = await getOAuthUrl('google', state, 'web')
     res.json({ url })
   } catch (error) {
     logError('Web Google sign-in start failed', error)
@@ -702,7 +715,8 @@ router.get('/auth/web/oauth/callback', async (req: Request, res: Response) => {
     return
   }
   const [authState, provider] = parsed.data.state.split(':') as [string, 'google']
-  if (!verifyAuthState(authState)) {
+  const pending = verifyAuthState(authState)
+  if (!pending) {
     res.redirect('/login?error=expired')
     return
   }
@@ -714,6 +728,10 @@ router.get('/auth/web/oauth/callback', async (req: Request, res: Response) => {
   if (!auth.verified) {
     await requestEmailVerification(auth.email)
     res.redirect('/login?verify=1')
+    return
+  }
+  if (pending.kind === 'desktop') {
+    await finishDesktopAuth(res, auth, authState)
     return
   }
   await startWebSession(res, auth)

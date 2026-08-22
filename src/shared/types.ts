@@ -20,6 +20,16 @@ export interface WindowBounds {
   height: number
 }
 
+export interface AppMenuPopup {
+  x: number
+  y: number
+  email?: string
+  hideAllowed: boolean
+  sessionLive: boolean
+  hasConversation: boolean
+  windowMode: WindowMode
+}
+
 export interface OverlayKeyEvent {
   down: boolean
   key: string
@@ -229,12 +239,19 @@ export interface ChatMessage {
   attachments?: Attachment[]
 }
 
+export interface SessionContext {
+  profile: LocalProfile
+  resume?: LocalResumeMeta
+  usedDefaults: boolean
+}
+
 export interface Conversation {
   id: string
   title: string
   messages: ChatMessage[]
   createdAt: number
   updatedAt: number
+  context?: SessionContext
 }
 
 export interface ChatRequest {
@@ -271,6 +288,8 @@ export type AppCommand =
   | 'open-settings'
   | 'open-account'
   | 'open-subscription'
+  | 'open-shortcuts'
+  | 'continue-session'
   | 'toggle-privacy'
   | 'toggle-hide-from-capture'
   | 'toggle-collapsed'

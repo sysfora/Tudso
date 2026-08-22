@@ -141,6 +141,11 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, ge
       set({ error: liveError() })
       return
     }
+    if (!useAppStore.getState().runningSessionId) {
+      useAppStore.getState().newConversation()
+      set({ error: 'Start a session first.' })
+      return
+    }
     const token = getToken()
     if (!token) {
       set({ error: 'Sign in to use live copilot.' })

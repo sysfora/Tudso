@@ -631,7 +631,7 @@ export function sessionExpiredPage(): string {
 
 function signInLink(state?: string): string {
   const href = state
-    ? `/auth/desktop?state=${encodeURIComponent(state)}`
+    ? `/login?state=${encodeURIComponent(state)}`
     : '/login'
   return `<p class="switch"><a href="${href}">Back to sign in</a></p>`
 }

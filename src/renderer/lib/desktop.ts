@@ -59,7 +59,7 @@ function createMock(): ElectronAPI {
   return {
     platform: 'win32',
     auth: {
-      startLogin: async () => ({ url: 'http://localhost:3000/auth/desktop?state=mock', state: 'mock' }),
+      startLogin: async () => ({ url: 'http://localhost:3000/login?state=mock', state: 'mock' }),
       openLogin: async () => undefined,
       setSession: async () => undefined,
       getSession: async () => null,
@@ -78,6 +78,7 @@ function createMock(): ElectronAPI {
       nudge: async () => undefined,
       restoreTaskbar: async () => undefined,
       setSignedInReady: async () => undefined,
+      popupAppMenu: async () => undefined,
       setHideFromCaptureAllowed: async (allowed) => {
         if (!allowed && memory.settings.hideFromCapture) {
           memory.settings = { ...memory.settings, hideFromCapture: false }
@@ -197,6 +198,14 @@ function createMock(): ElectronAPI {
         return structuredClone(next)
       },
     },
+    sessions: {
+      saveResume: async (_sessionId, file) => ({
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        storedName: 'resume.bin',
+      }),
+      copyDefaultResume: async (userId) => memory.users[userId]?.resume ?? null,
+    },
     ai: {
       chat: (request) => {
         const text = [
@@ -250,6 +259,7 @@ function createMock(): ElectronAPI {
         window.open(url, '_blank', 'noopener')
       },
       pickFiles: async () => [],
+      confirm: (message) => window.confirm(message),
       notify: () => undefined,
       deleteLocalData: async () => {
         memory = {

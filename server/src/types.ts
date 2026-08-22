@@ -120,6 +120,7 @@ export interface AuthState {
   codeVerifier: string
   createdAt: number
   kind: 'desktop' | 'web'
+  oauthKind?: 'desktop' | 'web'
 }
 
 export interface ChatMessage {

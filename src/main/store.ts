@@ -5,13 +5,14 @@ import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap } from '../sh
 import type {
   Conversation,
   LocalProfile,
+  LocalResumeMeta,
   LocalUserData,
   MemoryEntry,
   Settings,
   ShortcutMap,
   WindowBounds,
 } from '../shared/types'
-import { emptyLocalProfile, emptyLocalUser, removeAllProfiles, removeResumeFile, writeResumeFile } from './local-profile'
+import { emptyLocalProfile, emptyLocalUser, removeAllProfiles, removeAllSessionResumes, removeResumeFile, removeSessionResume, writeResumeFile, writeSessionResumeFile, copyUserResumeToSession } from './local-profile'
 import { normalizeMemoryEntries } from '../shared/memory'
 
 interface PersistedState {
@@ -81,11 +82,13 @@ export class AppStore {
 
   deleteConversation(id: string) {
     this.state.conversations = this.state.conversations.filter((item) => item.id !== id)
+    void removeSessionResume(id)
     this.queueWrite()
   }
 
   clearConversations() {
     this.state.conversations = []
+    void removeAllSessionResumes()
     this.queueWrite()
   }
 
@@ -101,6 +104,7 @@ export class AppStore {
   async deleteLocalData() {
     this.state = structuredClone(EMPTY_STATE)
     await removeAllProfiles()
+    await removeAllSessionResumes()
     await this.flush()
   }
 
@@ -182,11 +186,32 @@ export class AppStore {
     return structuredClone(next)
   }
 
+  async saveSessionResume(
+    sessionId: string,
+    file: { fileName: string; mimeType: string; data: ArrayBuffer },
+  ): Promise<LocalResumeMeta> {
+    await removeSessionResume(sessionId)
+    const bytes = Buffer.isBuffer(file.data) ? file.data : Buffer.from(new Uint8Array(file.data))
+    return writeSessionResumeFile(sessionId, file.fileName, file.mimeType, bytes)
+  }
+
+  async copyDefaultResumeToSession(userId: string, sessionId: string): Promise<LocalResumeMeta | null> {
+    const current = this.getUserData(userId)
+    if (!current.resume) return null
+    const copied = await copyUserResumeToSession(userId, sessionId, current.resume)
+    return copied ?? null
+  }
+
   private pruneConversations() {
     const days = this.state.settings.retentionDays
     if (!days) return
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
-    this.state.conversations = this.state.conversations.filter((item) => item.updatedAt >= cutoff)
+    const kept: Conversation[] = []
+    for (const item of this.state.conversations) {
+      if (item.updatedAt >= cutoff) kept.push(item)
+      else void removeSessionResume(item.id)
+    }
+    this.state.conversations = kept
   }
 
   private async load() {

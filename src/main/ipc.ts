@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { CHANNELS } from '../shared/channels'
 import type {
   AuthSession,
@@ -9,6 +9,7 @@ import type {
   PickedFile,
   Settings,
   ShortcutId,
+  AppMenuPopup,
 } from '../shared/types'
 import { clearSession, getSession, openLogin, setSession, startLogin } from './auth'
 import { generateResponse } from './ai'
@@ -26,6 +27,7 @@ import {
 } from './shortcuts'
 import { type AppStore, applyNativeTheme } from './store'
 import { applyPresence, isHideFromCaptureAllowed, refreshTray, setHideFromCaptureAllowed, setSignedInReady } from './presence'
+import { popupAppMenu } from './app-menu'
 import { moveToPreset, nudgeWindow } from './window-position'
 import {
   applyWindowChrome,
@@ -40,7 +42,7 @@ import {
   setHideFromCapture,
   setWindowMode,
 } from './windows'
-import { beginOverlayDrag, cancelOverlayDrag } from './overlay'
+import { beginOverlayDrag, cancelOverlayDrag, withOverlayPassthrough, withOverlayPassthroughAsync } from './overlay'
 
 let abortController: AbortController | null = null
 let locked = false
@@ -88,6 +90,11 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   })
   ipcMain.handle(CHANNELS.windowSetSignedInReady, (_event, ready: boolean) => {
     setSignedInReady(Boolean(ready))
+  })
+  ipcMain.handle(CHANNELS.windowPopupAppMenu, (event, opts: AppMenuPopup) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? getMainWindow()
+    if (!win || win.isDestroyed()) return
+    popupAppMenu(win, store, opts)
   })
   ipcMain.on(CHANNELS.overlayDragStart, () => {
     beginOverlayDrag()
@@ -198,6 +205,12 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
     return data.resume
   })
   ipcMain.handle(CHANNELS.profileDeleteResume, (_event, userId: string) => store.deleteUserResume(userId))
+  ipcMain.handle(CHANNELS.sessionSaveResume, async (_event, sessionId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) =>
+    store.saveSessionResume(sessionId, file),
+  )
+  ipcMain.handle(CHANNELS.sessionCopyDefaultResume, (_event, userId: string, sessionId: string) =>
+    store.copyDefaultResumeToSession(userId, sessionId),
+  )
 
   ipcMain.on(CHANNELS.aiChat, async (event, request: ChatRequest) => {
     abortController?.abort()
@@ -249,6 +262,23 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
     app.quit()
   })
 
+  ipcMain.on(CHANNELS.appConfirm, (event, message: string) => {
+    const win = getMainWindow()
+    event.returnValue = withOverlayPassthrough(() => {
+      const options: Electron.MessageBoxSyncOptions = {
+        type: 'question',
+        buttons: ['Cancel', 'OK'],
+        defaultId: 1,
+        cancelId: 0,
+        noLink: true,
+        message: String(message || 'Are you sure?'),
+      }
+      const result =
+        win && !win.isDestroyed() ? dialog.showMessageBoxSync(win, options) : dialog.showMessageBoxSync(options)
+      return result === 1
+    })
+  })
+
   ipcMain.handle(CHANNELS.appOpenExternal, async (_event, url: string) => {
     if (!/^https?:/i.test(url)) return
     await shell.openExternal(url)
@@ -263,7 +293,9 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
       ],
     }
     const win = getMainWindow()
-    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    const result = await withOverlayPassthroughAsync(() =>
+      win && !win.isDestroyed() ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options),
+    )
     if (result.canceled) return [] satisfies PickedFile[]
     const { readFile, stat } = await import('node:fs/promises')
     const files: PickedFile[] = []

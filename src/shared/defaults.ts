@@ -140,7 +140,7 @@ export const SHORTCUT_LABELS: Record<keyof ShortcutMap, string> = {
 export const SHORTCUT_DESCRIPTIONS: Record<keyof ShortcutMap, string> = {
   toggleWindow: 'Bring Tudso up or hide it completely.',
   toggleCollapsed: 'Shrink to the title bar, or restore the full window.',
-  newConversation: 'Start a new session. Disabled while one is already live.',
+  newConversation: 'Start a new session. Asks for name, resume, and preferences first. Disabled while one is already live.',
   endSession: 'Stop the live session, copilot, and generation.',
   nextConversation: 'Jump to the next session in the list.',
   previousConversation: 'Jump to the previous session in the list.',

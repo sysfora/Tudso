@@ -17,7 +17,7 @@ import {
 import type { AppStore } from './store'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const TITLEBAR_HEIGHT = 56
+const TITLEBAR_HEIGHT = 58
 const MIN_WIDTH = 400
 const MIN_HEIGHT = 480
 

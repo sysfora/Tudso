@@ -6,6 +6,9 @@ import type {
   Attachment,
   ChatMessage,
   Conversation,
+  LocalProfile,
+  LocalResumeMeta,
+  SessionContext,
   Settings,
   SettingsSection,
   ShortcutId,
@@ -16,7 +19,7 @@ import { create } from 'zustand'
 import { api } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import { useAuthStore } from '@/store/auth-store'
-import { toPromptProfile } from '@/types/api'
+import { snapshotLocalProfile, toPromptProfile } from '@/types/api'
 import { MAX_MEMORIES, mergeAutoMemories, shouldLearnFromMessage, storedUserContent } from '@shared/memory'
 import { codeFromAnswer, markdownToPlain } from '@/lib/clipboard-format'
 import { createId, isPlaceholderSessionTitle, MAX_SESSION_TITLE, sessionTitleFromChat } from '@/lib/format'
@@ -51,6 +54,8 @@ interface AppState {
   runningSessionId: string | null
   sessionStartedAt: number | null
   sessionEndedAtById: Record<string, number>
+  sessionSetupOpen: boolean
+  sessionSetupKey: number
 }
 
 interface AppActions {
@@ -69,6 +74,12 @@ interface AppActions {
   setShortcutsOpen: (open: boolean) => void
   checkForUpdates: () => Promise<void>
   newConversation: () => void
+  cancelSessionSetup: () => void
+  startSession: (input: {
+    profile: LocalProfile
+    usedDefaults: boolean
+    resumeFile?: { fileName: string; mimeType: string; data: ArrayBuffer }
+  }) => Promise<void>
   selectConversation: (id: string) => void
   continueSession: (id?: string) => void
   cycleConversation: (delta: number) => void
@@ -143,8 +154,32 @@ function learnFromChat(userText: string, assistantContent: string) {
     .catch(() => undefined)
 }
 
+function promptProfile(conversation?: Conversation | null) {
+  return toPromptProfile(conversation?.context?.profile ?? useAuthStore.getState().profile)
+}
+
 function trackSession() {
   void api.usage.trackSession().catch(() => undefined)
+}
+
+async function attachDefaultContext(conversation: Conversation): Promise<Conversation> {
+  if (conversation.context) return conversation
+  const userId = useAuthStore.getState().session?.userId
+  let resume: LocalResumeMeta | undefined
+  if (userId) {
+    resume = (await desktop.sessions.copyDefaultResume(userId, conversation.id)) ?? undefined
+  }
+  const next: Conversation = {
+    ...conversation,
+    context: {
+      profile: snapshotLocalProfile(useAuthStore.getState().profile),
+      resume,
+      usedDefaults: true,
+    },
+    updatedAt: Date.now(),
+  }
+  persistLocal(next)
+  return next
 }
 
 function createLocalConversation(): Conversation {
@@ -188,6 +223,8 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   runningSessionId: null,
   sessionStartedAt: null,
   sessionEndedAtById: {},
+  sessionSetupOpen: false,
+  sessionSetupKey: 0,
 
   hydrate: async () => {
     const [settings, shortcuts, lock, appVersion, blockedShortcuts, conversations] = await Promise.all([
@@ -262,6 +299,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     set({
       settingsOpen,
       settingsSection: section ?? get().settingsSection,
+      ...(settingsOpen ? { sessionSetupOpen: false } : {}),
     }),
   setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
   setWindowWidth: (windowWidth) => set({ windowWidth }),
@@ -292,25 +330,52 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   replaceShortcuts: (shortcuts) => set({ shortcuts: normalizeShortcutMap(shortcuts) }),
   setBlockedShortcuts: (blockedShortcuts) => set({ blockedShortcuts }),
 
-  newConversation: async () => {
+  newConversation: () => {
+    if (get().runningSessionId) return
+    set({
+      sessionSetupOpen: true,
+      sessionSetupKey: get().sessionSetupKey + 1,
+      settingsOpen: false,
+    })
+  },
+
+  cancelSessionSetup: () => {
+    set({ sessionSetupOpen: false })
+  },
+
+  startSession: async (input) => {
     if (get().runningSessionId) return
     const conversation = createLocalConversation()
-    persistLocal(conversation)
+    const context: SessionContext = {
+      profile: snapshotLocalProfile(input.profile),
+      usedDefaults: input.usedDefaults,
+    }
+    const userId = useAuthStore.getState().session?.userId
+    try {
+      if (input.resumeFile) {
+        context.resume = await desktop.sessions.saveResume(conversation.id, input.resumeFile)
+      } else if (input.usedDefaults && userId) {
+        context.resume = (await desktop.sessions.copyDefaultResume(userId, conversation.id)) ?? undefined
+      }
+    } catch {
+      desktop.app.notify('Resume', 'Could not save a resume for this session.')
+    }
+    const next: Conversation = { ...conversation, context }
+    persistLocal(next)
     trackSession()
     set({
-      conversations: upsert(get().conversations, conversation),
-      activeId: conversation.id,
-      composer: '',
-      attachments: [],
+      conversations: upsert(get().conversations, next),
+      activeId: next.id,
       settingsOpen: false,
-      runningSessionId: conversation.id,
+      sessionSetupOpen: false,
+      runningSessionId: next.id,
       sessionStartedAt: Date.now(),
     })
   },
 
   selectConversation: (id) => {
     if (get().runningSessionId && get().runningSessionId !== id) return
-    set({ activeId: id, settingsOpen: false })
+    set({ activeId: id, settingsOpen: false, sessionSetupOpen: false })
     void get().loadMessages(id)
   },
 
@@ -318,18 +383,23 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     const target = id ?? get().activeId
     if (get().runningSessionId && get().runningSessionId !== target) return
     if (!target) {
-      void get().newConversation()
+      get().newConversation()
       return
     }
     const conversation = get().conversations.find((item) => item.id === target)
     if (!conversation) return
-    set({
-      activeId: target,
-      runningSessionId: target,
-      sessionStartedAt: get().runningSessionId === target ? get().sessionStartedAt : Date.now(),
-      settingsOpen: false,
+    void attachDefaultContext(conversation).then((next) => {
+      if (get().runningSessionId && get().runningSessionId !== next.id) return
+      set({
+        conversations: upsert(get().conversations, next),
+        activeId: next.id,
+        runningSessionId: next.id,
+        sessionStartedAt: get().runningSessionId === next.id ? get().sessionStartedAt : Date.now(),
+        settingsOpen: false,
+        sessionSetupOpen: false,
+      })
+      void get().loadMessages(next.id)
     })
-    void get().loadMessages(target)
   },
 
   cycleConversation: (delta) => {
@@ -338,7 +408,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     if (!conversations.length) return
     const index = Math.max(0, conversations.findIndex((item) => item.id === activeId))
     const next = conversations[(index + delta + conversations.length) % conversations.length]
-    if (next) set({ activeId: next.id, settingsOpen: false })
+    if (next) set({ activeId: next.id, settingsOpen: false, sessionSetupOpen: false })
   },
 
   deleteConversation: async (id) => {
@@ -398,6 +468,16 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     const content = (text ?? (fromRealtime ? '' : state.composer)).trim()
     if (!fromScreen && !fromRealtime && !content && state.attachments.length === 0) return
     if (fromRealtime && !isActionableTranscript(audioText)) return
+    if (!state.runningSessionId) {
+      get().newConversation()
+      return
+    }
+
+    const conversation = state.conversations.find((item) => item.id === state.runningSessionId)
+    if (!conversation) {
+      get().newConversation()
+      return
+    }
 
     const captureScreen = fromScreen || (!fromScreen && !fromRealtime && state.screenContext)
     const displayContent = fromRealtime
@@ -422,16 +502,6 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
         desktop.app.notify('Answer from screen', 'Screen capture failed or was denied.')
         return
       }
-    }
-
-    let conversation = state.runningSessionId
-      ? state.conversations.find((item) => item.id === state.runningSessionId)
-      : state.conversations.find((item) => item.id === get().activeId)
-    if (!conversation) {
-      if (state.runningSessionId) return
-      conversation = createLocalConversation()
-      persistLocal(conversation)
-      trackSession()
     }
 
     const history = chatHistory(conversation.messages)
@@ -490,7 +560,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
     try {
       const model = resolveChatModel(get().settings.model)
-      const profile = toPromptProfile(useAuthStore.getState().profile)
+      const profile = promptProfile(next)
       const memories = promptMemories()
       const stream = image
         ? await api.ai.vision(image, apiMessage, history, abortController.signal, model, profile, memories)
@@ -586,7 +656,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
         chatHistory(prior),
         abortController.signal,
         resolveChatModel(get().settings.model),
-        toPromptProfile(useAuthStore.getState().profile),
+        promptProfile(next),
         promptMemories(),
       )
       if (!stream) throw new Error('No response stream')
@@ -663,7 +733,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   clearConversations: async () => {
     await desktop.conversations.clear()
-    set({ conversations: [], activeId: null, runningSessionId: null, sessionStartedAt: null, sessionEndedAtById: {} })
+    set({ conversations: [], activeId: null, runningSessionId: null, sessionStartedAt: null, sessionEndedAtById: {}, sessionSetupOpen: false })
   },
 
   deleteLocalData: async () => {
@@ -677,6 +747,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       runningSessionId: null,
       sessionStartedAt: null,
       sessionEndedAtById: {},
+      sessionSetupOpen: false,
       composer: '',
       attachments: [],
       apiKeyConfigured: false,

@@ -11,7 +11,7 @@ export function GuestWindowChrome() {
     <header
       className={
         windowCollapsed
-          ? 'flex h-14 shrink-0 items-center justify-end px-2.5'
+          ? 'flex h-full min-h-0 flex-1 items-center justify-end px-2.5'
           : 'absolute inset-x-0 top-0 z-20 flex h-11 items-center justify-end px-2.5'
       }
     >

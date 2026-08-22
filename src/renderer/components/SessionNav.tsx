@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Copy, FileCode, Play, Plus, Square, Trash2, X } from 'lucide-react'
+import { Check, Copy, FileCode, Play, Square, Trash2, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
-import { APP_NAME } from '@shared/defaults'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { desktop } from '@/lib/desktop'
 import { formatElapsed, MAX_SESSION_TITLE } from '@/lib/format'
@@ -19,10 +19,9 @@ export function SessionNav() {
   const conversation = useAppStore(activeConversation)
   const runningSessionId = useAppStore((state) => state.runningSessionId)
   const sessionStartedAt = useAppStore((state) => state.sessionStartedAt)
-  const generatingId = useAppStore((state) => state.generatingId)
+  const sessionSetupOpen = useAppStore((state) => state.sessionSetupOpen)
   const shortcuts = useAppStore((state) => state.shortcuts)
   const newConversation = useAppStore((state) => state.newConversation)
-  const continueSession = useAppStore((state) => state.continueSession)
   const endSession = useAppStore((state) => state.endSession)
   const renameConversation = useAppStore((state) => state.renameConversation)
   const deleteConversation = useAppStore((state) => state.deleteConversation)
@@ -62,18 +61,33 @@ export function SessionNav() {
   }
 
   const hasAnswer = Boolean(conversation?.messages.some((item) => item.role === 'assistant' && item.content.trim()))
-  const status = !conversation
-    ? 'No session'
-    : live
-      ? generatingId
-        ? 'Answering'
-        : 'Live'
-      : 'Ready'
+
+  if (!live && !sessionSetupOpen) {
+    return (
+      <Button
+        className="no-drag h-8 gap-2 px-3.5"
+        onClick={() => newConversation()}
+        aria-label={`Start session${shortcuts.newConversation ? `, ${hint(shortcuts.newConversation)}` : ''}`}
+      >
+        <Play className="h-3.5 w-3.5 fill-current" />
+        Start session
+      </Button>
+    )
+  }
+
+  if (sessionSetupOpen && !live) {
+    return (
+      <div className="no-drag flex h-8 items-center gap-2 rounded-md bg-raised px-3">
+        <Play className="h-3.5 w-3.5 fill-current text-accent" />
+        <span className="text-[13px] font-medium">New session</span>
+      </div>
+    )
+  }
 
   if (editing && conversation) {
     return (
       <form
-        className="no-drag flex h-8 min-w-0 max-w-[min(100%,320px)] items-center gap-1 rounded-md bg-surface-2 px-1"
+        className="no-drag flex h-8 min-w-0 max-w-[min(100%,320px)] items-center gap-1 rounded-md bg-raised px-1"
         onSubmit={(event) => {
           event.preventDefault()
           commitRename()
@@ -124,53 +138,33 @@ export function SessionNav() {
   }
 
   return (
-    <div className="no-drag flex min-w-0 max-w-[min(100%,320px)] items-center gap-1">
+    <div className="no-drag flex h-8 min-w-0 max-w-[min(100%,340px)] items-center rounded-md bg-raised">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label={conversation ? `Session: ${conversation.title}` : 'Sessions'}
-            className={cn(
-              'flex h-8 min-w-0 max-w-full items-center gap-2 rounded-md px-2.5 text-left transition-colors duration-150',
-              live ? 'bg-raised hover:bg-lift' : 'bg-surface-2 hover:bg-lift',
-            )}
+            aria-label={`Session: ${conversation?.title ?? 'Live'}${sessionStartedAt ? `, ${formatElapsed(now - sessionStartedAt)}` : ''}`}
+            className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 text-left transition-colors duration-150 hover:bg-lift"
           >
-            <span
-              className={cn('h-1.5 w-1.5 shrink-0 rounded-full', live ? 'bg-accent-fill' : 'bg-muted')}
-              aria-hidden
-            />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-accent-fill" aria-hidden />
             <span className="min-w-0 truncate text-[13px] font-medium">
-              {conversation?.title || APP_NAME}
+              {conversation?.title || 'Session'}
             </span>
-            {live && sessionStartedAt ? (
-              <span className="shrink-0 text-[11px] tabular-nums text-muted">
+            {sessionStartedAt ? (
+              <span className="shrink-0 rounded-sm bg-surface px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted">
                 {formatElapsed(now - sessionStartedAt)}
               </span>
-            ) : (
-              <span className="shrink-0 text-[11px] text-muted">{status}</span>
-            )}
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" />
+            ) : null}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="center" side="bottom" className="w-[220px]">
-          {live ? (
-            <DropdownMenuItem
-              onSelect={stopLive}
-            >
-              <span className="flex items-center gap-2">
-                <Square className="h-3.5 w-3.5 fill-current" />
-                End session
-              </span>
-              <span className="ml-auto text-[11px] text-muted">{hint(shortcuts.endSession)}</span>
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem onSelect={() => continueSession(conversation?.id)}>
-              <span className="flex items-center gap-2">
-                <Play className="h-3.5 w-3.5 fill-current" />
-                {conversation ? 'Continue session' : 'Start session'}
-              </span>
-            </DropdownMenuItem>
-          )}
+          <DropdownMenuItem onSelect={stopLive}>
+            <span className="flex items-center gap-2">
+              <Square className="h-3.5 w-3.5 fill-current" />
+              End session
+            </span>
+            <span className="ml-auto text-[11px] text-muted">{hint(shortcuts.endSession)}</span>
+          </DropdownMenuItem>
           {conversation ? (
             <DropdownMenuItem onSelect={() => setEditing(true)}>Rename</DropdownMenuItem>
           ) : null}
@@ -191,40 +185,38 @@ export function SessionNav() {
               </DropdownMenuItem>
             </>
           ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={live} onSelect={() => newConversation()}>
-            <span className="flex items-center gap-2">
-              <Plus className="h-3.5 w-3.5 text-muted" />
-              New session
-            </span>
-            <span className="ml-auto text-[11px] text-muted">{hint(shortcuts.newConversation)}</span>
-          </DropdownMenuItem>
-          {conversation && !live ? (
-            <DropdownMenuItem
-              className="text-danger data-[highlighted]:text-danger"
-              onSelect={() => {
-                if (!window.confirm('Delete this session?')) return
-                void deleteConversation(conversation.id)
-              }}
-            >
-              <span className="flex items-center gap-2">
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete session
-              </span>
-            </DropdownMenuItem>
+          {conversation ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-danger data-[highlighted]:text-danger"
+                onSelect={() => {
+                  if (!window.confirm('Delete this session?')) return
+                  stopLive()
+                  void deleteConversation(conversation.id)
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete session
+                </span>
+              </DropdownMenuItem>
+            </>
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-      {live ? (
-        <button
-          type="button"
-          aria-label="End session"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-2 text-fg transition-colors duration-150 hover:bg-danger/20 hover:text-danger"
-          onClick={stopLive}
-        >
-          <Square className="h-2.5 w-2.5 fill-current" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        aria-label="End session"
+        title={hint(shortcuts.endSession)}
+        className={cn(
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted',
+          'transition-colors duration-150 hover:bg-danger/20 hover:text-danger',
+        )}
+        onClick={stopLive}
+      >
+        <Square className="h-2.5 w-2.5 fill-current" />
+      </button>
     </div>
   )
 }

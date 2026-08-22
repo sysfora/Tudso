@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { mkdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, rm, unlink, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import type { LocalProfile, LocalResumeMeta, LocalUserData } from '../shared/types'
 
@@ -57,4 +57,50 @@ export async function removeResumeFile(userId: string, storedName?: string): Pro
 
 export async function removeAllProfiles(): Promise<void> {
   await rm(join(app.getPath('userData'), 'profiles'), { recursive: true, force: true })
+}
+
+export function sessionResumeDir(sessionId: string): string {
+  return join(app.getPath('userData'), 'session-resumes', safeUserId(sessionId))
+}
+
+export async function writeSessionResumeFile(
+  sessionId: string,
+  fileName: string,
+  mimeType: string,
+  data: Buffer,
+): Promise<LocalResumeMeta> {
+  const ext = ALLOWED_EXT.has(extname(fileName).toLowerCase()) ? extname(fileName).toLowerCase() : '.bin'
+  const storedName = `resume${ext}`
+  const dir = sessionResumeDir(sessionId)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, storedName), data)
+  return {
+    fileName,
+    mimeType: mimeType || 'application/octet-stream',
+    storedName,
+  }
+}
+
+export async function copyUserResumeToSession(
+  userId: string,
+  sessionId: string,
+  meta: LocalResumeMeta,
+): Promise<LocalResumeMeta | undefined> {
+  const source = join(profileDir(userId), meta.storedName)
+  const dir = sessionResumeDir(sessionId)
+  await mkdir(dir, { recursive: true })
+  try {
+    await copyFile(source, join(dir, meta.storedName))
+    return { ...meta }
+  } catch {
+    return undefined
+  }
+}
+
+export async function removeSessionResume(sessionId: string): Promise<void> {
+  await rm(sessionResumeDir(sessionId), { recursive: true, force: true })
+}
+
+export async function removeAllSessionResumes(): Promise<void> {
+  await rm(join(app.getPath('userData'), 'session-resumes'), { recursive: true, force: true })
 }

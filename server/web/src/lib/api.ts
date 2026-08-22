@@ -101,7 +101,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  google: () => request<{ url: string }>('/auth/web/oauth', { method: 'POST', body: JSON.stringify({}) }),
+  google: (state?: string) =>
+    request<{ url: string }>('/auth/web/oauth', { method: 'POST', body: JSON.stringify(state ? { state } : {}) }),
   logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST' }),
   dashboard: () => request<DashboardPayload>('/me/dashboard'),
   account: () => request<Account>('/me/account'),
