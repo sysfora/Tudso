@@ -36,7 +36,8 @@ linux:
   category: Utility
   synopsis: A lightweight floating desktop AI assistant
   desktop:
-    StartupWMClass: tudso
+    entry:
+      StartupWMClass: tudso
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
