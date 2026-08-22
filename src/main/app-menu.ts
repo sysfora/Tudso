@@ -5,6 +5,7 @@ import type { AppCommand, AppMenuPopup, ShortcutId, ShortcutMap, WindowMode } fr
 import type { AppStore } from './store'
 import { sendToRenderer } from './windows'
 import { beginOverlayPassthrough, endOverlayPassthrough } from './overlay'
+import { isMac } from './platform'
 
 const POSITIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 const SIZES: { id: WindowMode; label: string; shortcut: ShortcutId; command: AppCommand }[] = [
@@ -19,6 +20,42 @@ function accelerator(shortcuts: ShortcutMap, id: ShortcutId) {
 
 function run(command: AppCommand) {
   sendToRenderer(CHANNELS.appCommand, command)
+}
+
+export function installApplicationMenu() {
+  if (!isMac) {
+    Menu.setApplicationMenu(null)
+    return
+  }
+
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' },
+        ],
+      },
+    ]),
+  )
 }
 
 export function popupAppMenu(win: BrowserWindow, store: AppStore, opts: AppMenuPopup) {

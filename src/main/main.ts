@@ -1,6 +1,7 @@
-import { app, Menu } from 'electron'
+import { app } from 'electron'
 import { APP_ID, APP_NAME } from '../shared/defaults'
 import { flushPendingAuthSession, handleAuthCallback, registerProtocol } from './auth'
+import { installApplicationMenu } from './app-menu'
 import { CredentialStore } from './credentials'
 import { registerIpc } from './ipc'
 import { registerShortcuts, unregisterShortcuts } from './shortcuts'
@@ -12,9 +13,11 @@ import {
 } from './windows'
 import { applyAppIcon } from './icon'
 import { initPresence } from './presence'
+import { applyLoginItem, isLinux, isWindows } from './platform'
 
 const store = new AppStore()
 const credentials = new CredentialStore()
+let queuedAuthUrl: string | undefined
 
 function findProtocolUrl(argv: string[]): string | undefined {
   return argv
@@ -39,11 +42,28 @@ async function handleDeepLink(url: string) {
   if (session) showMainWindow()
 }
 
+function queueOrHandleDeepLink(url: string) {
+  if (!app.isReady()) {
+    queuedAuthUrl = url
+    return
+  }
+  void handleDeepLink(url)
+}
+
 app.setName(APP_NAME)
-app.setAppUserModelId(APP_ID)
+if (isWindows) app.setAppUserModelId(APP_ID)
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
+if (isLinux) {
+  app.commandLine.appendSwitch('enable-transparent-visuals')
+  app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
+}
 registerProtocol()
+
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  queueOrHandleDeepLink(url)
+})
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
@@ -57,18 +77,11 @@ if (!gotLock) {
 }
 
 app.whenReady().then(async () => {
-  app.on('open-url', (_event, url) => {
-    void handleDeepLink(url)
-  })
-
   await store.init()
   await credentials.init()
 
   applyNativeTheme(store.getSettings().theme)
-  app.setLoginItemSettings({
-    openAtLogin: store.getSettings().launchAtStartup,
-    enabled: store.getSettings().launchAtStartup,
-  })
+  applyLoginItem(store.getSettings().launchAtStartup)
 
   const window = createMainWindow(store)
   applyAppIcon()
@@ -79,9 +92,10 @@ app.whenReady().then(async () => {
   initPresence(store)
 
   registerIpc(store, credentials)
-  Menu.setApplicationMenu(null)
+  installApplicationMenu()
 
-  const startupUrl = findProtocolUrl(process.argv)
+  const startupUrl = queuedAuthUrl ?? findProtocolUrl(process.argv)
+  queuedAuthUrl = undefined
   if (startupUrl) await handleDeepLink(startupUrl)
 })
 

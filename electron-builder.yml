@@ -10,7 +10,7 @@ files:
 asarUnpack:
   - node_modules/koffi/**/*
 extraResources:
-  - from: public/icon.png
+  - from: server/public/icon.png
     to: icon.png
   - from: public/icon.ico
     to: icon.ico
@@ -18,12 +18,25 @@ win:
   icon: public/icon.ico
   target: nsis
 mac:
-  icon: public/icon.png
+  icon: server/public/icon.png
   target: dmg
   category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  darkModeSupport: true
+  extendInfo:
+    NSMicrophoneUsageDescription: Tudso uses the microphone for voice input and live copilot.
+    NSCameraUsageDescription: Tudso may use the camera if you share it.
+    NSAudioCaptureUsageDescription: Tudso captures system audio for live copilot.
 linux:
-  icon: public/icon.png
+  icon: server/public/icon.png
   target: AppImage
+  category: Utility
+  synopsis: A lightweight floating desktop AI assistant
+  desktop:
+    StartupWMClass: tudso
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

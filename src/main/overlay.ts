@@ -2,6 +2,7 @@ import { BrowserWindow, clipboard, screen } from 'electron'
 import { createRequire } from 'node:module'
 import { CHANNELS } from '../shared/channels'
 import type { OverlayKeyEvent, OverlayPointerEvent } from '../shared/types'
+import { isMac, isWindows, usesNativeOverlay } from './platform'
 
 const WM_KEYDOWN = 0x0100
 const WM_KEYUP = 0x0101
@@ -115,7 +116,7 @@ let overlayPassthrough = 0
 const mods = { shift: false, ctrl: false, alt: false, meta: false, caps: false }
 
 function loadNative(): NativeApi | null {
-  if (process.platform !== 'win32') return null
+  if (!isWindows) return null
   if (native !== undefined) return native
   try {
     const require = createRequire(import.meta.url)
@@ -692,7 +693,7 @@ export function isOverlayKeyboardActive() {
 }
 
 export function ensureNoActivate(win: BrowserWindow) {
-  if (process.platform !== 'win32' || win.isDestroyed()) return
+  if (!isWindows || win.isDestroyed()) return
   const api = loadNative()
   if (!api) return
   try {
@@ -707,7 +708,7 @@ export function ensureNoActivate(win: BrowserWindow) {
 }
 
 function preventActivationOnClick(win: BrowserWindow) {
-  if (process.platform !== 'win32' || win.isDestroyed()) return
+  if (!isWindows || win.isDestroyed()) return
   if (mouseActivateWindow === win) return
   clearMouseActivateHook()
   mouseActivateWindow = win
@@ -735,16 +736,42 @@ function clearMouseActivateHook() {
   }
 }
 
+export function raiseFloatingWindow(win: BrowserWindow) {
+  if (win.isDestroyed()) return
+  try {
+    if (isMac) win.setAlwaysOnTop(true, 'floating', 1)
+    else win.setAlwaysOnTop(true)
+  } catch {
+    try {
+      win.setAlwaysOnTop(true)
+    } catch {
+      undefined
+    }
+  }
+  try {
+    win.moveTop()
+  } catch {
+    undefined
+  }
+}
+
 export function applyOverlayWindowStyle(win: BrowserWindow) {
   win.setSkipTaskbar(true)
-  win.setFocusable(false)
   win.webContents.setBackgroundThrottling(false)
-  preventActivationOnClick(win)
   try {
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   } catch {
     undefined
   }
+
+  if (!usesNativeOverlay()) {
+    win.setFocusable(true)
+    raiseFloatingWindow(win)
+    return
+  }
+
+  win.setFocusable(false)
+  preventActivationOnClick(win)
   ensureNoActivate(win)
   if (!overlayDragCssKey) {
     void win.webContents
@@ -778,7 +805,7 @@ export function clearOverlayWindowStyle(win: BrowserWindow) {
 }
 
 export function startOverlayKeyboard(win: BrowserWindow): boolean {
-  if (process.platform !== 'win32') {
+  if (!usesNativeOverlay()) {
     keyboardHookOk = false
     return false
   }

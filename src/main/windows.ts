@@ -9,11 +9,13 @@ import {
   applyOverlayWindowStyle,
   clearOverlayWindowStyle,
   ensureNoActivate,
+  raiseFloatingWindow,
   setWindowBoundsNoActivate,
   setWindowPositionNoActivate,
   showWithoutActivating,
   startOverlayKeyboard,
 } from './overlay'
+import { isMac, isWindows, usesNativeOverlay } from './platform'
 import type { AppStore } from './store'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -73,8 +75,9 @@ export function createMainWindow(store: AppStore) {
     alwaysOnTop: false,
     skipTaskbar: true,
     focusable: true,
-    ...(process.platform === 'win32' ? { type: 'toolbar' as const } : {}),
-    ...(process.platform === 'darwin' ? { type: 'panel' as const, hiddenInMissionControl: true } : {}),
+    acceptFirstMouse: true,
+    ...(isWindows ? { type: 'toolbar' as const } : {}),
+    ...(isMac ? { type: 'panel' as const, hiddenInMissionControl: true } : {}),
     icon: appIconPath() ?? undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -93,12 +96,11 @@ export function createMainWindow(store: AppStore) {
   setHideFromCapture(settings.hideFromCapture)
 
   const session = win.webContents.session
+  const allowedPermissions = new Set(['media', 'display-capture', 'clipboard-sanitized-write', 'fullscreen'])
   session.setPermissionRequestHandler((_contents, permission, callback) => {
-    callback(permission === 'media' || permission === 'display-capture' || permission === 'clipboard-sanitized-write')
+    callback(allowedPermissions.has(permission))
   })
-  session.setPermissionCheckHandler((_contents, permission) => {
-    return permission === 'media' || permission === 'clipboard-sanitized-write'
-  })
+  session.setPermissionCheckHandler((_contents, permission) => allowedPermissions.has(permission))
 
   win.webContents.setBackgroundThrottling(false)
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -154,7 +156,11 @@ export function createMainWindow(store: AppStore) {
   })
   win.on('blur', () => {
     if (!floatingEnabled || !win?.isVisible()) return
-    ensureNoActivate(win)
+    if (usesNativeOverlay()) {
+      ensureNoActivate(win)
+      return
+    }
+    raiseFloatingWindow(win)
   })
   screen.on('display-metrics-changed', () => {
     if (!floatingEnabled || !win || win.isDestroyed() || !win.isVisible()) return
@@ -165,7 +171,7 @@ export function createMainWindow(store: AppStore) {
     if (settings.startMinimized) return
     const current = getMainWindow()
     if (!current || current.isDestroyed()) return
-    if (floatingEnabled) showWithoutActivating(current)
+    if (floatingEnabled) showMainWindow()
     else current.show()
   })
 
@@ -189,8 +195,14 @@ export function showMainWindow() {
   if (!win || win.isDestroyed()) return
   if (win.isMinimized()) win.restore()
   applyFloatingChrome()
+  if (floatingEnabled && usesNativeOverlay()) {
+    showWithoutActivating(win)
+    return
+  }
   if (floatingEnabled) {
     showWithoutActivating(win)
+    raiseFloatingWindow(win)
+    win.focus()
     return
   }
   win.show()

@@ -26,6 +26,7 @@ import {
   suspendShortcuts,
 } from './shortcuts'
 import { type AppStore, applyNativeTheme } from './store'
+import { applyLoginItem } from './platform'
 import { applyPresence, isHideFromCaptureAllowed, refreshTray, setHideFromCaptureAllowed, setSignedInReady } from './presence'
 import { popupAppMenu } from './app-menu'
 import { moveToPreset, nudgeWindow } from './window-position'
@@ -142,7 +143,7 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
       applyWindowChrome(settings.theme, settings.transparency)
     }
     if (settings.launchAtStartup !== previous.launchAtStartup) {
-      app.setLoginItemSettings({ openAtLogin: settings.launchAtStartup, enabled: settings.launchAtStartup })
+      applyLoginItem(settings.launchAtStartup)
     }
     if (
       settings.showInTaskbar !== previous.showInTaskbar ||

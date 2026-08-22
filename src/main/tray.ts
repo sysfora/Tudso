@@ -26,6 +26,7 @@ export function createTray(
   tray = new Tray(icon)
   tray.setToolTip(APP_NAME)
   tray.on('click', () => toggleMainWindow())
+  tray.on('double-click', () => showMainWindow())
 
   refreshMenu = () => {
     const settings = getSettings()

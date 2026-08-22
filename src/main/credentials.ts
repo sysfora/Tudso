@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import type { ApiKeyStatus, AuthSession } from '../shared/types'
+import { isLinux } from './platform'
 
 interface SecretFile {
   apiKey?: string
@@ -28,7 +29,7 @@ export class CredentialStore {
   getApiKeyStatus(): ApiKeyStatus {
     return {
       configured: Boolean(this.memory.apiKey),
-      encrypted: safeStorage.isEncryptionAvailable(),
+      encrypted: encryptionAvailable(),
     }
   }
 
@@ -93,10 +94,10 @@ export class CredentialStore {
   private async load() {
     try {
       const raw = await fs.readFile(this.filePath, 'utf8')
-      const parsed = JSON.parse(raw) as { payload?: string }
+      const parsed = JSON.parse(raw) as { payload?: string; encrypted?: boolean }
       if (!parsed.payload) return
-      if (!safeStorage.isEncryptionAvailable()) return
-      const json = safeStorage.decryptString(Buffer.from(parsed.payload, 'base64'))
+      const json = decodePayload(parsed.payload, parsed.encrypted !== false)
+      if (!json) return
       const secrets = JSON.parse(json) as SecretFile
       this.memory = {
         apiKey: secrets.apiKey,
@@ -111,10 +112,42 @@ export class CredentialStore {
 
   private async persist() {
     await fs.mkdir(path.dirname(this.filePath), { recursive: true })
-    if (!safeStorage.isEncryptionAvailable()) {
-      throw new Error('Operating system encryption is unavailable on this device.')
+    const json = JSON.stringify(this.memory)
+    if (encryptionAvailable()) {
+      const payload = safeStorage.encryptString(json).toString('base64')
+      await fs.writeFile(this.filePath, JSON.stringify({ payload, encrypted: true }), 'utf8')
+      return
     }
-    const payload = safeStorage.encryptString(JSON.stringify(this.memory)).toString('base64')
-    await fs.writeFile(this.filePath, JSON.stringify({ payload }), 'utf8')
+    await fs.writeFile(
+      this.filePath,
+      JSON.stringify({ payload: Buffer.from(json, 'utf8').toString('base64'), encrypted: false }),
+      'utf8',
+    )
+  }
+}
+
+function encryptionAvailable() {
+  if (safeStorage.isEncryptionAvailable()) return true
+  if (!isLinux) return false
+  try {
+    safeStorage.setUsePlainTextEncryption(true)
+  } catch {
+    return false
+  }
+  return safeStorage.isEncryptionAvailable()
+}
+
+function decodePayload(payload: string, encrypted: boolean) {
+  if (encrypted && encryptionAvailable()) {
+    try {
+      return safeStorage.decryptString(Buffer.from(payload, 'base64'))
+    } catch {
+      undefined
+    }
+  }
+  try {
+    return Buffer.from(payload, 'base64').toString('utf8')
+  } catch {
+    return null
   }
 }

@@ -1,8 +1,9 @@
-import { desktopCapturer, screen } from 'electron'
+import { desktopCapturer, screen, systemPreferences } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { isMac } from './platform'
 import { excludeWindowFromCapture, restoreOverlayAfterCapture, restoreWindowAfterCapture } from './windows'
 
 function delay(ms: number) {
@@ -20,8 +21,19 @@ function captureThumbnailSize() {
   }
 }
 
+export async function ensureCaptureAccess() {
+  if (!isMac) return
+  try {
+    const mic = systemPreferences.getMediaAccessStatus('microphone')
+    if (mic !== 'granted') await systemPreferences.askForMediaAccess('microphone')
+  } catch {
+    undefined
+  }
+}
+
 export async function captureScreen(): Promise<string | null> {
   try {
+    await ensureCaptureAccess()
     const { display, width, height } = captureThumbnailSize()
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
@@ -50,6 +62,7 @@ export async function captureScreenWithoutApp(keepExcluded = false): Promise<str
 
 export async function captureActiveWindow(): Promise<string | null> {
   try {
+    await ensureCaptureAccess()
     const { width, height } = captureThumbnailSize()
     const sources = await desktopCapturer.getSources({
       types: ['window'],

@@ -15,6 +15,7 @@ interface AuthState {
 
 let activeAuth: AuthState | null = null
 const SERVER_URL = config.serverUrl
+const SCHEME = 'tudso'
 
 export async function startLogin(deviceId: string, platform: string, appVersion: string): Promise<{ url: string; state: string }> {
   const response = await fetch(`${SERVER_URL}/auth/desktop/start`, {
@@ -89,13 +90,12 @@ export async function clearSession(credentials: CredentialStore): Promise<void> 
 }
 
 export function registerProtocol(): void {
-  const scheme = 'tudso'
   if (process.defaultApp) {
     const appPath = path.resolve(process.argv[1] ?? '.')
-    app.removeAsDefaultProtocolClient(scheme)
-    app.removeAsDefaultProtocolClient(scheme, process.execPath, [process.argv[1] ?? '.'])
-    app.setAsDefaultProtocolClient(scheme, process.execPath, [appPath])
+    app.removeAsDefaultProtocolClient(SCHEME)
+    app.removeAsDefaultProtocolClient(SCHEME, process.execPath, [process.argv[1] ?? '.'])
+    app.setAsDefaultProtocolClient(SCHEME, process.execPath, [appPath])
     return
   }
-  app.setAsDefaultProtocolClient(scheme)
+  app.setAsDefaultProtocolClient(SCHEME)
 }
