@@ -151,6 +151,7 @@ export function createMainWindow(store: AppStore) {
 
   win.on('show', () => {
     applyFloatingChrome()
+    if (!win || win.isDestroyed()) return
     applyNativeRoundedCorners(win)
   })
   win.on('blur', () => {

@@ -6,37 +6,18 @@ import featureStats from '@/assets/feature-stats.jpg'
 import featureNewest from '@/assets/feature-newest.jpg'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
+import { MarketingShell } from '@/components/MarketingShell'
 import { PricingCards } from '@/components/PricingCards'
-import { Leaf, ShieldCheck, Upload, Wand2, Send, LogIn, ArrowRight, BookOpen } from 'lucide-react'
-
-const displayFont = { fontFamily: 'Fraunces, Georgia, serif' }
-
-function NavActions() {
-  return (
-    <div className="flex items-center gap-2 sm:gap-3">
-      <Button variant="ghost" size="sm" className="sm:h-10 sm:px-4" asChild>
-        <Link to="/login">
-          <LogIn className="h-4 w-4" />
-          Login
-        </Link>
-      </Button>
-      <Button size="sm" className="sm:h-10 sm:px-4" asChild>
-        <Link to="/login?mode=register">
-          Start applying
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </Button>
-    </div>
-  )
-}
+import { displayFont } from '@/lib/brand'
+import { Leaf, ShieldCheck, Upload, Wand2, Send, BookOpen, Download } from 'lucide-react'
 
 function HeroActions() {
   return (
     <div className="mt-6 flex flex-col sm:flex-row flex-wrap justify-center gap-3 sm:mt-8">
       <Button size="lg" asChild>
-        <Link to="/login?mode=register">
-          Start applying
-          <ArrowRight className="h-4 w-4" />
+        <Link to="/download">
+          <Download className="h-4 w-4" />
+          Download Tudso
         </Link>
       </Button>
       <Button size="lg" variant="outline" asChild>
@@ -71,12 +52,7 @@ export default function Landing() {
   ]
 
   return (
-    <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-5 sm:px-5 sm:py-6">
-        <div className="text-xl font-black tracking-tight sm:text-2xl" style={displayFont}>Tudso</div>
-        <NavActions />
-      </header>
-
+    <MarketingShell>
       <section className="mx-auto max-w-6xl px-4 sm:px-5">
         <div className="relative overflow-hidden rounded-3xl bg-brand-mint p-6 sm:p-8 md:p-14">
           <h1 className="text-center text-3xl font-black leading-tight sm:text-4xl md:text-6xl" style={displayFont}>
@@ -270,18 +246,6 @@ export default function Landing() {
           </Accordion>
         </div>
       </section>
-
-      <footer className="mx-auto max-w-6xl px-4 pb-8 sm:px-5 sm:pb-10">
-        <div className="rounded-3xl bg-secondary p-8 text-center sm:p-10">
-          <div className="text-2xl font-black" style={displayFont}>Tudso</div>
-          <nav className="mt-4 flex flex-col items-center gap-2 text-sm text-muted-foreground">
-            <a href="#faq">FAQ</a>
-            <a href="#">Terms of Use</a>
-            <a href="#">Privacy Policy</a>
-          </nav>
-          <div className="mt-6 text-xs text-muted-foreground">© Tudso 2026</div>
-        </div>
-      </footer>
-    </div>
+    </MarketingShell>
   )
 }

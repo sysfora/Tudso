@@ -60,6 +60,7 @@ export const config = {
   },
   storage: {
     localDir: optional('RESUME_STORAGE_DIR', 'data'),
+    releasesDir: optional('RELEASES_DIR', 'data/releases'),
   },
   updates: {
     stable: optional('LATEST_VERSION_STABLE', '0.1.0'),

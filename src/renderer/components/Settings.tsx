@@ -261,12 +261,28 @@ function GeneralSection() {
   const settings = useAppStore((state) => state.settings)
   const setSettings = useAppStore((state) => state.setSettings)
   const resetSettings = useAppStore((state) => state.resetSettings)
+  const appVersion = useAppStore((state) => state.appVersion)
+  const updateAvailable = useAppStore((state) => state.updateAvailable)
+  const latestVersion = useAppStore((state) => state.latestVersion)
+  const updateDownloadUrl = useAppStore((state) => state.updateDownloadUrl)
   const entitlement = useAuthStore((state) => state.entitlement)
   const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
   const [resetting, setResetting] = useState(false)
 
   return (
     <div>
+      <Row
+        title={updateAvailable ? `Version ${latestVersion} is available` : `Version ${appVersion}`}
+        description={updateAvailable ? 'Download the new installer from the Tudso site. It replaces the previous build.' : 'Tudso checks the site for a newer installer.'}
+      >
+        {updateAvailable && updateDownloadUrl ? (
+          <Button variant="outline" size="sm" onClick={() => void desktop.app.openExternal(updateDownloadUrl)}>
+            Download
+          </Button>
+        ) : (
+          <span className="text-[12px] text-muted">{appVersion}</span>
+        )}
+      </Row>
       <Row title="Launch at startup" description="Open Tudso when you sign in.">
         <Switch checked={settings.launchAtStartup} onCheckedChange={(value) => void setSettings({ launchAtStartup: value })} />
       </Row>

@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import Landing from './pages/Landing'
+import Download from './pages/Download'
 import Login from './pages/Login'
 import DashboardLayout from './pages/dashboard/Layout'
 import Overview from './pages/dashboard/Overview'
@@ -10,6 +11,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/download" element={<Download />} />
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<Overview />} />

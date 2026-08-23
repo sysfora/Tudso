@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
 import { attachFrontend, isFrontendDev } from './frontend.js'
+import { ensureReleasesDir, releasesDir } from './releases.js'
 import routes from './routes.js'
 import { attachRealtimeAudio } from './realtime.js'
 import { log, requestLogger } from './log.js'
@@ -53,6 +54,22 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 app.use('/brand', express.static(publicDir, { maxAge: '7d', index: false }))
 app.use(express.static(publicDir, { maxAge: '7d', index: false }))
+await ensureReleasesDir()
+app.use('/downloads', express.static(releasesDir(), {
+  index: false,
+  fallthrough: false,
+  setHeaders(res, filePath) {
+    const name = filePath.toLowerCase()
+    if (name.endsWith('.json') || name.endsWith('.yml') || name.endsWith('.yaml')) {
+      res.setHeader('Cache-Control', 'no-store')
+      return
+    }
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+    if (/\.(exe|dmg|zip|appimage|blockmap)$/i.test(filePath)) {
+      res.setHeader('Content-Disposition', `attachment; filename="${filePath.split(/[/\\]/).pop()}"`)
+    }
+  },
+}))
 app.use(requestLogger)
 
 app.use(routes)

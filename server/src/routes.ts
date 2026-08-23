@@ -14,6 +14,7 @@ import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAcco
 import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
 import { getSessionPrompt, rememberSessionPrompt, SESSION_PROMPT_REQUIRED } from './session-prompt.js'
+import { readReleaseManifest, toLatestUpdate } from './releases.js'
 import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
 import { isPaidPlan, CHECKOUT_PLANS } from './plans.js'
 import type { AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
@@ -213,19 +214,11 @@ router.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: config.app.version, env: config.app.env })
 })
 
-router.get('/updates/latest', (req, res) => {
+router.get('/updates/latest', async (req, res) => {
   const channel = (req.query.channel as 'stable' | 'beta' | 'alpha') ?? 'stable'
   const currentVersion = (req.query.currentVersion as string) ?? '0.1.0'
-  const latestVersion = config.updates[channel] ?? config.updates.stable
-  const updateAvailable = compareVersions(currentVersion, latestVersion) < 0
-  res.json({
-    channel,
-    currentVersion,
-    latestVersion,
-    updateAvailable,
-    downloadUrl: config.updates.downloadUrl,
-    releaseNotesUrl: config.updates.releaseNotesUrl,
-  })
+  const manifest = await readReleaseManifest()
+  res.json(toLatestUpdate(manifest, currentVersion, channel))
 })
 
 function html(res: Response, page: string, status = 200) {
@@ -1412,17 +1405,6 @@ async function persistVision(userId: string, _message: string, _content: string)
 function pocketbaseError(error: unknown): unknown {
   const err = error as { data?: unknown; response?: unknown; message?: string }
   return err.data ?? err.response ?? err.message ?? error
-}
-
-function compareVersions(a: string, b: string): number {
-  const partsA = a.replace(/^v/, '').split('.').map(Number)
-  const partsB = b.replace(/^v/, '').split('.').map(Number)
-  for (let i = 0; i < Math.max(partsA.length, partsB.length); i += 1) {
-    const numA = Number.isNaN(partsA[i]) ? 0 : (partsA[i] ?? 0)
-    const numB = Number.isNaN(partsB[i]) ? 0 : (partsB[i] ?? 0)
-    if (numA !== numB) return numA - numB
-  }
-  return 0
 }
 
 export default router

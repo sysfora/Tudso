@@ -22,7 +22,7 @@ export function isFrontendDev(): boolean {
 }
 
 function isAppPage(path: string): boolean {
-  return path === '/' || path === '/login' || path === '/dashboard' || path.startsWith('/dashboard/')
+  return path === '/' || path === '/login' || path === '/download' || path === '/dashboard' || path.startsWith('/dashboard/')
 }
 
 export async function attachFrontend(app: Express, httpServer: Server): Promise<void> {

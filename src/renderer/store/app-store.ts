@@ -51,6 +51,7 @@ interface AppState {
   appVersion: string
   updateAvailable: boolean
   latestVersion: string | null
+  updateDownloadUrl: string | null
   updateError: string | null
   runningSessionId: string | null
   sessionStartedAt: number | null
@@ -255,6 +256,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   appVersion: '0.1.0',
   updateAvailable: false,
   latestVersion: null,
+  updateDownloadUrl: null,
   updateError: null,
   runningSessionId: null,
   sessionStartedAt: null,
@@ -352,6 +354,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       set({
         updateAvailable: result.updateAvailable,
         latestVersion: result.latestVersion,
+        updateDownloadUrl: result.downloadUrl || null,
         updateError: null,
       })
     } catch (error) {

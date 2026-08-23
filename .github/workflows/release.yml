@@ -1,5 +1,12 @@
 name: Release
 
+# Builds Windows, macOS, and Linux, rsyncs them to the server (replacing previous
+# installers), and publishes a GitHub release. Public downloads: /download
+# Files: /downloads
+#
+# Secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
+# Optional: DEPLOY_PORT (default 22). DEPLOY_PATH must match RELEASES_DIR on the server.
+
 on:
   push:
     tags:
@@ -73,8 +80,8 @@ jobs:
             release/*.yml
             release/*.yaml
 
-  release:
-    name: GitHub release
+  publish:
+    name: Publish installers
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -95,6 +102,52 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Write download manifest
+        run: node scripts/write-release-manifest.mjs artifacts "${{ steps.meta.outputs.version }}"
+
+      - name: Check deploy secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          missing=
+          [ -n "$DEPLOY_HOST" ] || missing="$missing DEPLOY_HOST"
+          [ -n "$DEPLOY_USER" ] || missing="$missing DEPLOY_USER"
+          [ -n "$DEPLOY_SSH_KEY" ] || missing="$missing DEPLOY_SSH_KEY"
+          [ -n "$DEPLOY_PATH" ] || missing="$missing DEPLOY_PATH"
+          if [ -n "$missing" ]; then
+            echo "Missing GitHub secrets:$missing"
+            echo "Set DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, and DEPLOY_PATH (absolute path to server/data/releases)."
+            exit 1
+          fi
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Trust server host
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || 22 }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Replace previous installers on server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || 22 }}
+        run: |
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
+          rsync -avz --delete --chmod=Fu=rw,Fgo=r,Du=rwx,Dgo=rx \
+            -e "ssh -p $DEPLOY_PORT" \
+            artifacts/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2

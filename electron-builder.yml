@@ -62,7 +62,5 @@ protocols:
     schemes:
       - tudso
 publish:
-  provider: github
-  owner: Sysfora
-  repo: Tudso
-  releaseType: release
+  provider: generic
+  url: https://tudso.com/downloads
