@@ -69,6 +69,23 @@ function deleteRange(el: HTMLInputElement | HTMLTextAreaElement, from: number, t
   setValue(el, el.value.slice(0, start) + el.value.slice(end), start, inputType, null)
 }
 
+function writeClipboard(text: string) {
+  if (!text) return
+  if (typeof desktop.app.writeClipboard === 'function') {
+    desktop.app.writeClipboard(text)
+    return
+  }
+  void navigator.clipboard.writeText(text)
+}
+
+function fieldEditShortcut(event: OverlayKeyEvent) {
+  if (!event.down || event.alt) return null
+  if (!(event.ctrl || event.meta)) return null
+  const key = event.key.toLowerCase()
+  if (key === 'a' || key === 'c' || key === 'x' || key === 'v') return key
+  return null
+}
+
 function applyEdit(el: HTMLInputElement | HTMLTextAreaElement, event: OverlayKeyEvent) {
   const start = el.selectionStart ?? 0
   const end = el.selectionEnd ?? 0
@@ -79,20 +96,19 @@ function applyEdit(el: HTMLInputElement | HTMLTextAreaElement, event: OverlayKey
     return
   }
 
-  if ((event.ctrl || event.meta) && !event.alt) {
-    const shortcut = event.key.toLowerCase()
-    if (shortcut === 'a') {
-      el.setSelectionRange(0, value.length)
-      return
-    }
-    if (shortcut === 'c' || shortcut === 'x') {
-      const selected = value.slice(start, end)
-      if (selected) void navigator.clipboard.writeText(selected)
-      if (shortcut === 'x') deleteRange(el, start, end, 'deleteByCut')
-      return
-    }
-    if (shortcut === 'v') return
+  const edit = fieldEditShortcut(event)
+  if (edit === 'a') {
+    el.setSelectionRange(0, value.length)
+    return
   }
+  if (edit === 'c' || edit === 'x') {
+    if (!(el instanceof HTMLInputElement && el.type === 'password')) {
+      writeClipboard(value.slice(start, end))
+    }
+    if (edit === 'x') deleteRange(el, start, end, 'deleteByCut')
+    return
+  }
+  if (edit === 'v') return
 
   if (event.key === 'Backspace') {
     if (start !== end) deleteRange(el, start, end, 'deleteContentBackward')
@@ -163,16 +179,17 @@ function runOverlayCommand(event: OverlayKeyEvent) {
 }
 
 export function applyOverlayKey(event: OverlayKeyEvent) {
-  if (runOverlayCommand(event)) return
   const el =
     (document.activeElement instanceof Element && isEditable(document.activeElement)
       ? document.activeElement
       : lastEditable) ?? document.getElementById('composer-input')
+  const editing = Boolean(el && isEditable(el))
+  if (!(editing && fieldEditShortcut(event)) && runOverlayCommand(event)) return
   if (!el) return
   const type = event.down ? 'keydown' : 'keyup'
   const keyEvent = new KeyboardEvent(type, keyInit(event))
   const prevented = !el.dispatchEvent(keyEvent) || keyEvent.defaultPrevented
-  if (!event.down || prevented || !isEditable(el)) return
+  if (!event.down || (prevented && !fieldEditShortcut(event)) || !isEditable(el)) return
   applyEdit(el, event)
 }
 
@@ -449,7 +466,7 @@ export function applyOverlayPointer(event: OverlayPointerEvent) {
     } else {
       desktop.window.cancelOverlayDrag()
     }
-    const target = hit ?? document.body
+    const target = interactive ?? hit ?? document.body
     pointerDownTarget = target
     const count = event.button === 0 ? nextClickCount(event.x, event.y) : 1
     dragCount = count
@@ -460,7 +477,11 @@ export function applyOverlayPointer(event: OverlayPointerEvent) {
       applySliderPointer(sliderDrag, event.x)
     } else if (target instanceof Element && isEditable(target)) {
       lastEditable = target
-      target.focus()
+      try {
+        target.focus()
+      } catch {
+        undefined
+      }
       const index = offsetFromPoint(target, event.x, event.y)
       dragAnchor = count === 1 ? index : index
       if (count === 1) target.setSelectionRange(index, index)
@@ -471,7 +492,11 @@ export function applyOverlayPointer(event: OverlayPointerEvent) {
       domAnchor = range ? range.cloneRange() : null
       applyDomSelection(event.x, event.y, count, count === 1 ? null : domAnchor)
     } else if (target instanceof HTMLElement && target.tabIndex >= 0) {
-      target.focus()
+      try {
+        target.focus()
+      } catch {
+        undefined
+      }
       selecting = false
     } else {
       selecting = false
@@ -483,12 +508,19 @@ export function applyOverlayPointer(event: OverlayPointerEvent) {
   }
   if (event.type === 'up') {
     if (sliderDrag) applySliderPointer(sliderDrag, event.x, true)
-    const target = sliderDrag ?? pointerDownTarget ?? hit ?? document.body
+    const raw = sliderDrag ?? pointerDownTarget ?? hit ?? document.body
+    const target =
+      raw instanceof Element
+        ? (raw.closest(
+            'button, a, input, textarea, select, [role="button"], [role="menuitem"], [role="switch"]',
+          ) ?? raw)
+        : raw
     const init = mouseInit(event, { detail: dragCount })
     target.dispatchEvent(new PointerEvent('pointerup', { ...init, pointerId: 1, pointerType: 'mouse' }))
     target.dispatchEvent(new MouseEvent('mouseup', init))
     if (event.button === 0 && !sliderDrag) {
-      target.dispatchEvent(new MouseEvent('click', init))
+      if (target instanceof HTMLElement) target.click()
+      else target.dispatchEvent(new MouseEvent('click', init))
       if (dragCount === 2) target.dispatchEvent(new MouseEvent('dblclick', init))
     }
     pointerDownTarget = null

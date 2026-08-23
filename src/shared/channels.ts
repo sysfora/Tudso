@@ -75,6 +75,7 @@ export const CHANNELS = {
   appPickFiles: 'app:pick-files',
   appPickResume: 'app:pick-resume',
   appConfirm: 'app:confirm',
+  appWriteClipboard: 'app:write-clipboard',
   appCommand: 'app:command',
   appNotify: 'app:notify',
   appDeleteLocalData: 'app:delete-local-data',

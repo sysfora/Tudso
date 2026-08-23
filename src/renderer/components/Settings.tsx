@@ -283,7 +283,7 @@ function GeneralSection() {
           <Switch checked={settings.hideFromCapture} onCheckedChange={(value) => void setSettings({ hideFromCapture: value })} />
         </Row>
       ) : null}
-      <Row title="Show in taskbar" description="Keep a taskbar button after you sign in. Sign-in and onboarding always show one.">
+      <Row title="Show in taskbar" description="Use a normal focusable window with a taskbar button. Turn off to stay a floating overlay.">
         <Switch checked={settings.showInTaskbar} onCheckedChange={(value) => void setSettings({ showInTaskbar: value })} />
       </Row>
       <Row title="Show in system tray" description="Keep a tray icon after you sign in so you can reopen a hidden window.">
@@ -515,11 +515,11 @@ function ProfileSection() {
       setError('Sign in to save a resume on this device.')
       return
     }
-    const picked = await pickResumeFile()
-    if (!picked) return
     setResumeBusy(true)
     setError(null)
     try {
+      const picked = await pickResumeFile()
+      if (!picked) return
       const saved = await desktop.profile.saveResume(userId, picked)
       applyLocalUser(saved)
       const next = saved.profile

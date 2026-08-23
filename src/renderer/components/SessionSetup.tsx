@@ -85,11 +85,12 @@ export function SessionSetup() {
   }
 
   const pickResume = async () => {
-    const picked = await pickResumeFile()
-    if (!picked) return
+    if (busy) return
     setResumeUploading(true)
     setResumeError('')
     try {
+      const picked = await pickResumeFile()
+      if (!picked) return
       const imported = await desktop.resume.parse(picked)
       setResumeFile(picked)
       setResumeImport(imported)

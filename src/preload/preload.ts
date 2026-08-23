@@ -105,6 +105,9 @@ const api: ElectronAPI = {
     pickFiles: () => ipcRenderer.invoke(CHANNELS.appPickFiles),
     pickResume: () => ipcRenderer.invoke(CHANNELS.appPickResume),
     confirm: (message: string) => ipcRenderer.sendSync(CHANNELS.appConfirm, message) as boolean,
+    writeClipboard: (text: string) => {
+      ipcRenderer.sendSync(CHANNELS.appWriteClipboard, text)
+    },
     notify: (title: string, body: string) => ipcRenderer.send(CHANNELS.appNotify, title, body),
     deleteLocalData: () => ipcRenderer.invoke(CHANNELS.appDeleteLocalData),
     getApiKeyStatus: () => ipcRenderer.invoke(CHANNELS.appGetApiKeyStatus),

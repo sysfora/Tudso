@@ -105,6 +105,7 @@ export interface ElectronAPI {
     pickFiles: () => Promise<PickedFile[]>
     pickResume: () => Promise<PickedResume | null>
     confirm: (message: string) => boolean
+    writeClipboard: (text: string) => void
     notify: (title: string, body: string) => void
     deleteLocalData: () => Promise<void>
     getApiKeyStatus: () => Promise<ApiKeyStatus>

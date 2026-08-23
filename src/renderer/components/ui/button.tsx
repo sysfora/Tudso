@@ -71,7 +71,7 @@ export function Button({
           aria-hidden
         />
       ) : null}
-      <span className={cn('inline-flex items-center justify-center gap-1.5', loading && 'invisible')}>{children}</span>
+      <span className={cn('pointer-events-none inline-flex items-center justify-center gap-1.5', loading && 'invisible')}>{children}</span>
     </Comp>
   )
 }

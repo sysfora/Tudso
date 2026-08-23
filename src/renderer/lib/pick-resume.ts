@@ -2,7 +2,12 @@ import { desktop, isElectron } from '@/lib/desktop'
 import type { PickedResume } from '@shared/types'
 
 export async function pickResumeFile(): Promise<PickedResume | null> {
-  if (isElectron) return desktop.app.pickResume()
+  if (isElectron) {
+    if (typeof desktop.app.pickResume !== 'function') {
+      throw new Error('Resume picker is unavailable. Restart Tudso and try again.')
+    }
+    return desktop.app.pickResume()
+  }
   return pickResumeInBrowser()
 }
 

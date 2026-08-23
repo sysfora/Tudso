@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { CHANNELS } from '../shared/channels'
 import type { AppStore } from './store'
 import { createTray, destroyTray } from './tray'
-import { sendToRenderer, getMainWindow, setFloatingEnabled, setHideFromCapture, setQuitting, setSkipTaskbar } from './windows'
+import { sendToRenderer, getMainWindow, isFloatingEnabled, setFloatingEnabled, setHideFromCapture, setQuitting, setSkipTaskbar, showMainWindow } from './windows'
 
 let storeRef: AppStore | null = null
 let signedInReady = false
@@ -38,15 +38,17 @@ export function initPresence(store: AppStore) {
 
 export function setSignedInReady(ready: boolean) {
   signedInReady = ready
-  setFloatingEnabled(ready)
   applyPresence()
 }
 
 export function applyPresence() {
   if (!storeRef) return
   const settings = storeRef.getSettings()
-  const showTaskbar = !signedInReady || settings.showInTaskbar
-  setSkipTaskbar(!showTaskbar)
+  const overlay = signedInReady && !settings.showInTaskbar
+  const wasFloating = isFloatingEnabled()
+  setSkipTaskbar(overlay)
+  setFloatingEnabled(overlay)
+  if (wasFloating && !overlay) showMainWindow()
 
   const win = getMainWindow()
   const hidden = !win || win.isDestroyed() || !win.isVisible()

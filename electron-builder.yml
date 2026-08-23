@@ -63,4 +63,6 @@ protocols:
       - tudso
 publish:
   provider: github
+  owner: Sysfora
+  repo: Tudso
   releaseType: release

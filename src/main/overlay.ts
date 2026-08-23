@@ -25,6 +25,7 @@ const SWP_NOACTIVATE = 0x0010
 const SWP_NOSENDCHANGING = 0x0400
 const SWP_FRAMECHANGED = 0x0020
 const HWND_TOPMOST = -1
+const HWND_NOTOPMOST = -2
 const GA_ROOT = 2
 const WM_MOUSEACTIVATE = 0x0021
 const WM_NCACTIVATE = 0x0086
@@ -685,6 +686,51 @@ export async function withOverlayPassthroughAsync<T>(fn: () => Promise<T>): Prom
   }
 }
 
+function prepareWindowForDialog(win: BrowserWindow) {
+  clearMouseActivateHook()
+  try {
+    win.setFocusable(true)
+  } catch {
+    undefined
+  }
+  const api = loadNative()
+  if (api && isWindows) {
+    try {
+      const handle = hwnd(win)
+      const current = api.GetWindowLongW(handle, GWL_EXSTYLE) >>> 0
+      const next = (current & ~WS_EX_NOACTIVATE) | WS_EX_TOPMOST | WS_EX_LAYERED
+      api.SetWindowLongW(handle, GWL_EXSTYLE, next | 0)
+      api.SetWindowPos(handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED)
+    } catch {
+      undefined
+    }
+  }
+  try {
+    win.focus()
+  } catch {
+    undefined
+  }
+}
+
+export async function withOverlayHostedDialog<T>(
+  win: BrowserWindow | null,
+  fn: (parent?: BrowserWindow) => Promise<T>,
+): Promise<T> {
+  const host = win && !win.isDestroyed() ? win : null
+  const restoreOverlay = Boolean(host && usesNativeOverlay())
+  beginOverlayPassthrough()
+  try {
+    if (restoreOverlay && host) prepareWindowForDialog(host)
+    return await fn(host ?? undefined)
+  } finally {
+    if (restoreOverlay && host && !host.isDestroyed()) {
+      applyOverlayWindowStyle(host)
+      raiseFloatingWindow(host)
+    }
+    endOverlayPassthrough()
+  }
+}
+
 export function beginOverlayDrag() {
   if (dragCancelled) return
   overlayPointerDown = false
@@ -835,6 +881,11 @@ export function clearOverlayWindowStyle(win: BrowserWindow) {
     undefined
   }
   try {
+    win.setSkipTaskbar(false)
+  } catch {
+    undefined
+  }
+  try {
     win.setVisibleOnAllWorkspaces(false)
   } catch {
     undefined
@@ -849,9 +900,9 @@ function restoreTaskbarWindowStyle(win: BrowserWindow) {
   try {
     const handle = hwnd(win)
     const current = api.GetWindowLongW(handle, GWL_EXSTYLE) >>> 0
-    const next = (current & ~WS_EX_NOACTIVATE & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW
+    const next = (current & ~WS_EX_NOACTIVATE & ~WS_EX_TOOLWINDOW & ~WS_EX_TOPMOST) | WS_EX_APPWINDOW
     api.SetWindowLongW(handle, GWL_EXSTYLE, next | 0)
-    api.SetWindowPos(handle, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED)
+    api.SetWindowPos(handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED)
     applyNativeRoundedCorners(win)
   } catch (error) {
     console.error('[overlay] failed to restore taskbar window style', error)

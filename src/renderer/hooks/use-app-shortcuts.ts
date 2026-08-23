@@ -14,6 +14,16 @@ export function useAppShortcuts() {
       const target = event.target as HTMLElement | null
       const inField = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || Boolean(target?.isContentEditable)
 
+      const editKey = event.key.toLowerCase()
+      if (
+        inField &&
+        (event.ctrlKey || event.metaKey) &&
+        !event.altKey &&
+        (editKey === 'a' || editKey === 'c' || editKey === 'x' || editKey === 'v')
+      ) {
+        return
+      }
+
       if (event.key === 'Escape' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
         event.preventDefault()
         const store = useAppStore.getState()

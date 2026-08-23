@@ -98,11 +98,12 @@ export function OnboardingFlow() {
       setResumeError('Sign in to save a resume on this device.')
       return
     }
-    const picked = await pickResumeFile()
-    if (!picked) return
+    if (busy) return
     setResumeUploading(true)
     setResumeError('')
     try {
+      const picked = await pickResumeFile()
+      if (!picked) return
       const saved = await desktop.profile.saveResume(userId, picked)
       applyLocalUser(saved)
       setValues((current) => mergeSetupValuesFromProfile(current, saved.profile))

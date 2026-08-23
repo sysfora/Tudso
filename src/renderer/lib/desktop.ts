@@ -303,6 +303,9 @@ function createMock(): ElectronAPI {
       pickFiles: async () => [],
       pickResume: async () => null,
       confirm: (message) => window.confirm(message),
+      writeClipboard: (text) => {
+        void navigator.clipboard.writeText(text)
+      },
       notify: () => undefined,
       deleteLocalData: async () => {
         memory = {

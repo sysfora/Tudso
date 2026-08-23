@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { CHANNELS } from '../shared/channels'
 import type {
   AuthSession,
@@ -38,7 +38,6 @@ import {
   getMainWindow,
   getWindowBounds,
   hideMainWindow,
-  isFloatingEnabled,
   minimizeMainWindow,
   moveMainWindow,
   restoreTaskbarPresence,
@@ -47,7 +46,7 @@ import {
   setHideFromCapture,
   setWindowMode,
 } from './windows'
-import { beginOverlayDrag, cancelOverlayDrag, withOverlayPassthrough, withOverlayPassthroughAsync } from './overlay'
+import { beginOverlayDrag, cancelOverlayDrag, withOverlayHostedDialog, withOverlayPassthrough } from './overlay'
 
 let abortController: AbortController | null = null
 let locked = false
@@ -291,6 +290,11 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
     })
   })
 
+  ipcMain.on(CHANNELS.appWriteClipboard, (event, text: string) => {
+    clipboard.writeText(String(text ?? ''))
+    event.returnValue = true
+  })
+
   ipcMain.handle(CHANNELS.appOpenExternal, async (_event, url: string) => {
     if (!/^https?:/i.test(url)) return
     await shell.openExternal(url)
@@ -428,9 +432,7 @@ function mimeFromResumeName(fileName: string) {
 }
 
 function showAppOpenDialog(options: Electron.OpenDialogOptions) {
-  const win = getMainWindow()
-  const parented = Boolean(win && !win.isDestroyed() && !isFloatingEnabled())
-  return withOverlayPassthroughAsync(() =>
-    parented && win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options),
+  return withOverlayHostedDialog(getMainWindow(), (parent) =>
+    parent ? dialog.showOpenDialog(parent, options) : dialog.showOpenDialog(options),
   )
 }
