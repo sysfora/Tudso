@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap } from '@shared/defaults'
 import type { ElectronAPI } from '@shared/electron-api'
+import { APP_VERSION } from '@shared/app-version'
 import { mergeAutoMemories } from '@shared/memory'
 import { mergeResumeIntoProfile, memoriesFromResume, parseResumeText, profileFromResume, clipResumeText } from '@shared/resume-parse'
 import type { AppCommand, Conversation, LocalProfile, LocalUserData, MemoryEntry, ResumeImportResult, Settings, ShortcutMap } from '@shared/types'
@@ -335,7 +336,7 @@ function createMock(): ElectronAPI {
         listeners.command.add(callback)
         return () => listeners.command.delete(callback)
       },
-      getVersion: async () => '0.1.0',
+      getVersion: async () => APP_VERSION,
     },
   }
 }

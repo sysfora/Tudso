@@ -1,6 +1,8 @@
+import crypto from 'node:crypto'
 import type { NextFunction, Request, Response } from 'express'
 import rateLimit from 'express-rate-limit'
 import { resolveAccessToken } from './auth.js'
+import { config } from './config.js'
 import { log } from './log.js'
 import type { EntitlementRecord } from './types.js'
 
@@ -32,6 +34,30 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   req.userId = resolved.userId
   req.email = resolved.email
   req.deviceId = resolved.deviceId
+  next()
+}
+
+export function tokenEquals(received: string, expected: string) {
+  if (!expected) return false
+  const a = Buffer.from(received)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length) return false
+  return crypto.timingSafeEqual(a, b)
+}
+
+export function requireReleaseUpload(req: Request, res: Response, next: NextFunction) {
+  const expected = config.security.releaseUploadToken
+  if (!expected) {
+    res.status(503).json({ error: 'Release upload is not configured' })
+    return
+  }
+  const header = req.headers.authorization
+  const token = header?.startsWith('Bearer ') ? header.slice(7) : ''
+  if (!tokenEquals(token, expected)) {
+    log.warn('Release upload rejected', { method: req.method, path: req.path })
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   next()
 }
 

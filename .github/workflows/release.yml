@@ -1,28 +1,50 @@
 name: Release
 
-# Builds Windows, macOS, and Linux, rsyncs them to the server (replacing previous
-# installers), and publishes a GitHub release. Public downloads: /download
-# Files: /downloads
+# Builds Windows, macOS, and Linux, stamps the version, POSTs installers to
+# https://tudso.com/internal/releases, and publishes a GitHub release.
+# Public downloads: /download  Files: /downloads
 #
-# Secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
-# Optional: DEPLOY_PORT (default 22). DEPLOY_PATH must match RELEASES_DIR on the server.
+# Version: tag v1.2.3, or workflow input, or a patch bump from package.json.
+# After publish, the same version is committed back to the default branch.
+#
+# GitHub secret: RELEASE_UPLOAD_TOKEN (same value as Dokploy env RELEASE_UPLOAD_TOKEN)
 
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (empty = bump patch, e.g. 1.0.0 → 1.0.1)'
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: desktop-release
   cancel-in-progress: true
 
 jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+        run: node scripts/set-release-version.mjs --print-only
+
   build:
     name: Package ${{ matrix.label }}
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -39,6 +61,9 @@ jobs:
             builder: --mac
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp release version
+        run: node scripts/set-release-version.mjs ${{ needs.version.outputs.version }}
 
       - uses: actions/setup-node@v4
         with:
@@ -82,21 +107,10 @@ jobs:
 
   publish:
     name: Publish installers
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Release metadata
-        id: meta
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
-          fi
 
       - uses: actions/download-artifact@v4
         with:
@@ -104,59 +118,74 @@ jobs:
           merge-multiple: true
 
       - name: Write download manifest
-        run: node scripts/write-release-manifest.mjs artifacts "${{ steps.meta.outputs.version }}"
+        run: node scripts/write-release-manifest.mjs artifacts "${{ needs.version.outputs.version }}"
 
-      - name: Check deploy secrets
+      - name: Check upload token
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          RELEASE_UPLOAD_TOKEN: ${{ secrets.RELEASE_UPLOAD_TOKEN }}
         run: |
-          missing=
-          [ -n "$DEPLOY_HOST" ] || missing="$missing DEPLOY_HOST"
-          [ -n "$DEPLOY_USER" ] || missing="$missing DEPLOY_USER"
-          [ -n "$DEPLOY_SSH_KEY" ] || missing="$missing DEPLOY_SSH_KEY"
-          [ -n "$DEPLOY_PATH" ] || missing="$missing DEPLOY_PATH"
-          if [ -n "$missing" ]; then
-            echo "Missing GitHub secrets:$missing"
-            echo "Set DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, and DEPLOY_PATH (absolute path to server/data/releases)."
+          if [ -z "$RELEASE_UPLOAD_TOKEN" ]; then
+            echo "Set GitHub secret RELEASE_UPLOAD_TOKEN to the same value as Dokploy env RELEASE_UPLOAD_TOKEN."
             exit 1
           fi
 
-      - name: Install SSH key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
-
-      - name: Trust server host
+      - name: Upload installers to server
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || 22 }}
+          RELEASE_UPLOAD_TOKEN: ${{ secrets.RELEASE_UPLOAD_TOKEN }}
+          API_URL: ${{ vars.VITE_SERVER_URL || 'https://tudso.com' }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-
-      - name: Replace previous installers on server
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || 22 }}
-        run: |
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
-          rsync -avz --delete --chmod=Fu=rw,Fgo=r,Du=rwx,Dgo=rx \
-            -e "ssh -p $DEPLOY_PORT" \
-            artifacts/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+          API_URL="${API_URL%/}"
+          form=(-F "version=$VERSION")
+          for f in artifacts/*; do
+            [ -f "$f" ] || continue
+            form+=(-F "files=@$f")
+          done
+          curl --fail-with-body --retry 2 --retry-delay 5 --max-time 1800 \
+            -H "Authorization: Bearer $RELEASE_UPLOAD_TOKEN" \
+            "${form[@]}" \
+            "$API_URL/internal/releases"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: Tudso ${{ steps.meta.outputs.version }}
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: Tudso ${{ needs.version.outputs.version }}
           files: artifacts/*
           fail_on_unmatched_files: true
           generate_release_notes: true
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-version:
+    name: Sync version in repo
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stamp release version
+        run: node scripts/set-release-version.mjs ${{ needs.version.outputs.version }}
+
+      - name: Commit version files
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json server/package.json server/package-lock.json src/shared/app-version.ts .env.example server/.env.example
+          if git diff --cached --quiet; then
+            echo "Version $VERSION is already on the default branch"
+            exit 0
+          fi
+          git commit -m "chore: release $VERSION"
+          git push
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi

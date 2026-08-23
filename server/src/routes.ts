@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import express, { type Request, type Response, type Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
@@ -9,12 +10,12 @@ import { beginPlainStream, endPlainStream, writePlainStream } from './stream.js'
 import { config } from './config.js'
 import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
-import { aiRateLimiter, rateLimiter, requireAuth, sensitiveRateLimiter } from './middleware.js'
+import { aiRateLimiter, rateLimiter, requireAuth, requireReleaseUpload, sensitiveRateLimiter } from './middleware.js'
 import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAccount, updateAccountAvatar, updateAccountName } from './account.js'
 import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
 import { getSessionPrompt, rememberSessionPrompt, SESSION_PROMPT_REQUIRED } from './session-prompt.js'
-import { readReleaseManifest, toLatestUpdate } from './releases.js'
+import { isAllowedReleaseName, publishStagedRelease, readReleaseManifest, releasesDir, toLatestUpdate } from './releases.js'
 import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
 import { isPaidPlan, CHECKOUT_PLANS } from './plans.js'
 import type { AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
@@ -216,9 +217,66 @@ router.get('/health', (_req, res) => {
 
 router.get('/updates/latest', async (req, res) => {
   const channel = (req.query.channel as 'stable' | 'beta' | 'alpha') ?? 'stable'
-  const currentVersion = (req.query.currentVersion as string) ?? '0.1.0'
+  const currentVersion = (req.query.currentVersion as string) ?? config.app.version
   const manifest = await readReleaseManifest()
   res.json(toLatestUpdate(manifest, currentVersion, channel))
+})
+
+const MAX_RELEASE_BYTES = 512 * 1024 * 1024
+
+function acceptReleaseFiles(req: Request, res: Response, next: () => void) {
+  req.setTimeout(30 * 60 * 1000)
+  res.setTimeout(30 * 60 * 1000)
+  const staging = join(dirname(releasesDir()), `releases-incoming-${crypto.randomUUID()}`)
+  void fs.mkdir(staging, { recursive: true }).then(() => {
+    const upload = multer({
+      storage: multer.diskStorage({
+        destination: (_req, _file, cb) => cb(null, staging),
+        filename: (_req, file, cb) => {
+          const name = file.originalname.replaceAll('\\', '/').split('/').pop() ?? ''
+          if (!isAllowedReleaseName(name)) {
+            cb(new Error('Unsupported file'), '')
+            return
+          }
+          cb(null, name)
+        },
+      }),
+      limits: { fileSize: MAX_RELEASE_BYTES, files: 40 },
+      fileFilter: (_req, file, cb) => {
+        const name = file.originalname.replaceAll('\\', '/').split('/').pop() ?? ''
+        if (!isAllowedReleaseName(name)) {
+          cb(new Error(`Unsupported file: ${name}`))
+          return
+        }
+        cb(null, true)
+      },
+    }).array('files', 40)
+    upload(req, res, (err: unknown) => {
+      if (err) {
+        void fs.rm(staging, { recursive: true, force: true })
+        res.status(400).json({ error: err instanceof Error ? err.message : 'Could not upload installers' })
+        return
+      }
+      ;(req as Request & { releaseStaging?: string }).releaseStaging = staging
+      next()
+    })
+  }).catch(() => {
+    res.status(500).json({ error: 'Could not start upload' })
+  })
+}
+
+router.post('/internal/releases', requireReleaseUpload, acceptReleaseFiles, async (req: Request, res: Response) => {
+  const staging = (req as Request & { releaseStaging?: string }).releaseStaging
+  try {
+    if (!staging) throw new Error('Upload failed')
+    const version = typeof req.body?.version === 'string' ? req.body.version : ''
+    const manifest = await publishStagedRelease(version, staging)
+    res.json({ ok: true, version: manifest.version, files: manifest.files.length })
+  } catch (error) {
+    if (staging) await fs.rm(staging, { recursive: true, force: true }).catch(() => undefined)
+    logError('Failed to publish desktop release', error)
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Could not publish release' })
+  }
 })
 
 function html(res: Response, page: string, status = 200) {
@@ -657,7 +715,7 @@ router.post('/auth/desktop/callback', async (req: Request, res: Response) => {
     state: z.string().min(1),
     deviceId: DEVICE_ID.default('unknown-device'),
     platform: z.string().max(64).default('unknown'),
-    appVersion: z.string().max(64).default('1.0.0'),
+    appVersion: z.string().max(64).default(config.app.version),
   }).parse(req.body)
   if (!verifyAuthState(state)) {
     res.status(400).json({ error: 'Invalid or expired state' })
@@ -692,7 +750,7 @@ router.post('/auth/desktop/start', (req: Request, res: Response) => {
   const { deviceId, platform, appVersion } = z.object({
     deviceId: DEVICE_ID,
     platform: z.string().max(64).default('unknown'),
-    appVersion: z.string().max(64).default('1.0.0'),
+    appVersion: z.string().max(64).default(config.app.version),
   }).parse(req.body)
   const { state, url } = generateAuthState('desktop')
   res.json({ url, state, deviceId, platform, appVersion })

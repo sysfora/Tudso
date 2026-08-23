@@ -1,4 +1,5 @@
 import { modifierCount } from '@shared/accelerator'
+import { APP_VERSION } from '@shared/app-version'
 import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap, REALTIME_ASK_PROMPT, SCREEN_ASK_PROMPT, SHORTCUT_LABELS, applyQuickActionPrompt, resolveChatModel, type QuickActionId } from '@shared/defaults'
 import { isActionableTranscript } from '@shared/transcript'
 import { isPaidPlan } from '@shared/plans'
@@ -253,7 +254,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   screenContext: false,
   audioContext: false,
   quickActionId: null,
-  appVersion: '0.1.0',
+  appVersion: APP_VERSION,
   updateAvailable: false,
   latestVersion: null,
   updateDownloadUrl: null,

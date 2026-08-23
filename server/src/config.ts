@@ -1,9 +1,12 @@
 import dotenv from 'dotenv'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const envDir = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(envDir, '..', '.env') })
+
+const PACKAGE_VERSION = (createRequire(import.meta.url)('../package.json') as { version: string }).version
 
 function required(name: string): string {
   const value = process.env[name]
@@ -20,7 +23,7 @@ export const config = {
     name: optional('APP_NAME', 'Tudso'),
     url: optional('APP_URL', 'http://localhost:3000'),
     env: optional('APP_ENV', 'development'),
-    version: optional('APP_VERSION', '1.0.0'),
+    version: PACKAGE_VERSION,
     port: Number(optional('PORT', '3000')),
   },
   pocketbase: {
@@ -57,17 +60,11 @@ export const config = {
   security: {
     jwtSecret: required('JWT_SECRET'),
     encryptionKey: required('ENCRYPTION_KEY'),
+    releaseUploadToken: optional('RELEASE_UPLOAD_TOKEN', ''),
   },
   storage: {
     localDir: optional('RESUME_STORAGE_DIR', 'data'),
-    releasesDir: optional('RELEASES_DIR', 'data/releases'),
-  },
-  updates: {
-    stable: optional('LATEST_VERSION_STABLE', '0.1.0'),
-    beta: optional('LATEST_VERSION_BETA', '0.1.0'),
-    alpha: optional('LATEST_VERSION_ALPHA', '0.1.0'),
-    downloadUrl: optional('UPDATE_DOWNLOAD_URL', ''),
-    releaseNotesUrl: optional('UPDATE_RELEASE_NOTES_URL', ''),
+    releasesDir: 'data/releases',
   },
 } as const
 
