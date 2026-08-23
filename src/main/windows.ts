@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { CHANNELS } from '../shared/channels'
 import { DEFAULT_BOUNDS, WINDOW_SIZES } from '../shared/defaults'
 import type { ThemeMode, WindowBounds, WindowMode } from '../shared/types'
-import { appIconPath, loadAppIcon } from './icon'
+import { appIconPath, applyWindowIcon, refreshWindowIcon } from './icon'
 import {
   applyOverlayWindowStyle,
   applyNativeRoundedCorners,
@@ -15,6 +15,7 @@ import {
   setWindowPositionNoActivate,
   showWithoutActivating,
   startOverlayKeyboard,
+  setWindowChromeRestorer,
 } from './overlay'
 import { isMac, usesNativeOverlay } from './platform'
 import type { AppStore } from './store'
@@ -83,9 +84,10 @@ export function createMainWindow(store: AppStore) {
     },
   })
 
+  setWindowChromeRestorer(() => applyFloatingChrome())
+
   if (!restored) win.center()
-  const icon = loadAppIcon()
-  if (icon) win.setIcon(icon)
+  applyWindowIcon(win)
   applyFloatingChrome()
   applyWindowChrome(settings.theme, settings.transparency)
   applyNativeRoundedCorners(win)
@@ -204,6 +206,7 @@ export function showMainWindow() {
   }
   win.show()
   win.focus()
+  refreshWindowIcon(win)
 }
 
 export function hideMainWindow() {
@@ -274,6 +277,7 @@ export function restoreTaskbarPresence() {
   apply()
   setTimeout(apply, 50)
   setTimeout(apply, 250)
+  refreshWindowIcon(win)
 }
 
 export function restoreOverlayAfterCapture() {
@@ -324,6 +328,7 @@ function applyFloatingChrome() {
   }
   clearOverlayWindowStyle(win)
   win.setSkipTaskbar(skipTaskbar)
+  refreshWindowIcon(win)
 }
 
 export function setFloatingEnabled(enabled: boolean) {

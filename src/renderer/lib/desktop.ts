@@ -199,15 +199,15 @@ function createMock(): ElectronAPI {
         localStorage.setItem('tudso.users', JSON.stringify(memory.users))
         return structuredClone(next)
       },
-      saveResume: async (userId, file) => {
+      saveResume: async (userId, file, imported) => {
         const current = memory.users[userId] ?? emptyLocalUser()
-        const imported = parseResumeInBrowser(file)
+        const result = imported ?? parseResumeInBrowser(file)
         const resume = { fileName: file.fileName, mimeType: file.mimeType, storedName: 'resume.bin' }
         const next: LocalUserData = {
           ...current,
           resume,
-          profile: mergeResumeIntoProfile(current.profile, imported.parsed),
-          memories: mergeAutoMemories(current.memories, imported.memories),
+          profile: mergeResumeIntoProfile(current.profile, result.parsed),
+          memories: mergeAutoMemories(current.memories, result.memories),
           memoryEnabled: true,
         }
         memory.users[userId] = next
@@ -225,6 +225,13 @@ function createMock(): ElectronAPI {
     },
     resume: {
       parse: async (file) => parseResumeInBrowser(file),
+      extract: async (file) => {
+        const ext = file.fileName.split('.').pop()?.toLowerCase() ?? ''
+        const text =
+          file.mimeType.startsWith('text/') || ext === 'txt' ? new TextDecoder().decode(file.data) : ''
+        const clipped = clipResumeText(text)
+        return { text: clipped, extractedChars: clipped.replace(/\s+/g, ' ').trim().length }
+      },
       parseUser: async (userId) => {
         const local = memory.users[userId]
         if (!local?.resume) return null

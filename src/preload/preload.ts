@@ -80,16 +80,17 @@ const api: ElectronAPI = {
     set: (userId: string, profile) => ipcRenderer.invoke(CHANNELS.profileSet, userId, profile),
     complete: (userId: string) => ipcRenderer.invoke(CHANNELS.profileComplete, userId),
     setMemory: (userId, patch) => ipcRenderer.invoke(CHANNELS.profileSetMemory, userId, patch),
-    saveResume: (userId: string, file) => ipcRenderer.invoke(CHANNELS.profileSaveResume, userId, file),
+    saveResume: (userId: string, file, imported) => ipcRenderer.invoke(CHANNELS.profileSaveResume, userId, file, imported),
     deleteResume: (userId: string) => ipcRenderer.invoke(CHANNELS.profileDeleteResume, userId),
   },
   resume: {
     parse: (file) => ipcRenderer.invoke(CHANNELS.resumeParse, file),
+    extract: (file) => ipcRenderer.invoke(CHANNELS.resumeExtract, file),
     parseUser: (userId) => ipcRenderer.invoke(CHANNELS.resumeParseUser, userId),
     parseSession: (sessionId, meta) => ipcRenderer.invoke(CHANNELS.resumeParseSession, sessionId, meta),
   },
   sessions: {
-    saveResume: (sessionId, file) => ipcRenderer.invoke(CHANNELS.sessionSaveResume, sessionId, file),
+    saveResume: (sessionId, file, imported) => ipcRenderer.invoke(CHANNELS.sessionSaveResume, sessionId, file, imported),
     copyDefaultResume: (userId, sessionId) => ipcRenderer.invoke(CHANNELS.sessionCopyDefaultResume, userId, sessionId),
   },
   ai: {

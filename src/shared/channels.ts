@@ -61,6 +61,7 @@ export const CHANNELS = {
   resumeParse: 'resume:parse',
   resumeParseUser: 'resume:parse-user',
   resumeParseSession: 'resume:parse-session',
+  resumeExtract: 'resume:extract',
   sessionSaveResume: 'session:save-resume',
   sessionCopyDefaultResume: 'session:copy-default-resume',
 

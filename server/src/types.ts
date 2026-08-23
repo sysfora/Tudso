@@ -163,4 +163,7 @@ export interface ParsedResume {
   certifications: string[]
   languages: string[]
   achievements: string[]
+  goals?: string[]
+  industry?: string
+  technicalLevel?: 'beginner' | 'intermediate' | 'advanced'
 }

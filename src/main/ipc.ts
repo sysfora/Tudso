@@ -7,6 +7,7 @@ import type {
   LocalProfile,
   LocalResumeMeta,
   MemoryEntry,
+  ResumeImportResult,
   PickedFile,
   PickedResume,
   Settings,
@@ -30,7 +31,7 @@ import {
 import { type AppStore, applyNativeTheme } from './store'
 import { applyLoginItem } from './platform'
 import { applyPresence, isHideFromCaptureAllowed, refreshTray, setHideFromCaptureAllowed, setSignedInReady } from './presence'
-import { importResumeFromBuffer } from './resume-import'
+import { extractResumeTextFromFile, importResumeFromBuffer } from './resume-import'
 import { popupAppMenu } from './app-menu'
 import { moveToPreset, nudgeWindow } from './window-position'
 import {
@@ -203,21 +204,24 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.handle(CHANNELS.profileSetMemory, (_event, userId: string, patch: { entries?: MemoryEntry[]; enabled?: boolean }) =>
     store.setUserMemory(userId, patch),
   )
-  ipcMain.handle(CHANNELS.profileSaveResume, async (_event, userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => {
-    const data = await store.saveUserResume(userId, file)
+  ipcMain.handle(CHANNELS.profileSaveResume, async (_event, userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }, imported?: ResumeImportResult) => {
+    const data = await store.saveUserResume(userId, file, imported)
     if (!data.resume) throw new Error('Could not save resume')
     return data
   })
   ipcMain.handle(CHANNELS.resumeParse, (_event, file: { fileName: string; mimeType: string; data: ArrayBuffer }) =>
     importResumeFromBuffer(file),
   )
+  ipcMain.handle(CHANNELS.resumeExtract, (_event, file: { fileName: string; mimeType: string; data: ArrayBuffer }) =>
+    extractResumeTextFromFile(file),
+  )
   ipcMain.handle(CHANNELS.resumeParseUser, (_event, userId: string) => store.parseUserResume(userId))
   ipcMain.handle(CHANNELS.resumeParseSession, (_event, sessionId: string, meta: LocalResumeMeta) =>
     store.parseSessionResume(sessionId, meta),
   )
   ipcMain.handle(CHANNELS.profileDeleteResume, (_event, userId: string) => store.deleteUserResume(userId))
-  ipcMain.handle(CHANNELS.sessionSaveResume, async (_event, sessionId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) =>
-    store.saveSessionResume(sessionId, file),
+  ipcMain.handle(CHANNELS.sessionSaveResume, async (_event, sessionId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }, imported?: ResumeImportResult) =>
+    store.saveSessionResume(sessionId, file, imported),
   )
   ipcMain.handle(CHANNELS.sessionCopyDefaultResume, (_event, userId: string, sessionId: string) =>
     store.copyDefaultResumeToSession(userId, sessionId),

@@ -19,6 +19,7 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { desktop } from '@/lib/desktop'
 import { pickResumeFile } from '@/lib/pick-resume'
+import { importPickedResume } from '@/lib/import-resume'
 import { cn } from '@/lib/cn'
 import { createId, formatMemoryDate } from '@/lib/format'
 import { previewAppearance } from '@/hooks/use-theme'
@@ -520,7 +521,8 @@ function ProfileSection() {
     try {
       const picked = await pickResumeFile()
       if (!picked) return
-      const saved = await desktop.profile.saveResume(userId, picked)
+      const imported = await importPickedResume(picked)
+      const saved = await desktop.profile.saveResume(userId, picked, imported)
       applyLocalUser(saved)
       const next = saved.profile
       setPreferredName(next.preferredName ?? preferredName)

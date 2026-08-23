@@ -1,4 +1,4 @@
-import type { LocalProfile, ParsedResume } from './types'
+import type { LocalProfile, ParsedResume, ResumeImportResult } from './types'
 
 export const CUSTOM_CONTEXT_MAX = 1800
 export const RESUME_PROMPT_TEXT_MAX = 8000
@@ -117,7 +117,7 @@ export function parseResumeText(text: string): ParsedResume {
   }
 
   applyHeader(parsed, headerLines)
-  parsed.skills = uniqueStrings(splitSkillLines(buckets.skills ?? []), SKILL_MAX)
+  parsed.skills = uniqueStrings(splitSkillLines(buckets.skills ?? []).filter(isKeepSkill), SKILL_MAX)
   parsed.languages = uniqueStrings([
     ...splitSkillLines(buckets.languages ?? []),
     ...parsed.skills.filter((skill) => SPOKEN_LANGUAGES.has(skill.toLowerCase())),
@@ -575,6 +575,69 @@ export function mergePromptMemories(groups: Array<string[] | undefined>, max = 1
   return uniqueStrings(groups.flatMap((group) => group ?? []), max)
 }
 
+export function resumeImportFromParsed(
+  text: string,
+  parsed: ParsedResume,
+  memories?: string[],
+): ResumeImportResult {
+  const clipped = clipResumeText(text)
+  return {
+    parsed,
+    profile: profileFromResume(parsed),
+    memories: memories?.length ? uniqueStrings(memories, 50) : memoriesFromResume(parsed),
+    text: clipped,
+    extractedChars: clipped.replace(/\s+/g, ' ').trim().length,
+  }
+}
+
+export function parsedResumeFromModelJson(raw: unknown): ParsedResume {
+  const data = asRecord(raw)
+  const parsed = emptyParsedResume()
+  parsed.name = clip(str(data.name), 120)
+  parsed.headline = clip(str(data.headline), 160)
+  parsed.summary = clip(str(data.summary), 800)
+  parsed.industry = clip(str(data.industry), 160)
+  parsed.skills = uniqueStrings(strList(data.skills).filter(isKeepSkill), SKILL_MAX)
+  parsed.languages = uniqueStrings(strList(data.languages), 20)
+  parsed.goals = uniqueStrings(strList(data.goals), GOAL_MAX)
+  parsed.experience = objectList(data.experience).map((item) => ({
+    company: clip(str(item.company), 120),
+    role: clip(str(item.role), 160),
+    duration: clip(str(item.duration), 80),
+    description: clip(str(item.description), 500),
+  })).filter((item) => item.company || item.role || item.description)
+  parsed.education = objectList(data.education).map((item) => ({
+    institution: clip(str(item.institution), 160),
+    degree: clip(str(item.degree), 160),
+    year: clip(str(item.year), 40),
+  })).filter((item) => item.institution || item.degree)
+  parsed.projects = objectList(data.projects).map((item) => ({
+    name: clip(str(item.name), 120),
+    description: clip(str(item.description), 400),
+    technologies: uniqueStrings(strList(item.technologies).filter(isKeepSkill), 16),
+  })).filter((item) => item.name || item.description)
+  parsed.certifications = uniqueStrings(strList(data.certifications), 16)
+  parsed.achievements = uniqueStrings(strList(data.achievements), 16)
+  const level = str(data.technicalLevel)?.toLowerCase()
+  if (level === 'beginner' || level === 'intermediate' || level === 'advanced') parsed.technicalLevel = level
+  const projectNames = new Set(
+    parsed.projects.map((project) => project.name?.toLowerCase()).filter(Boolean) as string[],
+  )
+  parsed.skills = parsed.skills.filter((skill) => !projectNames.has(skill.toLowerCase()))
+  if (!parsed.industry) parsed.industry = inferIndustry(parsed)
+  if (!parsed.technicalLevel) parsed.technicalLevel = inferTechnicalLevel(parsed)
+  if (!parsed.headline) parsed.headline = parsed.experience[0]?.role
+  return parsed
+}
+
+export function memoriesFromModelJson(raw: unknown, parsed: ParsedResume): string[] {
+  const fromModel = strList(asRecord(raw).memories)
+    .map((item) => clip(item, 400))
+    .filter(Boolean) as string[]
+  if (fromModel.length) return uniqueStrings(fromModel, 50)
+  return memoriesFromResume(parsed)
+}
+
 export function uniqueStrings(items: Array<string | undefined>, max: number): string[] {
   const seen = new Set<string>()
   const out: string[] = []
@@ -595,4 +658,39 @@ function clip(value: string | undefined, max: number): string | undefined {
   const text = value.replace(/\s+/g, ' ').trim()
   if (!text) return undefined
   return text.length > max ? `${text.slice(0, max - 1).trim()}…` : text
+}
+
+const JUNK_SKILL =
+  /^(core|also|selected projects?|projects?|experience|education|work(?: history)?|skills?|summary|objective|profile|certifications?|achievements?|languages?|page(?:\s+\d+)?|\d+\s*of\s*\d+|system|design|software|computer|tools?|technologies|stack)$/i
+
+function isKeepSkill(item: string) {
+  const value = item.replace(/\s+/g, ' ').trim()
+  if (value.length < 2 || value.length > 40) return false
+  if (JUNK_SKILL.test(value)) return false
+  if (/\b\d+\s*of\s*\d+\b/.test(value)) return false
+  if (/^[-–—\d\s/]+$/.test(value)) return false
+  return true
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+}
+
+function str(value: unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return undefined
+}
+
+function strList(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return value.split(/[,;|/]/).map((item) => item.trim()).filter(Boolean)
+  }
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => (typeof item === 'string' ? [item] : str(item) ? [str(item)!] : []))
+}
+
+function objectList(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
 }

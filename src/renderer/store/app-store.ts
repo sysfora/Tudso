@@ -390,7 +390,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     let imported = input.resumeImport ?? null
     try {
       if (input.resumeFile) {
-        context.resume = await desktop.sessions.saveResume(conversation.id, input.resumeFile)
+        context.resume = await desktop.sessions.saveResume(conversation.id, input.resumeFile, imported ?? undefined)
         imported ??= await desktop.resume.parse(input.resumeFile)
       } else if (input.usedDefaults && userId) {
         context.resume = (await desktop.sessions.copyDefaultResume(userId, conversation.id)) ?? undefined

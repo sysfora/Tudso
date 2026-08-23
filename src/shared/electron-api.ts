@@ -80,16 +80,17 @@ export interface ElectronAPI {
     set: (userId: string, profile: Partial<LocalProfile>) => Promise<LocalUserData>
     complete: (userId: string) => Promise<LocalUserData>
     setMemory: (userId: string, patch: { entries?: MemoryEntry[]; enabled?: boolean }) => Promise<LocalUserData>
-    saveResume: (userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalUserData>
+    saveResume: (userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }, imported?: ResumeImportResult) => Promise<LocalUserData>
     deleteResume: (userId: string) => Promise<LocalUserData>
   }
   resume: {
     parse: (file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<ResumeImportResult>
+    extract: (file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<{ text: string; extractedChars: number }>
     parseUser: (userId: string) => Promise<ResumeImportResult | null>
     parseSession: (sessionId: string, meta: LocalResumeMeta) => Promise<ResumeImportResult | null>
   }
   sessions: {
-    saveResume: (sessionId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalResumeMeta>
+    saveResume: (sessionId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }, imported?: ResumeImportResult) => Promise<LocalResumeMeta>
     copyDefaultResume: (userId: string, sessionId: string) => Promise<LocalResumeMeta | null>
   }
   ai: {

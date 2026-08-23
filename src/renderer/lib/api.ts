@@ -179,6 +179,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ userMessage, assistantContent, existing }),
       }),
+    parseResume: (text: string) =>
+      fetchJson<{ parsed: import('@shared/types').ParsedResume; memories: string[] }>('/ai/parse-resume', {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      }),
   },
   entitlements: {
     get: () => fetchJson<Entitlement | null>('/entitlements'),

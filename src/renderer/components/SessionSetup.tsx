@@ -8,7 +8,7 @@ import {
   type ProfileSetupValues,
 } from '@/components/ProfileSetup'
 import { pickResumeFile } from '@/lib/pick-resume'
-import { desktop } from '@/lib/desktop'
+import { importPickedResume } from '@/lib/import-resume'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
 import { DEFAULT_PROFILE_PREFERENCES, snapshotLocalProfile } from '@/types/api'
@@ -91,7 +91,7 @@ export function SessionSetup() {
     try {
       const picked = await pickResumeFile()
       if (!picked) return
-      const imported = await desktop.resume.parse(picked)
+      const imported = await importPickedResume(picked)
       setResumeFile(picked)
       setResumeImport(imported)
       setImportedProfile(imported.profile)
@@ -171,7 +171,7 @@ export function SessionSetup() {
             </Button>
           )}
           {step === 1 ? (
-            <Button variant="outline" className="flex-1" onClick={() => setStep(step + 1)} disabled={resumeUploading}>
+            <Button variant="outline" className="flex-1" onClick={() => setStep(step + 1)}>
               {resumeName ? 'Continue' : 'Skip'}
             </Button>
           ) : (

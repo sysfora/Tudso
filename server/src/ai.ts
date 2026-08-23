@@ -5,6 +5,7 @@ import { cleanTranscript } from './transcript.js'
 import type { AIRequest, AIResponse, AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
 import { DEFAULT_PROFILE_PREFERENCES } from './types.js'
 import { parseExtractedFacts } from './memory.js'
+import { normalizeResumeExtraction, RESUME_EXTRACT_SYSTEM } from './resume-extract.js'
 
 const openai = new OpenAI({
   apiKey: config.ai.apiKey,
@@ -203,6 +204,39 @@ export async function extractMemoryFacts(
     logError('Failed to extract memories', error)
     return []
   }
+}
+
+export async function extractResumeStructured(text: string): Promise<{ parsed: ParsedResume; memories: string[] }> {
+  const clipped = text.replace(/\u0000/g, '').trim().slice(0, 12_000)
+  if (!clipped) throw new Error('Resume text is empty')
+  const completion = await openai.chat.completions.create({
+    model: config.ai.chatModel,
+    temperature: 0,
+    max_tokens: 2500,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: RESUME_EXTRACT_SYSTEM },
+      { role: 'user', content: clipped },
+    ],
+  })
+  const content = completion.choices[0]?.message?.content ?? '{}'
+  let raw: unknown = {}
+  try {
+    raw = JSON.parse(content)
+  } catch {
+    raw = {}
+  }
+  const result = normalizeResumeExtraction(raw)
+  if (
+    !result.parsed.skills.length &&
+    !result.parsed.projects.length &&
+    !result.parsed.experience.length &&
+    !result.parsed.name &&
+    !result.parsed.summary
+  ) {
+    throw new Error('Could not extract resume fields')
+  }
+  return result
 }
 
 export function buildChatMessages(

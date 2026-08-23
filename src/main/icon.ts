@@ -1,35 +1,60 @@
-import { app, nativeImage, type NativeImage } from 'electron'
+import { app, nativeImage, type BrowserWindow, type NativeImage } from 'electron'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isMac, isWindows } from './platform'
+import { isMac } from './platform'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export function appIconPath(): string | null {
-  const names = isWindows ? ['icon.ico', 'icon.png'] : ['icon.png', 'icon.ico']
+function iconRoots() {
   const roots = [
     process.resourcesPath,
     path.join(process.resourcesPath ?? '', 'resources'),
     path.join(__dirname, '..', 'public'),
     path.join(__dirname, '..', 'server', 'public'),
     path.join(__dirname, '..', 'dist'),
-    path.join(app.getAppPath(), 'public'),
-    path.join(app.getAppPath(), 'server', 'public'),
-    path.join(app.getAppPath(), 'dist'),
+    path.join(process.cwd(), 'public'),
+    path.join(process.cwd(), 'server', 'public'),
   ]
-  for (const name of names) {
-    const match = roots.map((dir) => path.join(dir, name)).find((file) => existsSync(file))
-    if (match) return match
+  try {
+    roots.push(path.join(app.getAppPath(), 'public'))
+    roots.push(path.join(app.getAppPath(), 'server', 'public'))
+    roots.push(path.join(app.getAppPath(), 'dist'))
+  } catch {
+    undefined
+  }
+  return roots
+}
+
+function iconCandidates() {
+  const files: string[] = []
+  const seen = new Set<string>()
+  for (const name of ['icon.png', 'icon.ico']) {
+    for (const dir of iconRoots()) {
+      const file = path.join(dir, name)
+      if (!existsSync(file) || seen.has(file)) continue
+      seen.add(file)
+      files.push(file)
+    }
+  }
+  return files
+}
+
+function loadAppIconSource() {
+  for (const file of iconCandidates()) {
+    const image = nativeImage.createFromPath(file)
+    if (image.isEmpty()) continue
+    return { path: file, image }
   }
   return null
 }
 
+export function appIconPath(): string | null {
+  return loadAppIconSource()?.path ?? null
+}
+
 export function loadAppIcon(): NativeImage | undefined {
-  const file = appIconPath()
-  if (!file) return undefined
-  const icon = nativeImage.createFromPath(file)
-  return icon.isEmpty() ? undefined : icon
+  return loadAppIconSource()?.image
 }
 
 export function loadTrayIcon(): NativeImage {
@@ -37,6 +62,24 @@ export function loadTrayIcon(): NativeImage {
   if (!source) return nativeImage.createEmpty()
   const size = isMac ? 22 : 32
   return source.resize({ width: size, height: size, quality: 'best' })
+}
+
+export function applyWindowIcon(win: BrowserWindow | null | undefined) {
+  if (!win || win.isDestroyed()) return
+  const icon = loadAppIcon()
+  if (!icon) return
+  try {
+    win.setIcon(icon)
+  } catch {
+    undefined
+  }
+}
+
+export function refreshWindowIcon(win: BrowserWindow | null | undefined) {
+  applyWindowIcon(win)
+  setTimeout(() => applyWindowIcon(win), 0)
+  setTimeout(() => applyWindowIcon(win), 50)
+  setTimeout(() => applyWindowIcon(win), 250)
 }
 
 export function applyAppIcon() {

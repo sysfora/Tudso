@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { CHANNELS } from '../shared/channels'
 import type { OverlayKeyEvent, OverlayPointerEvent } from '../shared/types'
 import { isMac, isWindows, usesNativeOverlay } from './platform'
+import { applyWindowIcon } from './icon'
 
 const WM_KEYDOWN = 0x0100
 const WM_KEYUP = 0x0101
@@ -124,6 +125,8 @@ let overlayPointerDown = false
 let overlayDragCssKey: string | null = null
 let overlayTyping = false
 let overlayPassthrough = 0
+let overlayChromeApplied = false
+let restoreWindowChrome: (() => void) | null = null
 const mods = { shift: false, ctrl: false, alt: false, meta: false, caps: false }
 
 function loadNative(): NativeApi | null {
@@ -668,6 +671,14 @@ export function endOverlayPassthrough() {
   overlayPassthrough = Math.max(0, overlayPassthrough - 1)
 }
 
+export function setWindowChromeRestorer(fn: () => void) {
+  restoreWindowChrome = fn
+}
+
+export function isOverlayChromeApplied() {
+  return overlayChromeApplied
+}
+
 export function withOverlayPassthrough<T>(fn: () => T): T {
   beginOverlayPassthrough()
   try {
@@ -717,15 +728,18 @@ export async function withOverlayHostedDialog<T>(
   fn: (parent?: BrowserWindow) => Promise<T>,
 ): Promise<T> {
   const host = win && !win.isDestroyed() ? win : null
-  const restoreOverlay = Boolean(host && usesNativeOverlay())
+  const restoreOverlay = overlayChromeApplied && usesNativeOverlay()
   beginOverlayPassthrough()
   try {
     if (restoreOverlay && host) prepareWindowForDialog(host)
     return await fn(host ?? undefined)
   } finally {
-    if (restoreOverlay && host && !host.isDestroyed()) {
-      applyOverlayWindowStyle(host)
-      raiseFloatingWindow(host)
+    if (host && !host.isDestroyed()) {
+      if (restoreWindowChrome) restoreWindowChrome()
+      else if (restoreOverlay) {
+        applyOverlayWindowStyle(host)
+        raiseFloatingWindow(host)
+      }
     }
     endOverlayPassthrough()
   }
@@ -837,6 +851,7 @@ export function raiseFloatingWindow(win: BrowserWindow) {
 }
 
 export function applyOverlayWindowStyle(win: BrowserWindow) {
+  overlayChromeApplied = true
   win.setSkipTaskbar(true)
   win.webContents.setBackgroundThrottling(false)
   try {
@@ -867,6 +882,7 @@ export function applyOverlayWindowStyle(win: BrowserWindow) {
 }
 
 export function clearOverlayWindowStyle(win: BrowserWindow) {
+  overlayChromeApplied = false
   stopOverlayKeyboard()
   clearMouseActivateHook()
   if (overlayDragCssKey) {
@@ -891,6 +907,7 @@ export function clearOverlayWindowStyle(win: BrowserWindow) {
     undefined
   }
   restoreTaskbarWindowStyle(win)
+  applyWindowIcon(win)
 }
 
 function restoreTaskbarWindowStyle(win: BrowserWindow) {
@@ -904,6 +921,7 @@ function restoreTaskbarWindowStyle(win: BrowserWindow) {
     api.SetWindowLongW(handle, GWL_EXSTYLE, next | 0)
     api.SetWindowPos(handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED)
     applyNativeRoundedCorners(win)
+    applyWindowIcon(win)
   } catch (error) {
     console.error('[overlay] failed to restore taskbar window style', error)
   }
@@ -1033,7 +1051,7 @@ export async function withPreservedForeground<T>(
   const self = appWin && !appWin.isDestroyed() ? hwnd(appWin) : 0n
   const restore = () => {
     if (previous && previous !== self) restoreForegroundWindow(previous)
-    else if (appWin && !appWin.isDestroyed()) ensureNoActivate(appWin)
+    else if (overlayChromeApplied && appWin && !appWin.isDestroyed()) ensureNoActivate(appWin)
   }
   try {
     return await fn()

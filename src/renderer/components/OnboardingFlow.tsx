@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
 import { desktop } from '@/lib/desktop'
 import { pickResumeFile } from '@/lib/pick-resume'
+import { importPickedResume } from '@/lib/import-resume'
 import { DEFAULT_PROFILE_PREFERENCES } from '@/types/api'
 import {
   PROFILE_SETUP_STEPS,
@@ -104,7 +105,8 @@ export function OnboardingFlow() {
     try {
       const picked = await pickResumeFile()
       if (!picked) return
-      const saved = await desktop.profile.saveResume(userId, picked)
+      const imported = await importPickedResume(picked)
+      const saved = await desktop.profile.saveResume(userId, picked, imported)
       applyLocalUser(saved)
       setValues((current) => mergeSetupValuesFromProfile(current, saved.profile))
       const filled = saved.profile.skills.length || saved.profile.goals.length || saved.profile.preferredName
@@ -154,7 +156,7 @@ export function OnboardingFlow() {
             </Button>
           ) : null}
           {step === 1 ? (
-            <Button variant="outline" className="flex-1" onClick={() => setStep(step + 1)} disabled={resumeUploading}>
+            <Button variant="outline" className="flex-1" onClick={() => setStep(step + 1)}>
               {resumeName ? 'Continue' : 'Skip'}
             </Button>
           ) : (

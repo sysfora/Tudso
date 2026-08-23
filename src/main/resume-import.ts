@@ -4,11 +4,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { mergeResumeIntoProfile, memoriesFromResume, parseResumeText, profileFromResume, clipResumeText } from '../shared/resume-parse'
 import type { LocalProfile, ResumeImportResult } from '../shared/types'
 
-export async function importResumeFromBuffer(file: {
+export async function extractResumeTextFromFile(file: {
   fileName: string
   mimeType: string
   data: ArrayBuffer | Buffer | Uint8Array
-}): Promise<ResumeImportResult> {
+}): Promise<{ text: string; extractedChars: number }> {
   const bytes = toBuffer(file.data)
   let text = ''
   try {
@@ -16,6 +16,16 @@ export async function importResumeFromBuffer(file: {
   } catch {
     text = ''
   }
+  const clipped = clipResumeText(text)
+  return { text: clipped, extractedChars: clipped.replace(/\s+/g, ' ').trim().length }
+}
+
+export async function importResumeFromBuffer(file: {
+  fileName: string
+  mimeType: string
+  data: ArrayBuffer | Buffer | Uint8Array
+}): Promise<ResumeImportResult> {
+  const { text } = await extractResumeTextFromFile(file)
   const parsed = parseResumeText(text)
   const clipped = clipResumeText(text)
   return {

@@ -4,7 +4,7 @@ import express, { type Request, type Response, type Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import { authenticateWithEmailPassword, buildCallbackUrl, confirmEmailChange, confirmEmailVerification, confirmPasswordReset, createAccount, createAppSession, exchangeOAuthCallback, generateAuthState, getOAuthUrl, requestEmailVerification, requestPasswordReset, resolveAccessToken, verifyAuthState } from './auth.js'
-import { chat, transcription, vision, buildChatMessages, buildSystemPrompt, applyTurnContext, resolveChatModel, resolveVisionModel, extractMemoryFacts } from './ai.js'
+import { chat, transcription, vision, buildChatMessages, buildSystemPrompt, applyTurnContext, resolveChatModel, resolveVisionModel, extractMemoryFacts, extractResumeStructured } from './ai.js'
 import { beginPlainStream, endPlainStream, writePlainStream } from './stream.js'
 import { config } from './config.js'
 import { logError } from './log.js'
@@ -1143,6 +1143,20 @@ router.post('/ai/memory-extract', requireAuth, aiRateLimiter, async (req: Reques
   }
   const facts = await extractMemoryFacts(userMessage, assistantContent, existing ?? [])
   res.json({ facts })
+})
+
+router.post('/ai/parse-resume', requireAuth, aiRateLimiter, async (req: Request, res: Response) => {
+  const schema = z.object({
+    text: z.string().min(1).max(20_000),
+  })
+  const { text } = schema.parse(req.body)
+  try {
+    const result = await extractResumeStructured(text)
+    res.json(result)
+  } catch (error) {
+    logError('Failed to parse resume with AI', error, { user: req.userId })
+    res.status(422).json({ error: (error as Error).message || 'Could not parse resume' })
+  }
 })
 
 router.get('/ai/realtime/session', requireAuth, async (req: Request, res: Response) => {

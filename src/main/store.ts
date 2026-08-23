@@ -13,7 +13,7 @@ import type {
   ShortcutMap,
   WindowBounds,
 } from '../shared/types'
-import { emptyLocalProfile, emptyLocalUser, removeAllProfiles, removeAllSessionResumes, removeResumeFile, removeSessionResume, writeResumeFile, writeSessionResumeFile, copyUserResumeToSession, readUserResumeFile, readSessionResumeFile } from './local-profile'
+import { emptyLocalProfile, emptyLocalUser, profileDir, removeAllProfiles, removeAllSessionResumes, removeResumeFile, removeSessionResume, sessionResumeDir, writeResumeFile, writeSessionResumeFile, copyUserResumeToSession, readUserResumeFile, readSessionResumeFile, readResumeImportCache, writeResumeImportCache } from './local-profile'
 import { mergeAutoMemories, normalizeMemoryEntries } from '../shared/memory'
 import { applyResumeImport, importResumeFromBuffer } from './resume-import'
 
@@ -167,17 +167,19 @@ export class AppStore {
   async saveUserResume(
     userId: string,
     file: { fileName: string; mimeType: string; data: ArrayBuffer },
+    imported?: ResumeImportResult,
   ): Promise<LocalUserData> {
     const current = this.getUserData(userId)
     if (current.resume?.storedName) await removeResumeFile(userId, current.resume.storedName)
     const bytes = Buffer.isBuffer(file.data) ? file.data : Buffer.from(new Uint8Array(file.data))
     const resume = await writeResumeFile(userId, file.fileName, file.mimeType, bytes)
-    const imported = await importResumeFromBuffer({ fileName: file.fileName, mimeType: file.mimeType, data: bytes })
+    const result = imported ?? await importResumeFromBuffer({ fileName: file.fileName, mimeType: file.mimeType, data: bytes })
+    await writeResumeImportCache(profileDir(userId), result)
     const next: LocalUserData = {
       ...current,
       resume,
-      profile: applyResumeImport(current.profile, imported),
-      memories: mergeAutoMemories(current.memories, imported.memories),
+      profile: applyResumeImport(current.profile, result),
+      memories: mergeAutoMemories(current.memories, result.memories),
       memoryEnabled: true,
     }
     this.state.users[userId] = next
@@ -198,10 +200,13 @@ export class AppStore {
   async saveSessionResume(
     sessionId: string,
     file: { fileName: string; mimeType: string; data: ArrayBuffer },
+    imported?: ResumeImportResult,
   ): Promise<LocalResumeMeta> {
     await removeSessionResume(sessionId)
     const bytes = Buffer.isBuffer(file.data) ? file.data : Buffer.from(new Uint8Array(file.data))
-    return writeSessionResumeFile(sessionId, file.fileName, file.mimeType, bytes)
+    const meta = await writeSessionResumeFile(sessionId, file.fileName, file.mimeType, bytes)
+    if (imported) await writeResumeImportCache(sessionResumeDir(sessionId), imported)
+    return meta
   }
 
   async copyDefaultResumeToSession(userId: string, sessionId: string): Promise<LocalResumeMeta | null> {
@@ -212,6 +217,8 @@ export class AppStore {
   }
 
   async parseUserResume(userId: string): Promise<ResumeImportResult | null> {
+    const cached = await readResumeImportCache(profileDir(userId))
+    if (cached) return cached
     const current = this.getUserData(userId)
     if (!current.resume) return null
     const bytes = await readUserResumeFile(userId, current.resume.storedName)
@@ -224,6 +231,8 @@ export class AppStore {
   }
 
   async parseSessionResume(sessionId: string, meta: LocalResumeMeta): Promise<ResumeImportResult | null> {
+    const cached = await readResumeImportCache(sessionResumeDir(sessionId))
+    if (cached) return cached
     const bytes = await readSessionResumeFile(sessionId, meta.storedName)
     if (!bytes) return null
     return importResumeFromBuffer({

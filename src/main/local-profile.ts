@@ -1,7 +1,9 @@
 import { app } from 'electron'
 import { copyFile, mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
-import type { LocalProfile, LocalResumeMeta, LocalUserData } from '../shared/types'
+import type { LocalProfile, LocalResumeMeta, LocalUserData, ResumeImportResult } from '../shared/types'
+
+const IMPORT_CACHE = 'resume.import.json'
 
 const ALLOWED_EXT = new Set(['.pdf', '.docx', '.txt', '.doc'])
 
@@ -50,9 +52,30 @@ export async function writeResumeFile(
   }
 }
 
+export async function writeResumeImportCache(dir: string, imported: ResumeImportResult): Promise<void> {
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, IMPORT_CACHE), JSON.stringify(imported), 'utf8')
+}
+
+export async function readResumeImportCache(dir: string): Promise<ResumeImportResult | null> {
+  try {
+    const raw = JSON.parse(await readFile(join(dir, IMPORT_CACHE), 'utf8')) as ResumeImportResult
+    if (!raw?.parsed || !Array.isArray(raw.parsed.skills)) return null
+    return raw
+  } catch {
+    return null
+  }
+}
+
+export async function removeResumeImportCache(dir: string): Promise<void> {
+  await unlink(join(dir, IMPORT_CACHE)).catch(() => undefined)
+}
+
 export async function removeResumeFile(userId: string, storedName?: string): Promise<void> {
   if (!storedName) return
-  await unlink(join(profileDir(userId), storedName)).catch(() => undefined)
+  const dir = profileDir(userId)
+  await unlink(join(dir, storedName)).catch(() => undefined)
+  await removeResumeImportCache(dir)
 }
 
 export async function removeAllProfiles(): Promise<void> {
@@ -107,6 +130,7 @@ export async function copyUserResumeToSession(
   await mkdir(dir, { recursive: true })
   try {
     await copyFile(source, join(dir, meta.storedName))
+    await copyFile(join(profileDir(userId), IMPORT_CACHE), join(dir, IMPORT_CACHE)).catch(() => undefined)
     return { ...meta }
   } catch {
     return undefined
