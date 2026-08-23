@@ -7,7 +7,10 @@ name: Release
 # Version: tag v1.2.3, or workflow input, or a patch bump from package.json.
 # After publish, the same version is committed back to the default branch.
 #
-# GitHub secret: RELEASE_UPLOAD_TOKEN (same value as Dokploy env RELEASE_UPLOAD_TOKEN)
+# Upload token: GitHub secret RELEASE_UPLOAD_TOKEN (same value as Dokploy).
+# If the secret lives on a named Environment (not Repository secrets), set
+# repository variable RELEASE_ENVIRONMENT to that environment's exact name.
+# Default environment: production.
 
 on:
   push:
@@ -18,6 +21,11 @@ on:
       version:
         description: 'Version to release (empty = bump patch, e.g. 1.0.0 → 1.0.1)'
         required: false
+        type: string
+      environment:
+        description: 'GitHub Environment that holds RELEASE_UPLOAD_TOKEN'
+        required: false
+        default: production
         type: string
 
 permissions:
@@ -109,6 +117,8 @@ jobs:
     name: Publish installers
     needs: [version, build]
     runs-on: ubuntu-latest
+    # Environment secrets are empty unless this job names the environment.
+    environment: ${{ github.event.inputs.environment || vars.RELEASE_ENVIRONMENT || 'production' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -122,16 +132,20 @@ jobs:
 
       - name: Check upload token
         env:
-          RELEASE_UPLOAD_TOKEN: ${{ secrets.RELEASE_UPLOAD_TOKEN }}
+          RELEASE_UPLOAD_TOKEN: ${{ secrets.RELEASE_UPLOAD_TOKEN || vars.RELEASE_UPLOAD_TOKEN }}
+          RELEASE_ENVIRONMENT: ${{ github.event.inputs.environment || vars.RELEASE_ENVIRONMENT || 'production' }}
         run: |
           if [ -z "$RELEASE_UPLOAD_TOKEN" ]; then
-            echo "Set GitHub secret RELEASE_UPLOAD_TOKEN to the same value as Dokploy env RELEASE_UPLOAD_TOKEN."
+            echo "RELEASE_UPLOAD_TOKEN is empty in environment '$RELEASE_ENVIRONMENT'."
+            echo "Put it in Settings → Environments → $RELEASE_ENVIRONMENT → Environment secrets,"
+            echo "or in Settings → Secrets and variables → Actions → Repository secrets."
+            echo "If your environment has a different name, set repository variable RELEASE_ENVIRONMENT to that name."
             exit 1
           fi
 
       - name: Upload installers to server
         env:
-          RELEASE_UPLOAD_TOKEN: ${{ secrets.RELEASE_UPLOAD_TOKEN }}
+          RELEASE_UPLOAD_TOKEN: ${{ secrets.RELEASE_UPLOAD_TOKEN || vars.RELEASE_UPLOAD_TOKEN }}
           API_URL: ${{ vars.VITE_SERVER_URL || 'https://tudso.com' }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
