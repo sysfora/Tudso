@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { copyFile, mkdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import type { LocalProfile, LocalResumeMeta, LocalUserData } from '../shared/types'
 
@@ -78,6 +78,22 @@ export async function writeSessionResumeFile(
     fileName,
     mimeType: mimeType || 'application/octet-stream',
     storedName,
+  }
+}
+
+export async function readUserResumeFile(userId: string, storedName: string): Promise<Buffer | null> {
+  try {
+    return await readFile(join(profileDir(userId), storedName))
+  } catch {
+    return null
+  }
+}
+
+export async function readSessionResumeFile(sessionId: string, storedName: string): Promise<Buffer | null> {
+  try {
+    return await readFile(join(sessionResumeDir(sessionId), storedName))
+  } catch {
+    return null
   }
 }
 

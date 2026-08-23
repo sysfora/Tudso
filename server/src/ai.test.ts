@@ -40,4 +40,26 @@ describe('ai system prompt', () => {
     expect(prompt).toContain('I prefer TypeScript')
     expect(prompt).toContain('I work remotely')
   })
+
+  it('includes resume content when provided', () => {
+    const prompt = buildSystemPrompt({
+      resume: {
+        name: 'Jane Doe',
+        headline: 'Staff Engineer',
+        skills: ['Go', 'Postgres'],
+        languages: ['English'],
+        experience: [{ company: 'Acme', role: 'Staff Engineer', duration: '2020-Present', description: 'Built payments APIs' }],
+        education: [],
+        projects: [],
+        certifications: [],
+        achievements: [],
+        rawText: 'Jane Doe Staff Engineer Acme Built payments APIs in Go',
+      },
+    })
+    expect(prompt).toContain('RESUME')
+    expect(prompt).toContain('Jane Doe')
+    expect(prompt).toContain('Built payments APIs')
+    expect(prompt).toContain('Jane Doe Staff Engineer Acme')
+    expect(prompt).toContain('Answer from this resume')
+  })
 })

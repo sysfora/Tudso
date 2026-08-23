@@ -3,8 +3,9 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { withPreservedForeground } from './overlay'
 import { isMac } from './platform'
-import { excludeWindowFromCapture, restoreOverlayAfterCapture, restoreWindowAfterCapture } from './windows'
+import { excludeWindowFromCapture, getMainWindow, restoreOverlayAfterCapture, restoreWindowAfterCapture } from './windows'
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -31,7 +32,7 @@ export async function ensureCaptureAccess() {
   }
 }
 
-export async function captureScreen(): Promise<string | null> {
+async function captureScreenRaw(): Promise<string | null> {
   try {
     await ensureCaptureAccess()
     const { display, width, height } = captureThumbnailSize()
@@ -50,32 +51,40 @@ export async function captureScreen(): Promise<string | null> {
   }
 }
 
+export async function captureScreen(): Promise<string | null> {
+  return withPreservedForeground(captureScreenRaw, getMainWindow())
+}
+
 export async function captureScreenWithoutApp(keepExcluded = false): Promise<string | null> {
-  excludeWindowFromCapture(keepExcluded)
-  await delay(50)
-  try {
-    return await captureScreen()
-  } finally {
-    restoreWindowAfterCapture()
-  }
+  return withPreservedForeground(async () => {
+    excludeWindowFromCapture(keepExcluded)
+    await delay(50)
+    try {
+      return await captureScreenRaw()
+    } finally {
+      restoreWindowAfterCapture()
+    }
+  }, getMainWindow())
 }
 
 export async function captureActiveWindow(): Promise<string | null> {
-  try {
-    await ensureCaptureAccess()
-    const { width, height } = captureThumbnailSize()
-    const sources = await desktopCapturer.getSources({
-      types: ['window'],
-      thumbnailSize: { width, height },
-    })
-    restoreOverlayAfterCapture()
-    const source = sources[0]
-    if (!source) return null
-    return source.thumbnail.toDataURL()
-  } catch {
-    restoreOverlayAfterCapture()
-    return null
-  }
+  return withPreservedForeground(async () => {
+    try {
+      await ensureCaptureAccess()
+      const { width, height } = captureThumbnailSize()
+      const sources = await desktopCapturer.getSources({
+        types: ['window'],
+        thumbnailSize: { width, height },
+      })
+      restoreOverlayAfterCapture()
+      const source = sources[0]
+      if (!source) return null
+      return source.thumbnail.toDataURL()
+    } catch {
+      restoreOverlayAfterCapture()
+      return null
+    }
+  }, getMainWindow())
 }
 
 export async function captureRegion(): Promise<string | null> {

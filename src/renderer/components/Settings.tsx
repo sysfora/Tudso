@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { desktop } from '@/lib/desktop'
+import { pickResumeFile } from '@/lib/pick-resume'
 import { cn } from '@/lib/cn'
 import { createId, formatMemoryDate } from '@/lib/format'
 import { previewAppearance } from '@/hooks/use-theme'
@@ -451,7 +452,7 @@ function ProfileSection() {
   const session = useAuthStore((state) => state.session)
   const profile = useAuthStore((state) => state.profile)
   const updateProfile = useAuthStore((state) => state.updateProfile)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const applyLocalUser = useAuthStore((state) => state.applyLocalUser)
   const prefs = resolveProfilePreferences(profile)
   const [preferredName, setPreferredName] = useState(profile?.preferredName ?? '')
   const [profession, setProfession] = useState(profile?.profession ?? '')
@@ -508,22 +509,37 @@ function ProfileSection() {
       })
   }
 
-  const uploadResume = async (file: File) => {
+  const uploadResume = async () => {
     const userId = session?.userId
     if (!userId) {
       setError('Sign in to save a resume on this device.')
       return
     }
+    const picked = await pickResumeFile()
+    if (!picked) return
     setResumeBusy(true)
     setError(null)
     try {
-      const saved = await desktop.profile.saveResume(userId, {
-        fileName: file.name,
-        mimeType: file.type,
-        data: await file.arrayBuffer(),
-      })
-      setResumeName(saved.fileName || file.name)
-      setStatus('Resume saved on this device.')
+      const saved = await desktop.profile.saveResume(userId, picked)
+      applyLocalUser(saved)
+      const next = saved.profile
+      setPreferredName(next.preferredName ?? preferredName)
+      setProfession(next.profession ?? profession)
+      setRole(next.role ?? role)
+      setIndustry(next.industry ?? industry)
+      setEducation(next.education ?? education)
+      setSkills(next.skills.join(', '))
+      setGoals(next.goals.join('\n'))
+      if (next.technicalLevel) setTechnicalLevel(next.technicalLevel)
+      setCustomContext(next.customContext ?? customContext)
+      setResumeName(saved.resume?.fileName || picked.fileName)
+      const filled = next.skills.length || next.goals.length || next.customContext
+      setStatus(
+        filled
+          ? 'Resume saved. Profile fields and memory were filled from the file.'
+          : 'Resume saved on this device.',
+      )
+      if (!filled) setError('Saved the file, but could not read enough text to fill your profile. Try PDF, DOCX, or TXT.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save resume.')
     } finally {
@@ -753,20 +769,9 @@ function ProfileSection() {
             description={
               resumeName
                 ? `${resumeName}. Kept on this device.`
-                : 'Optional. Kept on this device, not uploaded to the server.'
+                : 'We extract skills, work, projects, and goals into this profile and memory. Kept on this device.'
             }
           >
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (file) void uploadResume(file)
-              }}
-            />
             <div className="flex shrink-0 items-center gap-1">
               {resumeName ? (
                 <Button variant="danger" size="sm" disabled={resumeBusy} loading={resumeBusy} onClick={() => void removeResume()}>
@@ -778,7 +783,7 @@ function ProfileSection() {
                 size="sm"
                 disabled={resumeBusy}
                 loading={resumeBusy}
-                onClick={() => fileRef.current?.click()}
+                onClick={() => void uploadResume()}
               >
                 {resumeName ? 'Replace' : 'Upload'}
               </Button>

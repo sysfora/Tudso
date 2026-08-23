@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { api, clearToken, setToken } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
-import type { AuthSession, LocalProfile } from '@shared/types'
+import type { AuthSession, LocalProfile, LocalUserData } from '@shared/types'
 import type { Entitlement, MemoryEntry, UserProfile } from '@/types/api'
 import { toUserProfile } from '@/types/api'
 import { MAX_MEMORIES, normalizeMemoryEntries } from '@shared/memory'
@@ -61,6 +61,7 @@ interface AuthActions {
   loadProfile: () => Promise<void>
   hydrateSignedIn: (session: AuthSession) => Promise<void>
   updateProfile: (profile: Partial<UserProfile>) => Promise<void>
+  applyLocalUser: (local: LocalUserData) => void
   setOnboardingStep: (step: number) => void
   completeOnboarding: () => Promise<void>
   loadEntitlement: () => Promise<void>
@@ -184,6 +185,17 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     const local = await desktop.profile.set(userId, partial as Partial<LocalProfile>)
     const profile = toUserProfile(userId, local.profile)
     set({ profile })
+  },
+
+  applyLocalUser: (local) => {
+    const userId = get().session?.userId
+    if (!userId) return
+    set({
+      profile: toUserProfile(userId, local.profile),
+      memories: normalizeMemoryEntries(local.memories),
+      memoryEnabled: local.memoryEnabled !== false,
+      memoriesLoaded: true,
+    })
   },
 
   setOnboardingStep: (step) => set({ onboardingStep: step }),

@@ -8,9 +8,11 @@ import type {
   LocalResumeMeta,
   LocalUserData,
   MemoryEntry,
+  ResumeImportResult,
   OverlayKeyEvent,
   OverlayPointerEvent,
   PickedFile,
+  PickedResume,
   Settings,
   ShortcutId,
   ShortcutMap,
@@ -78,8 +80,13 @@ export interface ElectronAPI {
     set: (userId: string, profile: Partial<LocalProfile>) => Promise<LocalUserData>
     complete: (userId: string) => Promise<LocalUserData>
     setMemory: (userId: string, patch: { entries?: MemoryEntry[]; enabled?: boolean }) => Promise<LocalUserData>
-    saveResume: (userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalResumeMeta>
+    saveResume: (userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalUserData>
     deleteResume: (userId: string) => Promise<LocalUserData>
+  }
+  resume: {
+    parse: (file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<ResumeImportResult>
+    parseUser: (userId: string) => Promise<ResumeImportResult | null>
+    parseSession: (sessionId: string, meta: LocalResumeMeta) => Promise<ResumeImportResult | null>
   }
   sessions: {
     saveResume: (sessionId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => Promise<LocalResumeMeta>
@@ -96,6 +103,7 @@ export interface ElectronAPI {
     quit: () => void
     openExternal: (url: string) => Promise<void>
     pickFiles: () => Promise<PickedFile[]>
+    pickResume: () => Promise<PickedResume | null>
     confirm: (message: string) => boolean
     notify: (title: string, body: string) => void
     deleteLocalData: () => Promise<void>

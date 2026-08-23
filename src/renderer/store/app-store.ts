@@ -7,7 +7,7 @@ import type {
   ChatMessage,
   Conversation,
   LocalProfile,
-  LocalResumeMeta,
+  ResumeImportResult,
   SessionContext,
   Settings,
   SettingsSection,
@@ -19,8 +19,9 @@ import { create } from 'zustand'
 import { api } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import { useAuthStore } from '@/store/auth-store'
-import { snapshotLocalProfile, toPromptProfile } from '@/types/api'
+import { snapshotLocalProfile, toPromptProfile, toPromptResume } from '@/types/api'
 import { MAX_MEMORIES, mergeAutoMemories, shouldLearnFromMessage, storedUserContent } from '@shared/memory'
+import { mergePromptMemories, promptResumeFromImport } from '@shared/resume-parse'
 import { codeFromAnswer, markdownToPlain } from '@/lib/clipboard-format'
 import { createId, isPlaceholderSessionTitle, MAX_SESSION_TITLE, sessionTitleFromChat } from '@/lib/format'
 
@@ -79,6 +80,8 @@ interface AppActions {
     profile: LocalProfile
     usedDefaults: boolean
     resumeFile?: { fileName: string; mimeType: string; data: ArrayBuffer }
+    resumeImport?: ResumeImportResult
+    memoryFacts?: string[]
   }) => Promise<void>
   selectConversation: (id: string) => void
   continueSession: (id?: string) => void
@@ -131,11 +134,12 @@ function chatHistory(messages: ChatMessage[]) {
     .map((item) => ({ role: item.role as 'user' | 'assistant', content: item.content }))
 }
 
-function promptMemories() {
+function promptMemories(conversation?: Conversation | null) {
+  const session = conversation?.context?.promptMemories
   const { memoryEnabled, memories } = useAuthStore.getState()
-  if (!memoryEnabled) return undefined
-  const texts = memories.map((entry) => entry.text).filter(Boolean)
-  return texts.length ? texts : undefined
+  const live = memoryEnabled ? memories.map((entry) => entry.text) : []
+  const merged = mergePromptMemories([session, live])
+  return merged.length ? merged : undefined
 }
 
 function learnFromChat(userText: string, assistantContent: string) {
@@ -158,23 +162,55 @@ function promptProfile(conversation?: Conversation | null) {
   return toPromptProfile(conversation?.context?.profile ?? useAuthStore.getState().profile)
 }
 
+function promptResume(conversation?: Conversation | null) {
+  return toPromptResume(conversation?.context?.promptResume)
+}
+
+function liveMemoryTexts() {
+  return useAuthStore.getState().memories.map((entry) => entry.text)
+}
+
 function trackSession() {
   void api.usage.trackSession().catch(() => undefined)
 }
 
 async function attachDefaultContext(conversation: Conversation): Promise<Conversation> {
-  if (conversation.context) return conversation
-  const userId = useAuthStore.getState().session?.userId
-  let resume: LocalResumeMeta | undefined
-  if (userId) {
-    resume = (await desktop.sessions.copyDefaultResume(userId, conversation.id)) ?? undefined
+  if (conversation.context?.promptResume || conversation.context?.promptMemories?.length) {
+    return conversation
   }
+  const usedDefaults = conversation.context?.usedDefaults ?? true
+  return hydrateSessionPrompt(conversation, {
+    usedDefaults,
+    copyDefaultResume: usedDefaults && !conversation.context?.resume,
+  })
+}
+
+async function hydrateSessionPrompt(
+  conversation: Conversation,
+  options: { usedDefaults: boolean; copyDefaultResume: boolean },
+): Promise<Conversation> {
+  const userId = useAuthStore.getState().session?.userId
+  let resume = conversation.context?.resume
+  let imported: ResumeImportResult | null = null
+  try {
+    if (resume) {
+      imported = await desktop.resume.parseSession(conversation.id, resume)
+    } else if (options.copyDefaultResume && userId) {
+      resume = (await desktop.sessions.copyDefaultResume(userId, conversation.id)) ?? undefined
+      imported = resume ? await desktop.resume.parseUser(userId) : null
+    }
+  } catch {
+    imported = null
+  }
+  const promptMemories = mergePromptMemories([liveMemoryTexts(), imported?.memories])
   const next: Conversation = {
     ...conversation,
     context: {
-      profile: snapshotLocalProfile(useAuthStore.getState().profile),
+      profile: conversation.context?.profile ?? snapshotLocalProfile(useAuthStore.getState().profile),
       resume,
-      usedDefaults: true,
+      promptResume: imported ? promptResumeFromImport(imported) : conversation.context?.promptResume,
+      promptMemories: promptMemories.length ? promptMemories : conversation.context?.promptMemories,
+      usedDefaults: options.usedDefaults,
     },
     updatedAt: Date.now(),
   }
@@ -351,15 +387,31 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       usedDefaults: input.usedDefaults,
     }
     const userId = useAuthStore.getState().session?.userId
+    let imported = input.resumeImport ?? null
     try {
       if (input.resumeFile) {
         context.resume = await desktop.sessions.saveResume(conversation.id, input.resumeFile)
+        imported ??= await desktop.resume.parse(input.resumeFile)
       } else if (input.usedDefaults && userId) {
         context.resume = (await desktop.sessions.copyDefaultResume(userId, conversation.id)) ?? undefined
+        imported ??= context.resume ? await desktop.resume.parseUser(userId) : null
       }
     } catch {
       desktop.app.notify('Resume', 'Could not save a resume for this session.')
     }
+    if (input.memoryFacts?.length && userId) {
+      try {
+        const auth = useAuthStore.getState()
+        if (!auth.memoryEnabled) await auth.setMemoryEnabled(true)
+        const merged = mergeAutoMemories(useAuthStore.getState().memories, input.memoryFacts)
+        await useAuthStore.getState().saveMemories(merged)
+      } catch {
+        desktop.app.notify('Memory', 'Could not save resume details to memory.')
+      }
+    }
+    const promptMemories = mergePromptMemories([liveMemoryTexts(), input.memoryFacts, imported?.memories])
+    context.promptResume = imported ? promptResumeFromImport(imported) : undefined
+    context.promptMemories = promptMemories.length ? promptMemories : undefined
     const next: Conversation = { ...conversation, context }
     persistLocal(next)
     trackSession()
@@ -473,11 +525,12 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       return
     }
 
-    const conversation = state.conversations.find((item) => item.id === state.runningSessionId)
-    if (!conversation) {
+    const found = state.conversations.find((item) => item.id === state.runningSessionId)
+    if (!found) {
       get().newConversation()
       return
     }
+    const conversation = await attachDefaultContext(found)
 
     const captureScreen = fromScreen || (!fromScreen && !fromRealtime && state.screenContext)
     const displayContent = fromRealtime
@@ -560,11 +613,17 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
     try {
       const model = resolveChatModel(get().settings.model)
-      const profile = promptProfile(next)
-      const memories = promptMemories()
-      const stream = image
-        ? await api.ai.vision(image, apiMessage, history, abortController.signal, model, profile, memories)
-        : await api.ai.chat(apiMessage, history, abortController.signal, model, profile, memories)
+      const turn = {
+        message: apiMessage,
+        history,
+        signal: abortController.signal,
+        model,
+        conversationId: next.id,
+        profile: promptProfile(next),
+        memories: promptMemories(next),
+        resume: promptResume(next),
+      }
+      const stream = image ? await api.ai.vision(image, turn) : await api.ai.chat(turn)
       if (!stream) throw new Error('No response stream')
       const reader = stream.getReader()
       const decoder = new TextDecoder()
@@ -624,8 +683,9 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   regenerate: async (messageId) => {
     const state = get()
     if (state.generatingId) return
-    const conversation = state.conversations.find((item) => item.id === state.activeId)
-    if (!conversation) return
+    const found = state.conversations.find((item) => item.id === state.activeId)
+    if (!found) return
+    const conversation = await attachDefaultContext(found)
     const targetId = messageId ?? [...conversation.messages].reverse().find((item) => item.role === 'assistant')?.id
     if (!targetId) return
     const index = conversation.messages.findIndex((item) => item.id === targetId)
@@ -651,14 +711,16 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     })
     persistLocal(next)
     try {
-      const stream = await api.ai.chat(
-        applyQuickActionPrompt(get().quickActionId, lastUser.content),
-        chatHistory(prior),
-        abortController.signal,
-        resolveChatModel(get().settings.model),
-        promptProfile(next),
-        promptMemories(),
-      )
+      const stream = await api.ai.chat({
+        message: applyQuickActionPrompt(get().quickActionId, lastUser.content),
+        history: chatHistory(prior),
+        signal: abortController.signal,
+        model: resolveChatModel(get().settings.model),
+        conversationId: next.id,
+        profile: promptProfile(next),
+        memories: promptMemories(next),
+        resume: promptResume(next),
+      })
       if (!stream) throw new Error('No response stream')
       const reader = stream.getReader()
       const decoder = new TextDecoder()

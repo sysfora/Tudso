@@ -5,6 +5,7 @@ import { desktop, isElectron } from '@/lib/desktop'
 import '@/styles/globals.css'
 
 if (isElectron) {
+  document.documentElement.dataset.platform = desktop.platform
   window.confirm = (message?: string) => desktop.app.confirm(String(message ?? ''))
 }
 

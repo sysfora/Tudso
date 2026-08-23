@@ -5,8 +5,10 @@ import type {
   ChatRequest,
   Conversation,
   LocalProfile,
+  LocalResumeMeta,
   MemoryEntry,
   PickedFile,
+  PickedResume,
   Settings,
   ShortcutId,
   AppMenuPopup,
@@ -28,6 +30,7 @@ import {
 import { type AppStore, applyNativeTheme } from './store'
 import { applyLoginItem } from './platform'
 import { applyPresence, isHideFromCaptureAllowed, refreshTray, setHideFromCaptureAllowed, setSignedInReady } from './presence'
+import { importResumeFromBuffer } from './resume-import'
 import { popupAppMenu } from './app-menu'
 import { moveToPreset, nudgeWindow } from './window-position'
 import {
@@ -35,6 +38,7 @@ import {
   getMainWindow,
   getWindowBounds,
   hideMainWindow,
+  isFloatingEnabled,
   minimizeMainWindow,
   moveMainWindow,
   restoreTaskbarPresence,
@@ -203,8 +207,15 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.handle(CHANNELS.profileSaveResume, async (_event, userId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) => {
     const data = await store.saveUserResume(userId, file)
     if (!data.resume) throw new Error('Could not save resume')
-    return data.resume
+    return data
   })
+  ipcMain.handle(CHANNELS.resumeParse, (_event, file: { fileName: string; mimeType: string; data: ArrayBuffer }) =>
+    importResumeFromBuffer(file),
+  )
+  ipcMain.handle(CHANNELS.resumeParseUser, (_event, userId: string) => store.parseUserResume(userId))
+  ipcMain.handle(CHANNELS.resumeParseSession, (_event, sessionId: string, meta: LocalResumeMeta) =>
+    store.parseSessionResume(sessionId, meta),
+  )
   ipcMain.handle(CHANNELS.profileDeleteResume, (_event, userId: string) => store.deleteUserResume(userId))
   ipcMain.handle(CHANNELS.sessionSaveResume, async (_event, sessionId: string, file: { fileName: string; mimeType: string; data: ArrayBuffer }) =>
     store.saveSessionResume(sessionId, file),
@@ -286,17 +297,14 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   })
 
   ipcMain.handle(CHANNELS.appPickFiles, async () => {
-    const options = {
-      properties: ['openFile', 'multiSelections'] as Array<'openFile' | 'multiSelections'>,
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile', 'multiSelections'],
       filters: [
         { name: 'Text and code', extensions: ['txt', 'md', 'json', 'csv', 'ts', 'tsx', 'js', 'jsx', 'py', 'go', 'rs', 'css', 'html'] },
         { name: 'All files', extensions: ['*'] },
       ],
     }
-    const win = getMainWindow()
-    const result = await withOverlayPassthroughAsync(() =>
-      win && !win.isDestroyed() ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options),
-    )
+    const result = await showAppOpenDialog(options)
     if (result.canceled) return [] satisfies PickedFile[]
     const { readFile, stat } = await import('node:fs/promises')
     const files: PickedFile[] = []
@@ -314,6 +322,31 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
       })
     }
     return files
+  })
+
+  ipcMain.handle(CHANNELS.appPickResume, async () => {
+    const options: Electron.OpenDialogOptions = {
+      title: 'Upload resume',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Resume', extensions: ['pdf', 'docx', 'txt', 'doc'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    }
+    const result = await showAppOpenDialog(options)
+    if (result.canceled || !result.filePaths[0]) return null
+    const { readFile, stat } = await import('node:fs/promises')
+    const filePath = result.filePaths[0]
+    const info = await stat(filePath)
+    if (info.size > 10 * 1024 * 1024) throw new Error('Resume must be 10 MB or smaller.')
+    const fileName = filePath.split(/[/\\]/).pop() ?? 'resume'
+    if (!/\.(pdf|docx|txt|doc)$/i.test(fileName)) throw new Error('Use a PDF, DOCX, or TXT file.')
+    const raw = await readFile(filePath)
+    return {
+      fileName,
+      mimeType: mimeFromResumeName(fileName),
+      data: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength),
+    } satisfies PickedResume
   })
 
   ipcMain.on(CHANNELS.appNotify, (_event, title: string, body: string) => {
@@ -383,4 +416,21 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
 function looksBinary(buffer: Buffer) {
   const sample = buffer.subarray(0, 800)
   return sample.includes(0)
+}
+
+function mimeFromResumeName(fileName: string) {
+  const ext = fileName.split('.').pop()?.toLowerCase()
+  if (ext === 'pdf') return 'application/pdf'
+  if (ext === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  if (ext === 'doc') return 'application/msword'
+  if (ext === 'txt') return 'text/plain'
+  return 'application/octet-stream'
+}
+
+function showAppOpenDialog(options: Electron.OpenDialogOptions) {
+  const win = getMainWindow()
+  const parented = Boolean(win && !win.isDestroyed() && !isFloatingEnabled())
+  return withOverlayPassthroughAsync(() =>
+    parented && win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options),
+  )
 }

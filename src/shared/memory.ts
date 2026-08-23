@@ -1,6 +1,6 @@
 import type { MemoryEntry } from './types'
 
-export const MAX_MEMORIES = 80
+export const MAX_MEMORIES = 120
 export const MAX_MEMORY_CHARS = 400
 
 const CANNED_USER_TEXT = /^(Live copilot|Answer from screen)$/i

@@ -1,4 +1,4 @@
-import { BrowserWindow, nativeTheme, screen, shell } from 'electron'
+import { BrowserWindow, screen, shell } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CHANNELS } from '../shared/channels'
@@ -7,6 +7,7 @@ import type { ThemeMode, WindowBounds, WindowMode } from '../shared/types'
 import { appIconPath, loadAppIcon } from './icon'
 import {
   applyOverlayWindowStyle,
+  applyNativeRoundedCorners,
   clearOverlayWindowStyle,
   ensureNoActivate,
   raiseFloatingWindow,
@@ -15,7 +16,7 @@ import {
   showWithoutActivating,
   startOverlayKeyboard,
 } from './overlay'
-import { isMac, isWindows, usesNativeOverlay } from './platform'
+import { isMac, usesNativeOverlay } from './platform'
 import type { AppStore } from './store'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -39,14 +40,9 @@ export function setQuitting(value: boolean) {
   quitting = value
 }
 
-export function chromeColor(theme: ThemeMode) {
-  const dark = theme === 'dark' || (theme === 'system' && nativeTheme.shouldUseDarkColors)
-  return dark ? '#1c1c1f' : '#f4f4f5'
-}
-
-export function applyWindowChrome(theme: ThemeMode, transparency = false) {
+export function applyWindowChrome(_theme: ThemeMode, _transparency = false) {
   if (!win || win.isDestroyed()) return
-  win.setBackgroundColor(transparency ? '#00000000' : chromeColor(theme))
+  win.setBackgroundColor('#00000000')
 }
 
 export function createMainWindow(store: AppStore) {
@@ -66,18 +62,17 @@ export function createMainWindow(store: AppStore) {
     show: false,
     frame: false,
     transparent: true,
-    backgroundColor: settings.transparency ? '#00000000' : chromeColor(settings.theme),
+    backgroundColor: '#00000000',
     hasShadow: false,
     resizable: true,
     maximizable: false,
     fullscreenable: false,
     autoHideMenuBar: true,
     alwaysOnTop: false,
-    skipTaskbar: true,
+    skipTaskbar: false,
     focusable: true,
     acceptFirstMouse: true,
-    ...(isWindows ? { type: 'toolbar' as const } : {}),
-    ...(isMac ? { type: 'panel' as const, hiddenInMissionControl: true } : {}),
+    ...(isMac ? { roundedCorners: true } : {}),
     icon: appIconPath() ?? undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -93,6 +88,7 @@ export function createMainWindow(store: AppStore) {
   if (icon) win.setIcon(icon)
   applyFloatingChrome()
   applyWindowChrome(settings.theme, settings.transparency)
+  applyNativeRoundedCorners(win)
   setHideFromCapture(settings.hideFromCapture)
 
   const session = win.webContents.session
@@ -153,6 +149,7 @@ export function createMainWindow(store: AppStore) {
 
   win.on('show', () => {
     applyFloatingChrome()
+    applyNativeRoundedCorners(win)
   })
   win.on('blur', () => {
     if (!floatingEnabled || !win?.isVisible()) return
@@ -332,6 +329,10 @@ function applyFloatingChrome() {
 export function setFloatingEnabled(enabled: boolean) {
   floatingEnabled = enabled
   applyFloatingChrome()
+}
+
+export function isFloatingEnabled() {
+  return floatingEnabled
 }
 
 export function setSkipTaskbar(skip: boolean) {

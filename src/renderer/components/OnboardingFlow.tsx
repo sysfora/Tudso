@@ -2,10 +2,12 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
 import { desktop } from '@/lib/desktop'
+import { pickResumeFile } from '@/lib/pick-resume'
 import { DEFAULT_PROFILE_PREFERENCES } from '@/types/api'
 import {
   PROFILE_SETUP_STEPS,
   ProfileSetupFields,
+  mergeSetupValuesFromProfile,
   splitList,
   type ProfileSetupValues,
 } from '@/components/ProfileSetup'
@@ -15,6 +17,7 @@ export function OnboardingFlow() {
   const profile = useAuthStore((state) => state.profile)
   const updateProfile = useAuthStore((state) => state.updateProfile)
   const completeOnboarding = useAuthStore((state) => state.completeOnboarding)
+  const applyLocalUser = useAuthStore((state) => state.applyLocalUser)
   const [step, setStep] = useState(0)
   const [values, setValues] = useState<ProfileSetupValues>({
     preferredName: profile?.preferredName ?? '',
@@ -29,7 +32,6 @@ export function OnboardingFlow() {
   const [resumeName, setResumeName] = useState('')
   const [saving, setSaving] = useState(false)
   const [resumeError, setResumeError] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
   const hydrated = useRef(false)
 
   useEffect(() => {
@@ -90,21 +92,29 @@ export function OnboardingFlow() {
     }
   }
 
-  const uploadResume = async (file: File) => {
+  const uploadResume = async () => {
     const userId = session?.userId
     if (!userId) {
       setResumeError('Sign in to save a resume on this device.')
       return
     }
+    const picked = await pickResumeFile()
+    if (!picked) return
     setResumeUploading(true)
     setResumeError('')
     try {
-      const saved = await desktop.profile.saveResume(userId, {
-        fileName: file.name,
-        mimeType: file.type,
-        data: await file.arrayBuffer(),
-      })
-      setResumeName(`${saved.fileName || file.name} saved on this device.`)
+      const saved = await desktop.profile.saveResume(userId, picked)
+      applyLocalUser(saved)
+      setValues((current) => mergeSetupValuesFromProfile(current, saved.profile))
+      const filled = saved.profile.skills.length || saved.profile.goals.length || saved.profile.preferredName
+      setResumeName(
+        filled
+          ? `${saved.resume?.fileName || picked.fileName} saved. Profile and memory filled from the resume.`
+          : `${saved.resume?.fileName || picked.fileName} saved on this device.`,
+      )
+      if (saved.memories.length === 0 && !(saved.profile.skills.length || saved.profile.customContext)) {
+        setResumeError('Saved the file, but could not read enough text to fill your profile. Try PDF, DOCX, or TXT.')
+      }
     } catch (error) {
       setResumeError(error instanceof Error ? error.message : 'Could not save resume')
     } finally {
@@ -130,9 +140,7 @@ export function OnboardingFlow() {
           values={values}
           onChange={(patch) => setValues((current) => ({ ...current, ...patch }))}
           onEnter={onEnter}
-          fileRef={fileRef}
-          onPickFile={(file) => void uploadResume(file)}
-          onPickClick={() => fileRef.current?.click()}
+          onPickClick={() => void uploadResume()}
           resumeName={resumeName}
           resumeError={resumeError}
           resumeUploading={resumeUploading}

@@ -51,7 +51,7 @@
   --scrollbar: #c0c0c8;
   --scrollbar-hover: #8e8e98;
   --motion: 140ms;
-  --radius: 12px;
+  --radius: 8px;
   --syn-comment: #6d6d76;
   --syn-keyword: #5b3cc4;
   --syn-string: #1f7a4c;
@@ -92,6 +92,14 @@
   --syn-type: #67e8f9;
   --syn-property: #fdba74;
   --syn-literal: #f0abfc;
+}
+
+html[data-platform='darwin'] {
+  --radius: 10px;
+}
+
+html[data-platform='linux'] {
+  --radius: 12px;
 }
 
 html,
@@ -210,6 +218,8 @@ body,
 .app-frame {
   height: 100%;
   width: 100%;
+  overflow: hidden;
+  background: transparent;
 }
 
 .app-shell {
@@ -230,10 +240,6 @@ body,
 .markdown,
 article {
   user-select: text;
-}
-
-.compact .app-shell {
-  --radius: 10px;
 }
 
 .markdown {

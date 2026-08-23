@@ -4,7 +4,7 @@ import express, { type Request, type Response, type Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import { authenticateWithEmailPassword, buildCallbackUrl, confirmEmailChange, confirmEmailVerification, confirmPasswordReset, createAccount, createAppSession, exchangeOAuthCallback, generateAuthState, getOAuthUrl, requestEmailVerification, requestPasswordReset, resolveAccessToken, verifyAuthState } from './auth.js'
-import { chat, transcription, vision, buildChatMessages, buildSystemPrompt, resolveChatModel, resolveVisionModel, extractMemoryFacts } from './ai.js'
+import { chat, transcription, vision, buildChatMessages, buildSystemPrompt, applyTurnContext, resolveChatModel, resolveVisionModel, extractMemoryFacts } from './ai.js'
 import { beginPlainStream, endPlainStream, writePlainStream } from './stream.js'
 import { config } from './config.js'
 import { logError } from './log.js'
@@ -13,9 +13,10 @@ import { aiRateLimiter, rateLimiter, requireAuth, sensitiveRateLimiter } from '.
 import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAccount, updateAccountAvatar, updateAccountName } from './account.js'
 import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
+import { getSessionPrompt, rememberSessionPrompt, SESSION_PROMPT_REQUIRED } from './session-prompt.js'
 import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
 import { isPaidPlan, CHECKOUT_PLANS } from './plans.js'
-import type { AIStreamHandler, ChatMessage, UserProfile } from './types.js'
+import type { AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
 import { WEB_DEVICE_ID, clearWebSessionCookie, setWebSessionCookie } from './web-session.js'
 
 const DEVICE_ID = z.string().min(1).max(128).regex(/^[a-zA-Z0-9._:-]+$/)
@@ -79,6 +80,33 @@ const clientProfileSchema = z.object({
 
 const clientMemoriesSchema = z.array(z.string().max(MAX_MEMORY_CHARS)).max(MAX_MEMORIES).optional()
 
+const clientResumeSchema = z.object({
+  name: z.string().max(120).optional(),
+  headline: z.string().max(200).optional(),
+  summary: z.string().max(2000).optional(),
+  skills: z.array(z.string().max(80)).max(50).optional(),
+  languages: z.array(z.string().max(80)).max(20).optional(),
+  experience: z.array(z.object({
+    company: z.string().max(160).optional(),
+    role: z.string().max(160).optional(),
+    duration: z.string().max(80).optional(),
+    description: z.string().max(800).optional(),
+  })).max(16).optional(),
+  education: z.array(z.object({
+    institution: z.string().max(160).optional(),
+    degree: z.string().max(160).optional(),
+    year: z.string().max(20).optional(),
+  })).max(8).optional(),
+  projects: z.array(z.object({
+    name: z.string().max(160).optional(),
+    description: z.string().max(800).optional(),
+    technologies: z.array(z.string().max(80)).max(20).optional(),
+  })).max(12).optional(),
+  certifications: z.array(z.string().max(200)).max(16).optional(),
+  achievements: z.array(z.string().max(400)).max(16).optional(),
+  rawText: z.string().max(8000).optional(),
+}).optional()
+
 function clientProfile(userId: string, body?: z.infer<typeof clientProfileSchema>): UserProfile | undefined {
   if (!body) return undefined
   return {
@@ -103,11 +131,66 @@ function clientProfile(userId: string, body?: z.infer<typeof clientProfileSchema
   }
 }
 
-function promptFromClient(userId: string, profileBody?: z.infer<typeof clientProfileSchema>, memories?: string[]) {
+function promptFromClient(
+  userId: string,
+  profileBody?: z.infer<typeof clientProfileSchema>,
+  memories?: string[],
+  resumeBody?: z.infer<typeof clientResumeSchema>,
+) {
   return {
     profile: clientProfile(userId, profileBody),
     contextEntries: memories?.map((entry) => entry.trim()).filter(Boolean).slice(0, MAX_MEMORIES),
+    resume: clientResume(resumeBody),
   }
+}
+
+function clientResume(body?: z.infer<typeof clientResumeSchema>): ParsedResume | undefined {
+  if (!body) return undefined
+  return {
+    name: body.name,
+    headline: body.headline,
+    summary: body.summary,
+    rawText: body.rawText,
+    skills: body.skills ?? [],
+    languages: body.languages ?? [],
+    experience: body.experience ?? [],
+    education: body.education ?? [],
+    projects: body.projects ?? [],
+    certifications: body.certifications ?? [],
+    achievements: body.achievements ?? [],
+  }
+}
+
+function hasSessionContext(
+  profileBody?: z.infer<typeof clientProfileSchema>,
+  memories?: string[],
+  resumeBody?: z.infer<typeof clientResumeSchema>,
+) {
+  return profileBody !== undefined || memories !== undefined || resumeBody !== undefined
+}
+
+function resolveSessionPrompt(
+  userId: string,
+  conversationId: string | undefined,
+  profileBody?: z.infer<typeof clientProfileSchema>,
+  memories?: string[],
+  resumeBody?: z.infer<typeof clientResumeSchema>,
+): string | null {
+  if (hasSessionContext(profileBody, memories, resumeBody)) {
+    const { profile, contextEntries, resume } = promptFromClient(userId, profileBody, memories, resumeBody)
+    const prompt = buildSystemPrompt({
+      profile,
+      resume,
+      contextEntries,
+      communicationStyle: profile?.communicationStyle,
+    })
+    if (conversationId) rememberSessionPrompt(userId, conversationId, prompt)
+    return prompt
+  }
+  if (conversationId) {
+    return getSessionPrompt(userId, conversationId) ?? null
+  }
+  return buildSystemPrompt({})
 }
 
 const router: Router = express.Router()
@@ -912,8 +995,9 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
     model: z.enum(['gpt-4.1-nano', 'gpt-4.1']).optional(),
     profile: clientProfileSchema,
     memories: clientMemoriesSchema,
+    resume: clientResumeSchema,
   })
-  const { message, stream, includeProfile, includeHistory, history: historyBody, model, profile: profileBody, memories } = schema.parse(req.body)
+  const { message, stream, includeHistory, history: historyBody, model, profile: profileBody, memories, resume: resumeBody, conversationId } = schema.parse(req.body)
 
   const entitlement = await getEntitlementForUser(req.userId!)
   if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
@@ -922,14 +1006,12 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
   }
 
   const history: ChatMessage[] = historyFromBody(historyBody, includeHistory)
-  const { profile, contextEntries } = includeProfile
-    ? promptFromClient(req.userId!, profileBody, memories)
-    : { profile: undefined, contextEntries: undefined }
-  const systemPrompt = buildSystemPrompt({
-    profile,
-    contextEntries,
-    communicationStyle: profile?.communicationStyle,
-  })
+  const basePrompt = resolveSessionPrompt(req.userId!, conversationId, profileBody, memories, resumeBody)
+  if (!basePrompt) {
+    res.status(409).json({ error: SESSION_PROMPT_REQUIRED })
+    return
+  }
+  const systemPrompt = applyTurnContext(basePrompt)
   const messages = buildChatMessages(systemPrompt, history, message)
 
   if (stream) {
@@ -976,8 +1058,9 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
     model: z.enum(['gpt-4.1-nano', 'gpt-4.1']).optional(),
     profile: clientProfileSchema,
     memories: clientMemoriesSchema,
+    resume: clientResumeSchema,
   })
-  const { image, message, history: historyBody, model, profile: profileBody, memories } = schema.parse(req.body)
+  const { image, message, history: historyBody, model, profile: profileBody, memories, resume: resumeBody, conversationId } = schema.parse(req.body)
 
   const entitlement = await getEntitlementForUser(req.userId!)
   if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
@@ -987,8 +1070,12 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
 
   const history: ChatMessage[] = historyFromBody(historyBody, true)
     .filter((m) => !(m.role === 'user' && /^(Answer from screen|Live copilot)$/i.test(m.content)))
-  const { profile, contextEntries } = promptFromClient(req.userId!, profileBody, memories)
-  const systemPrompt = buildSystemPrompt({ profile, contextEntries, screenContext: true })
+  const basePrompt = resolveSessionPrompt(req.userId!, conversationId, profileBody, memories, resumeBody)
+  if (!basePrompt) {
+    res.status(409).json({ error: SESSION_PROMPT_REQUIRED })
+    return
+  }
+  const systemPrompt = applyTurnContext(basePrompt, { screen: true })
   const messages = buildChatMessages(systemPrompt, history, message)
   beginPlainStream(res)
   let content = ''

@@ -13,8 +13,11 @@ const WH_MOUSE_LL = 14
 const GWL_EXSTYLE = -20
 const WS_EX_NOACTIVATE = 0x08000000
 const WS_EX_TOOLWINDOW = 0x00000080
+const WS_EX_APPWINDOW = 0x00040000
 const WS_EX_TOPMOST = 0x00000008
 const WS_EX_LAYERED = 0x00080000
+const DWMWA_WINDOW_CORNER_PREFERENCE = 33
+const DWMWCP_ROUND = 2
 const SWP_NOSIZE = 0x0001
 const SWP_NOMOVE = 0x0002
 const SWP_NOZORDER = 0x0004
@@ -94,6 +97,13 @@ type NativeApi = {
   UnhookWindowsHookEx: (hook: unknown) => boolean
   CallNextHookEx: (hook: null, code: number, wParam: number, lParam: unknown) => number
   GetLastError: () => number
+  GetForegroundWindow: () => number | bigint
+  SetForegroundWindow: (hwnd: bigint) => boolean
+  IsWindow: (hwnd: bigint) => boolean
+  GetWindowThreadProcessId: (hwnd: bigint, pid: Buffer | null) => number
+  GetCurrentThreadId: () => number
+  AttachThreadInput: (attach: number, attachTo: number, connect: boolean) => boolean
+  AllowSetForegroundWindow: (processId: number) => boolean
 }
 
 let native: NativeApi | null | undefined
@@ -156,6 +166,13 @@ function loadNative(): NativeApi | null {
       UnhookWindowsHookEx: user32.func('bool __stdcall UnhookWindowsHookEx(void *hhk)') as NativeApi['UnhookWindowsHookEx'],
       CallNextHookEx: user32.func('intptr_t __stdcall CallNextHookEx(void *hhk, int nCode, uintptr_t wParam, void *lParam)') as NativeApi['CallNextHookEx'],
       GetLastError: kernel32.func('uint32_t __stdcall GetLastError()') as NativeApi['GetLastError'],
+      GetForegroundWindow: user32.func('uintptr_t __stdcall GetForegroundWindow()') as NativeApi['GetForegroundWindow'],
+      SetForegroundWindow: user32.func('bool __stdcall SetForegroundWindow(uintptr_t hWnd)') as NativeApi['SetForegroundWindow'],
+      IsWindow: user32.func('bool __stdcall IsWindow(uintptr_t hWnd)') as NativeApi['IsWindow'],
+      GetWindowThreadProcessId: user32.func('uint32_t __stdcall GetWindowThreadProcessId(uintptr_t hWnd, void *lpdwProcessId)') as NativeApi['GetWindowThreadProcessId'],
+      GetCurrentThreadId: kernel32.func('uint32_t __stdcall GetCurrentThreadId()') as NativeApi['GetCurrentThreadId'],
+      AttachThreadInput: user32.func('bool __stdcall AttachThreadInput(uint32_t idAttach, uint32_t idAttachTo, bool fAttach)') as NativeApi['AttachThreadInput'],
+      AllowSetForegroundWindow: user32.func('bool __stdcall AllowSetForegroundWindow(uint32_t dwProcessId)') as NativeApi['AllowSetForegroundWindow'],
     }
     const hookPtr = koffi.pointer(hookProc)
     try {
@@ -692,6 +709,23 @@ export function isOverlayKeyboardActive() {
   return keyboardHookOk
 }
 
+export function applyNativeRoundedCorners(win: BrowserWindow) {
+  if (!isWindows || win.isDestroyed()) return
+  try {
+    const require = createRequire(import.meta.url)
+    const koffi = require('koffi') as Koffi
+    const dwmapi = koffi.load('dwmapi.dll')
+    const DwmSetWindowAttribute = dwmapi.func(
+      'int32_t __stdcall DwmSetWindowAttribute(uintptr_t hwnd, uint32_t attr, void *value, uint32_t size)',
+    ) as (hwnd: bigint, attr: number, value: Buffer, size: number) => number
+    const preference = Buffer.alloc(4)
+    preference.writeUInt32LE(DWMWCP_ROUND, 0)
+    DwmSetWindowAttribute(hwnd(win), DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4)
+  } catch (error) {
+    console.error('[overlay] failed to round window corners', error)
+  }
+}
+
 export function ensureNoActivate(win: BrowserWindow) {
   if (!isWindows || win.isDestroyed()) return
   const api = loadNative()
@@ -699,9 +733,10 @@ export function ensureNoActivate(win: BrowserWindow) {
   try {
     const handle = hwnd(win)
     const current = api.GetWindowLongW(handle, GWL_EXSTYLE) >>> 0
-    const next = current | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_LAYERED
+    const next = (current | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_LAYERED) & ~WS_EX_APPWINDOW
     api.SetWindowLongW(handle, GWL_EXSTYLE, next | 0)
     api.SetWindowPos(handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED)
+    applyNativeRoundedCorners(win)
   } catch (error) {
     console.error('[overlay] failed to apply WS_EX_NOACTIVATE', error)
   }
@@ -767,12 +802,14 @@ export function applyOverlayWindowStyle(win: BrowserWindow) {
   if (!usesNativeOverlay()) {
     win.setFocusable(true)
     raiseFloatingWindow(win)
+    applyNativeRoundedCorners(win)
     return
   }
 
   win.setFocusable(false)
   preventActivationOnClick(win)
   ensureNoActivate(win)
+  applyNativeRoundedCorners(win)
   if (!overlayDragCssKey) {
     void win.webContents
       .insertCSS('.drag-region{-webkit-app-region:no-drag !important;app-region:no-drag !important}')
@@ -801,6 +838,23 @@ export function clearOverlayWindowStyle(win: BrowserWindow) {
     win.setVisibleOnAllWorkspaces(false)
   } catch {
     undefined
+  }
+  restoreTaskbarWindowStyle(win)
+}
+
+function restoreTaskbarWindowStyle(win: BrowserWindow) {
+  if (!isWindows || win.isDestroyed()) return
+  const api = loadNative()
+  if (!api) return
+  try {
+    const handle = hwnd(win)
+    const current = api.GetWindowLongW(handle, GWL_EXSTYLE) >>> 0
+    const next = (current & ~WS_EX_NOACTIVATE & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW
+    api.SetWindowLongW(handle, GWL_EXSTYLE, next | 0)
+    api.SetWindowPos(handle, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED)
+    applyNativeRoundedCorners(win)
+  } catch (error) {
+    console.error('[overlay] failed to restore taskbar window style', error)
   }
 }
 
@@ -873,4 +927,69 @@ export function showWithoutActivating(win: BrowserWindow) {
   if (win.isDestroyed()) return
   if (win.isMinimized()) win.restore()
   win.showInactive()
+}
+
+const ASFW_ANY = 0xffffffff
+
+function asHwnd(value: number | bigint | null | undefined): bigint {
+  if (value == null) return 0n
+  try {
+    const next = typeof value === 'bigint' ? value : BigInt(value)
+    return next < 0n ? 0n : next
+  } catch {
+    return 0n
+  }
+}
+
+export function snapshotForegroundWindow(): bigint {
+  const api = loadNative()
+  if (!api) return 0n
+  try {
+    return asHwnd(api.GetForegroundWindow())
+  } catch {
+    return 0n
+  }
+}
+
+export function restoreForegroundWindow(target: bigint) {
+  const api = loadNative()
+  if (!api || target === 0n) return
+  try {
+    if (!api.IsWindow(target)) return
+    const current = asHwnd(api.GetForegroundWindow())
+    if (current === target) return
+    api.AllowSetForegroundWindow(ASFW_ANY)
+    const pid = Buffer.alloc(4)
+    const targetThread = api.GetWindowThreadProcessId(target, pid)
+    const currentThread = api.GetCurrentThreadId()
+    const attached =
+      targetThread !== 0 && currentThread !== 0 && targetThread !== currentThread
+        ? api.AttachThreadInput(currentThread, targetThread, true)
+        : false
+    api.SetForegroundWindow(target)
+    if (attached) api.AttachThreadInput(currentThread, targetThread, false)
+  } catch (error) {
+    console.error('[overlay] failed to restore foreground window', error)
+  }
+}
+
+export async function withPreservedForeground<T>(
+  fn: () => Promise<T>,
+  appWin?: BrowserWindow | null,
+): Promise<T> {
+  if (!isWindows) return fn()
+  const previous = snapshotForegroundWindow()
+  const self = appWin && !appWin.isDestroyed() ? hwnd(appWin) : 0n
+  const restore = () => {
+    if (previous && previous !== self) restoreForegroundWindow(previous)
+    else if (appWin && !appWin.isDestroyed()) ensureNoActivate(appWin)
+  }
+  try {
+    return await fn()
+  } finally {
+    restore()
+    setTimeout(restore, 0)
+    setTimeout(restore, 40)
+    setTimeout(restore, 120)
+  }
 }

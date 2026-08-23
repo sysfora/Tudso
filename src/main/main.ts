@@ -54,8 +54,10 @@ app.setName(APP_NAME)
 if (isWindows) app.setAppUserModelId(APP_ID)
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
-if (isLinux) {
+if (isWindows || isLinux) {
   app.commandLine.appendSwitch('enable-transparent-visuals')
+}
+if (isLinux) {
   app.commandLine.appendSwitch('ozone-platform-hint', 'auto')
 }
 registerProtocol()

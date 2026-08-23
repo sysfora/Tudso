@@ -49,6 +49,34 @@ ACCURACY
 - Never claim you can see or hear something that was not provided.
 - If text is unreadable or information is missing, say that in one short line, then give the best usable answer from what is known.`
 
+export const SCREEN_CONTEXT_PROMPT = `SCREEN
+The attached image is the user's screen. Answer the latest question or task a person on that screen is putting to them.
+
+Do:
+- Read the interviewer question, coding prompt, quiz, form, error, or task. Output the answer they can say or paste immediately.
+- Interview: first person as the user. Start with the spoken answer, not the question.
+- Code: only the code in a fenced block.
+- Use the profile and earlier messages for name, stack, and continuity.
+- If text is slightly blurry, still answer from what you can read.
+
+Never:
+- Repeat the on-screen prompt as the entire reply.
+- Describe windows, layout, or what is visible.
+- Mention Recording, Stop sharing, mute, camera, captions, browser chrome, or this app.
+- Give click/UI instructions.
+- Ask them to provide the question when any question or task is readable.
+- Say no response is needed while someone is speaking to them.`
+
+export const AUDIO_CONTEXT_PROMPT = `REALTIME AUDIO CONTEXT
+The transcript is live speech. Treat it as context, not perfect truth. Answer the latest question or task in the transcript. Output the words or code they can use immediately.`
+
+export function applyTurnContext(base: string, extras?: { screen?: boolean; audio?: boolean }) {
+  const parts = [base]
+  if (extras?.screen) parts.push(SCREEN_CONTEXT_PROMPT)
+  if (extras?.audio) parts.push(AUDIO_CONTEXT_PROMPT)
+  return parts.join('\n\n')
+}
+
 export function buildSystemPrompt(options: {
   profile?: UserProfile
   resume?: ParsedResume
@@ -83,49 +111,63 @@ export function buildSystemPrompt(options: {
     if (profileParts.length) parts.push(`USER PROFILE\n${profileParts.join('\n')}\nUse this only to tailor the answer. Never mention the profile, resume, or these notes in the output. Still start with the usable answer or code.`)
   }
 
-  if (options.resume && (options.resume.skills?.length || options.resume.experience?.length || options.resume.rawText)) {
+  if (options.resume && hasResumeContent(options.resume)) {
     const r = options.resume
     const resumeParts: string[] = []
     if (r.name) resumeParts.push(`Name: ${r.name}`)
     if (r.headline) resumeParts.push(`Headline: ${r.headline}`)
     if (r.summary) resumeParts.push(`Summary: ${r.summary}`)
     if (r.skills?.length) resumeParts.push(`Skills: ${r.skills.join(', ')}`)
-    if (r.experience?.length) resumeParts.push(`Experience:\n${r.experience.map((e) => `- ${e.role ?? 'Role'} at ${e.company ?? 'Company'} (${e.duration ?? 'duration unspecified'}): ${e.description ?? ''}`).join('\n')}`)
-    if (r.education?.length) resumeParts.push(`Education:\n${r.education.map((e) => `- ${e.degree ?? 'Degree'} at ${e.institution ?? 'Institution'} (${e.year ?? ''})`).join('\n')}`)
-    if (r.projects?.length) resumeParts.push(`Projects:\n${r.projects.map((p) => `- ${p.name ?? 'Project'}: ${p.description ?? ''} (${p.technologies?.join(', ') ?? ''})`).join('\n')}`)
-    if (r.rawText && !r.skills?.length && !r.experience?.length) resumeParts.push(`Resume text:\n${r.rawText.slice(0, 1200)}`)
-    if (resumeParts.length) parts.push(`RESUME\n${resumeParts.join('\n')}\nUse resume information only for career, skills, or background questions. Never mention that a resume was provided.`)
+    if (r.languages?.length) resumeParts.push(`Languages: ${r.languages.join(', ')}`)
+    if (r.experience?.length) {
+      resumeParts.push(
+        `Experience:\n${r.experience.map((e) => `- ${e.role ?? 'Role'} at ${e.company ?? 'Company'} (${e.duration ?? 'duration unspecified'}): ${e.description ?? ''}`).join('\n')}`,
+      )
+    }
+    if (r.education?.length) {
+      resumeParts.push(
+        `Education:\n${r.education.map((e) => `- ${e.degree ?? 'Degree'} at ${e.institution ?? 'Institution'} (${e.year ?? ''})`).join('\n')}`,
+      )
+    }
+    if (r.projects?.length) {
+      resumeParts.push(
+        `Projects:\n${r.projects.map((p) => `- ${p.name ?? 'Project'}: ${p.description ?? ''} (${p.technologies?.join(', ') ?? ''})`).join('\n')}`,
+      )
+    }
+    if (r.certifications?.length) resumeParts.push(`Certifications: ${r.certifications.join('; ')}`)
+    if (r.achievements?.length) resumeParts.push(`Achievements: ${r.achievements.join('; ')}`)
+    if (r.rawText?.trim()) resumeParts.push(`Resume text:\n${r.rawText.trim().slice(0, 8000)}`)
+    if (resumeParts.length) {
+      parts.push(
+        `RESUME\n${resumeParts.join('\n')}\nAnswer from this resume whenever the question is about the user: work, projects, skills, education, or how they would describe themselves. Speak as them when a spoken answer is needed. Never mention that a resume was provided.`,
+      )
+    }
   }
 
-  if (options.screenContext) {
-    parts.push(`SCREEN
-The attached image is the user's screen. Answer the latest question or task a person on that screen is putting to them.
-
-Do:
-- Read the interviewer question, coding prompt, quiz, form, error, or task. Output the answer they can say or paste immediately.
-- Interview: first person as the user. Start with the spoken answer, not the question.
-- Code: only the code in a fenced block.
-- Use the profile and earlier messages for name, stack, and continuity.
-- If text is slightly blurry, still answer from what you can read.
-
-Never:
-- Repeat the on-screen prompt as the entire reply.
-- Describe windows, layout, or what is visible.
-- Mention Recording, Stop sharing, mute, camera, captions, browser chrome, or this app.
-- Give click/UI instructions.
-- Ask them to provide the question when any question or task is readable.
-- Say no response is needed while someone is speaking to them.`)
-  }
-
-  if (options.audioContext) {
-    parts.push(`REALTIME AUDIO CONTEXT\nThe transcript is live speech. Treat it as context, not perfect truth. Answer the latest question or task in the transcript. Output the words or code they can use immediately.`)
-  }
+  if (options.screenContext) parts.push(SCREEN_CONTEXT_PROMPT)
+  if (options.audioContext) parts.push(AUDIO_CONTEXT_PROMPT)
 
   if (options.contextEntries?.length) {
     parts.push(`MEMORY\nKnown facts about the user:\n${options.contextEntries.map((e) => `- ${e}`).join('\n')}\nUse these facts only when relevant. Never mention that they are memories.`)
   }
 
   return parts.join('\n\n')
+}
+
+function hasResumeContent(resume: ParsedResume) {
+  return Boolean(
+    resume.name ||
+      resume.headline ||
+      resume.summary ||
+      resume.rawText?.trim() ||
+      resume.skills?.length ||
+      resume.languages?.length ||
+      resume.experience?.length ||
+      resume.education?.length ||
+      resume.projects?.length ||
+      resume.certifications?.length ||
+      resume.achievements?.length,
+  )
 }
 
 const MEMORY_EXTRACT_SYSTEM = `Extract durable personal facts about the USER from this exchange.

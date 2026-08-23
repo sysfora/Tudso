@@ -83,6 +83,11 @@ const api: ElectronAPI = {
     saveResume: (userId: string, file) => ipcRenderer.invoke(CHANNELS.profileSaveResume, userId, file),
     deleteResume: (userId: string) => ipcRenderer.invoke(CHANNELS.profileDeleteResume, userId),
   },
+  resume: {
+    parse: (file) => ipcRenderer.invoke(CHANNELS.resumeParse, file),
+    parseUser: (userId) => ipcRenderer.invoke(CHANNELS.resumeParseUser, userId),
+    parseSession: (sessionId, meta) => ipcRenderer.invoke(CHANNELS.resumeParseSession, sessionId, meta),
+  },
   sessions: {
     saveResume: (sessionId, file) => ipcRenderer.invoke(CHANNELS.sessionSaveResume, sessionId, file),
     copyDefaultResume: (userId, sessionId) => ipcRenderer.invoke(CHANNELS.sessionCopyDefaultResume, userId, sessionId),
@@ -98,6 +103,7 @@ const api: ElectronAPI = {
     quit: () => ipcRenderer.send(CHANNELS.appQuit),
     openExternal: (url: string) => ipcRenderer.invoke(CHANNELS.appOpenExternal, url),
     pickFiles: () => ipcRenderer.invoke(CHANNELS.appPickFiles),
+    pickResume: () => ipcRenderer.invoke(CHANNELS.appPickResume),
     confirm: (message: string) => ipcRenderer.sendSync(CHANNELS.appConfirm, message) as boolean,
     notify: (title: string, body: string) => ipcRenderer.send(CHANNELS.appNotify, title, body),
     deleteLocalData: () => ipcRenderer.invoke(CHANNELS.appDeleteLocalData),

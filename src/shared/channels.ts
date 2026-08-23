@@ -58,6 +58,9 @@ export const CHANNELS = {
   profileSetMemory: 'profile:set-memory',
   profileSaveResume: 'profile:save-resume',
   profileDeleteResume: 'profile:delete-resume',
+  resumeParse: 'resume:parse',
+  resumeParseUser: 'resume:parse-user',
+  resumeParseSession: 'resume:parse-session',
   sessionSaveResume: 'session:save-resume',
   sessionCopyDefaultResume: 'session:copy-default-resume',
 
@@ -70,6 +73,7 @@ export const CHANNELS = {
   appQuit: 'app:quit',
   appOpenExternal: 'app:open-external',
   appPickFiles: 'app:pick-files',
+  appPickResume: 'app:pick-resume',
   appConfirm: 'app:confirm',
   appCommand: 'app:command',
   appNotify: 'app:notify',

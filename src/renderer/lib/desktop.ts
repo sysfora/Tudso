@@ -1,6 +1,23 @@
 import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap } from '@shared/defaults'
 import type { ElectronAPI } from '@shared/electron-api'
-import type { AppCommand, Conversation, LocalProfile, LocalUserData, MemoryEntry, Settings, ShortcutMap } from '@shared/types'
+import { mergeAutoMemories } from '@shared/memory'
+import { mergeResumeIntoProfile, memoriesFromResume, parseResumeText, profileFromResume, clipResumeText } from '@shared/resume-parse'
+import type { AppCommand, Conversation, LocalProfile, LocalUserData, MemoryEntry, ResumeImportResult, Settings, ShortcutMap } from '@shared/types'
+
+function parseResumeInBrowser(file: { fileName: string; mimeType: string; data: ArrayBuffer }): ResumeImportResult {
+  const ext = file.fileName.split('.').pop()?.toLowerCase() ?? ''
+  const text =
+    file.mimeType.startsWith('text/') || ext === 'txt' ? new TextDecoder().decode(file.data) : ''
+  const parsed = parseResumeText(text)
+  const clipped = clipResumeText(text)
+  return {
+    parsed,
+    profile: profileFromResume(parsed),
+    memories: memoriesFromResume(parsed),
+    text: clipped,
+    extractedChars: clipped.replace(/\s+/g, ' ').trim().length,
+  }
+}
 
 function emptyLocalUser(): LocalUserData {
   return {
@@ -184,10 +201,18 @@ function createMock(): ElectronAPI {
       },
       saveResume: async (userId, file) => {
         const current = memory.users[userId] ?? emptyLocalUser()
+        const imported = parseResumeInBrowser(file)
         const resume = { fileName: file.fileName, mimeType: file.mimeType, storedName: 'resume.bin' }
-        memory.users[userId] = { ...current, resume }
+        const next: LocalUserData = {
+          ...current,
+          resume,
+          profile: mergeResumeIntoProfile(current.profile, imported.parsed),
+          memories: mergeAutoMemories(current.memories, imported.memories),
+          memoryEnabled: true,
+        }
+        memory.users[userId] = next
         localStorage.setItem('tudso.users', JSON.stringify(memory.users))
-        return resume
+        return structuredClone(next)
       },
       deleteResume: async (userId) => {
         const current = memory.users[userId] ?? emptyLocalUser()
@@ -197,6 +222,23 @@ function createMock(): ElectronAPI {
         localStorage.setItem('tudso.users', JSON.stringify(memory.users))
         return structuredClone(next)
       },
+    },
+    resume: {
+      parse: async (file) => parseResumeInBrowser(file),
+      parseUser: async (userId) => {
+        const local = memory.users[userId]
+        if (!local?.resume) return null
+        const text = local.profile.customContext ?? ''
+        const parsed = parseResumeText(text)
+        return {
+          parsed,
+          profile: local.profile,
+          memories: (local.memories ?? []).map((entry) => entry.text),
+          text: clipResumeText(text),
+          extractedChars: text.trim().length,
+        }
+      },
+      parseSession: async () => null,
     },
     sessions: {
       saveResume: async (_sessionId, file) => ({
@@ -259,6 +301,7 @@ function createMock(): ElectronAPI {
         window.open(url, '_blank', 'noopener')
       },
       pickFiles: async () => [],
+      pickResume: async () => null,
       confirm: (message) => window.confirm(message),
       notify: () => undefined,
       deleteLocalData: async () => {

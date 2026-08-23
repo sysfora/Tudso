@@ -8,12 +8,14 @@ import type {
   LocalResumeMeta,
   LocalUserData,
   MemoryEntry,
+  ResumeImportResult,
   Settings,
   ShortcutMap,
   WindowBounds,
 } from '../shared/types'
-import { emptyLocalProfile, emptyLocalUser, removeAllProfiles, removeAllSessionResumes, removeResumeFile, removeSessionResume, writeResumeFile, writeSessionResumeFile, copyUserResumeToSession } from './local-profile'
-import { normalizeMemoryEntries } from '../shared/memory'
+import { emptyLocalProfile, emptyLocalUser, removeAllProfiles, removeAllSessionResumes, removeResumeFile, removeSessionResume, writeResumeFile, writeSessionResumeFile, copyUserResumeToSession, readUserResumeFile, readSessionResumeFile } from './local-profile'
+import { mergeAutoMemories, normalizeMemoryEntries } from '../shared/memory'
+import { applyResumeImport, importResumeFromBuffer } from './resume-import'
 
 interface PersistedState {
   settings: Settings
@@ -170,7 +172,14 @@ export class AppStore {
     if (current.resume?.storedName) await removeResumeFile(userId, current.resume.storedName)
     const bytes = Buffer.isBuffer(file.data) ? file.data : Buffer.from(new Uint8Array(file.data))
     const resume = await writeResumeFile(userId, file.fileName, file.mimeType, bytes)
-    const next: LocalUserData = { ...current, resume }
+    const imported = await importResumeFromBuffer({ fileName: file.fileName, mimeType: file.mimeType, data: bytes })
+    const next: LocalUserData = {
+      ...current,
+      resume,
+      profile: applyResumeImport(current.profile, imported),
+      memories: mergeAutoMemories(current.memories, imported.memories),
+      memoryEnabled: true,
+    }
     this.state.users[userId] = next
     this.queueWrite()
     return structuredClone(next)
@@ -200,6 +209,28 @@ export class AppStore {
     if (!current.resume) return null
     const copied = await copyUserResumeToSession(userId, sessionId, current.resume)
     return copied ?? null
+  }
+
+  async parseUserResume(userId: string): Promise<ResumeImportResult | null> {
+    const current = this.getUserData(userId)
+    if (!current.resume) return null
+    const bytes = await readUserResumeFile(userId, current.resume.storedName)
+    if (!bytes) return null
+    return importResumeFromBuffer({
+      fileName: current.resume.fileName,
+      mimeType: current.resume.mimeType,
+      data: bytes,
+    })
+  }
+
+  async parseSessionResume(sessionId: string, meta: LocalResumeMeta): Promise<ResumeImportResult | null> {
+    const bytes = await readSessionResumeFile(sessionId, meta.storedName)
+    if (!bytes) return null
+    return importResumeFromBuffer({
+      fileName: meta.fileName,
+      mimeType: meta.mimeType,
+      data: bytes,
+    })
   }
 
   private pruneConversations() {

@@ -1,4 +1,4 @@
-import type { LocalProfile } from '@shared/types'
+import type { LocalProfile, SessionPromptResume } from '@shared/types'
 
 export type Plan = 'free' | 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
 
@@ -121,6 +121,35 @@ export function toPromptProfile(profile?: PromptProfileSource | null) {
     examples: snapshot.examples,
     explainTerms: snapshot.explainTerms,
     customContext: snapshot.customContext,
+  }
+}
+
+export function toPromptResume(resume?: SessionPromptResume | null) {
+  if (!resume) return undefined
+  const parsed = resume.parsed
+  const text = resume.text?.trim()
+  const hasParsed =
+    Boolean(parsed.name || parsed.headline || parsed.summary) ||
+    parsed.skills.length > 0 ||
+    parsed.languages.length > 0 ||
+    parsed.experience.length > 0 ||
+    parsed.education.length > 0 ||
+    parsed.projects.length > 0 ||
+    parsed.certifications.length > 0 ||
+    parsed.achievements.length > 0
+  if (!hasParsed && !text) return undefined
+  return {
+    name: parsed.name,
+    headline: parsed.headline,
+    summary: parsed.summary,
+    skills: parsed.skills,
+    languages: parsed.languages,
+    experience: parsed.experience,
+    education: parsed.education,
+    projects: parsed.projects,
+    certifications: parsed.certifications,
+    achievements: parsed.achievements,
+    rawText: text,
   }
 }
 

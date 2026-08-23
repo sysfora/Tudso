@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode, RefObject } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
 import { cn } from '@/lib/cn'
@@ -10,11 +10,11 @@ export const PROFILE_SETUP_STEPS = [
   },
   {
     title: 'Add your resume',
-    description: 'Optional. You can skip.',
+    description: 'We extract skills, work history, projects, and goals into your profile and memory.',
   },
   {
     title: 'Skills and goals',
-    description: 'A few skills and what you are working toward.',
+    description: 'A few skills and what you are working toward. Filled from your resume when we can.',
   },
   {
     title: 'How should answers sound?',
@@ -34,6 +34,52 @@ export interface ProfileSetupValues {
 
 export function splitList(value: string, separator: string) {
   return value.split(separator).map((item) => item.trim()).filter(Boolean)
+}
+
+function mergeComma(current: string, incoming?: string[]) {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of [...splitList(current, ','), ...(incoming ?? [])]) {
+    const key = item.toLowerCase()
+    if (!item || seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+  }
+  return out.join(', ')
+}
+
+function mergeLines(current: string, incoming?: string[]) {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of [...splitList(current, '\n'), ...(incoming ?? [])]) {
+    const key = item.toLowerCase()
+    if (!item || seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+  }
+  return out.join('\n')
+}
+
+export function mergeSetupValuesFromProfile(
+  current: ProfileSetupValues,
+  profile: Partial<{
+    preferredName?: string
+    profession?: string
+    role?: string
+    skills?: string[]
+    goals?: string[]
+    technicalLevel?: ProfileSetupValues['technicalLevel']
+  }>,
+): ProfileSetupValues {
+  return {
+    preferredName: current.preferredName.trim() || profile.preferredName || '',
+    profession: current.profession.trim() || profile.profession || '',
+    role: current.role.trim() || profile.role || '',
+    skills: mergeComma(current.skills, profile.skills),
+    goals: mergeLines(current.goals, profile.goals),
+    communicationStyle: current.communicationStyle,
+    technicalLevel: profile.technicalLevel ?? current.technicalLevel,
+  }
 }
 
 export function ProfileSetupField({ label, children }: { label: string; children: ReactNode }) {
@@ -78,8 +124,6 @@ export function ProfileSetupFields({
   values,
   onChange,
   onEnter,
-  fileRef,
-  onPickFile,
   onPickClick,
   resumeName,
   resumeError,
@@ -89,8 +133,6 @@ export function ProfileSetupFields({
   values: ProfileSetupValues
   onChange: (patch: Partial<ProfileSetupValues>) => void
   onEnter: (event: KeyboardEvent<HTMLInputElement>) => void
-  fileRef: RefObject<HTMLInputElement | null>
-  onPickFile: (file: File) => void
   onPickClick: () => void
   resumeName: string
   resumeError: string
@@ -130,17 +172,6 @@ export function ProfileSetupFields({
 
       {step === 1 && (
         <div className="space-y-2">
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".pdf,.docx,.txt"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (file) onPickFile(file)
-            }}
-          />
           <Button
             variant="outline"
             className="w-full"

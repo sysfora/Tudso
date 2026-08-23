@@ -82,6 +82,30 @@ export interface LocalResumeMeta {
   storedName: string
 }
 
+export interface ParsedResume {
+  name?: string
+  headline?: string
+  summary?: string
+  industry?: string
+  skills: string[]
+  languages: string[]
+  goals: string[]
+  experience: Array<{ company?: string; role?: string; duration?: string; description?: string }>
+  education: Array<{ institution?: string; degree?: string; year?: string }>
+  projects: Array<{ name?: string; description?: string; technologies?: string[] }>
+  certifications: string[]
+  achievements: string[]
+  technicalLevel?: 'beginner' | 'intermediate' | 'advanced'
+}
+
+export interface ResumeImportResult {
+  parsed: ParsedResume
+  profile: Partial<LocalProfile>
+  memories: string[]
+  text: string
+  extractedChars: number
+}
+
 export type MemorySource = 'auto' | 'manual'
 
 export interface MemoryEntry {
@@ -239,9 +263,16 @@ export interface ChatMessage {
   attachments?: Attachment[]
 }
 
+export interface SessionPromptResume {
+  parsed: ParsedResume
+  text: string
+}
+
 export interface SessionContext {
   profile: LocalProfile
   resume?: LocalResumeMeta
+  promptResume?: SessionPromptResume
+  promptMemories?: string[]
   usedDefaults: boolean
 }
 
@@ -333,4 +364,10 @@ export interface PickedFile {
   mime: string
   size: number
   text?: string
+}
+
+export interface PickedResume {
+  fileName: string
+  mimeType: string
+  data: ArrayBuffer
 }

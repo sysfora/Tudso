@@ -1,4 +1,4 @@
-export const MAX_MEMORIES = 80
+export const MAX_MEMORIES = 120
 export const MAX_MEMORY_CHARS = 400
 
 export type MemorySource = 'auto' | 'manual'

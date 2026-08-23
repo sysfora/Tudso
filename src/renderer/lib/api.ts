@@ -1,6 +1,6 @@
 import { config } from '@/config'
 import type { BillingPlanPrice, Entitlement, Subscription } from '@/types/api'
-import { toPromptProfile } from '@/types/api'
+import { toPromptProfile, toPromptResume } from '@/types/api'
 import type { PaidPlan } from '@shared/plans'
 
 const API_BASE = config.serverUrl
@@ -74,6 +74,49 @@ async function subscribeSse<T>(path: string, onUpdate: (value: T) => void, signa
   }
 }
 
+const boundSessionPrompts = new Set<string>()
+
+export type AiTurnRequest = {
+  message: string
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>
+  signal?: AbortSignal
+  model?: string
+  conversationId?: string
+  profile?: ReturnType<typeof toPromptProfile>
+  memories?: string[]
+  resume?: ReturnType<typeof toPromptResume>
+}
+
+async function postAiStream(path: '/ai/chat' | '/ai/vision', body: AiTurnRequest & { image?: string }) {
+  const { signal, conversationId, image, ...rest } = body
+  const send = (includeSessionPrompt: boolean) =>
+    fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
+      body: JSON.stringify({
+        message: rest.message,
+        history: rest.history,
+        stream: true,
+        model: rest.model,
+        conversationId,
+        ...(image ? { image } : {}),
+        ...(includeSessionPrompt ? { profile: rest.profile, memories: rest.memories, resume: rest.resume } : {}),
+      }),
+      signal,
+      cache: 'no-store',
+    })
+
+  const alreadyBound = Boolean(conversationId && boundSessionPrompts.has(conversationId))
+  let response = await send(!alreadyBound)
+  if (response.status === 409 && conversationId && alreadyBound) {
+    boundSessionPrompts.delete(conversationId)
+    response = await send(true)
+  }
+  if (!response.ok) throw new Error(await response.text())
+  if (conversationId) boundSessionPrompts.add(conversationId)
+  return response.body as ReadableStream<Uint8Array> | null
+}
+
 export const api = {
   auth: {
     start: (deviceId: string, platform: string, appVersion: string) =>
@@ -122,43 +165,8 @@ export const api = {
     revokeOthers: () => fetchJson<{ ok: true; revoked: number }>('/me/sessions/revoke-others', { method: 'POST' }),
   },
   ai: {
-    chat: async (
-      message: string,
-      history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
-      signal?: AbortSignal,
-      model?: string,
-      profile?: ReturnType<typeof toPromptProfile>,
-      memories?: string[],
-    ) => {
-      const response = await fetch(`${API_BASE}/ai/chat`, {
-        method: 'POST',
-        headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ message, history, stream: true, model, profile, memories }),
-        signal,
-        cache: 'no-store',
-      })
-      if (!response.ok) throw new Error(await response.text())
-      return response.body as ReadableStream<Uint8Array> | null
-    },
-    vision: async (
-      image: string,
-      message: string,
-      history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
-      signal?: AbortSignal,
-      model?: string,
-      profile?: ReturnType<typeof toPromptProfile>,
-      memories?: string[],
-    ) => {
-      const response = await fetch(`${API_BASE}/ai/vision`, {
-        method: 'POST',
-        headers: { ...headers(), Accept: 'text/plain', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ image, message, history, model, profile, memories }),
-        signal,
-        cache: 'no-store',
-      })
-      if (!response.ok) throw new Error(await response.text())
-      return response.body as ReadableStream<Uint8Array> | null
-    },
+    chat: (request: AiTurnRequest) => postAiStream('/ai/chat', request),
+    vision: (image: string, request: AiTurnRequest) => postAiStream('/ai/vision', { ...request, image }),
     transcribe: async (audio: Blob) => {
       const form = new FormData()
       const extension = audio.type.includes('mp4') ? 'mp4' : audio.type.includes('ogg') ? 'ogg' : 'webm'

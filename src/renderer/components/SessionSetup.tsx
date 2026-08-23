@@ -1,14 +1,18 @@
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   PROFILE_SETUP_STEPS,
   ProfileSetupFields,
+  mergeSetupValuesFromProfile,
   splitList,
   type ProfileSetupValues,
 } from '@/components/ProfileSetup'
+import { pickResumeFile } from '@/lib/pick-resume'
+import { desktop } from '@/lib/desktop'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
 import { DEFAULT_PROFILE_PREFERENCES, snapshotLocalProfile } from '@/types/api'
+import type { LocalProfile, ResumeImportResult } from '@shared/types'
 
 export function SessionSetup() {
   const profile = useAuthStore((state) => state.profile)
@@ -25,11 +29,13 @@ export function SessionSetup() {
     technicalLevel: DEFAULT_PROFILE_PREFERENCES.technicalLevel,
   })
   const [resumeFile, setResumeFile] = useState<{ fileName: string; mimeType: string; data: ArrayBuffer } | null>(null)
+  const [importedProfile, setImportedProfile] = useState<Partial<LocalProfile> | null>(null)
+  const [resumeImport, setResumeImport] = useState<ResumeImportResult | null>(null)
+  const [memoryFacts, setMemoryFacts] = useState<string[]>([])
   const [resumeName, setResumeName] = useState('')
   const [resumeError, setResumeError] = useState('')
   const [resumeUploading, setResumeUploading] = useState(false)
   const [saving, setSaving] = useState<'defaults' | 'custom' | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const last = step === PROFILE_SETUP_STEPS.length - 1
   const busy = saving !== null || resumeUploading
@@ -45,18 +51,24 @@ export function SessionSetup() {
         ? snapshotLocalProfile(profile)
         : snapshotLocalProfile({
             ...DEFAULT_PROFILE_PREFERENCES,
-            preferredName: values.preferredName.trim() || undefined,
-            profession: values.profession.trim() || undefined,
-            role: values.role.trim() || undefined,
+            ...importedProfile,
+            preferredName: values.preferredName.trim() || importedProfile?.preferredName || undefined,
+            profession: values.profession.trim() || importedProfile?.profession || undefined,
+            role: values.role.trim() || importedProfile?.role || undefined,
             skills: splitList(values.skills, ','),
             goals: splitList(values.goals, '\n'),
             communicationStyle: values.communicationStyle,
             technicalLevel: values.technicalLevel,
+            education: importedProfile?.education,
+            industry: importedProfile?.industry,
+            customContext: importedProfile?.customContext,
           })
       await startSession({
         profile: nextProfile,
         usedDefaults,
         resumeFile: usedDefaults ? undefined : resume ?? undefined,
+        resumeImport: usedDefaults ? undefined : resumeImport ?? undefined,
+        memoryFacts: usedDefaults ? undefined : memoryFacts,
       })
     } finally {
       setSaving(null)
@@ -72,19 +84,33 @@ export function SessionSetup() {
     await finish(false, resumeFile)
   }
 
-  const pickResume = async (file: File) => {
+  const pickResume = async () => {
+    const picked = await pickResumeFile()
+    if (!picked) return
     setResumeUploading(true)
     setResumeError('')
     try {
-      setResumeFile({
-        fileName: file.name,
-        mimeType: file.type,
-        data: await file.arrayBuffer(),
-      })
-      setResumeName(`${file.name} for this session only.`)
+      const imported = await desktop.resume.parse(picked)
+      setResumeFile(picked)
+      setResumeImport(imported)
+      setImportedProfile(imported.profile)
+      setMemoryFacts(imported.memories)
+      setValues((current) => mergeSetupValuesFromProfile(current, imported.profile))
+      const filled = imported.extractedChars > 40
+      setResumeName(
+        filled
+          ? `${picked.fileName} for this session. Skills, work history, and memory will be filled.`
+          : `${picked.fileName} for this session only.`,
+      )
+      if (!filled) {
+        setResumeError('Could not read enough text to fill this session. Try PDF, DOCX, or TXT.')
+      }
     } catch (error) {
       setResumeError(error instanceof Error ? error.message : 'Could not read resume')
       setResumeFile(null)
+      setImportedProfile(null)
+      setResumeImport(null)
+      setMemoryFacts([])
       setResumeName('')
     } finally {
       setResumeUploading(false)
@@ -103,7 +129,7 @@ export function SessionSetup() {
         <p className="text-[12px] font-medium text-muted">This session only</p>
         <h1 className="mt-1 text-[18px] font-semibold tracking-tight">Set up this session</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-          Same details as onboarding. Used for this session and not saved to your profile.
+          Same details as onboarding. Session fields stay here; resume facts also go into memory so answers stay useful.
         </p>
 
         <Button
@@ -127,9 +153,7 @@ export function SessionSetup() {
           values={values}
           onChange={(patch) => setValues((current) => ({ ...current, ...patch }))}
           onEnter={onEnter}
-          fileRef={fileRef}
-          onPickFile={(file) => void pickResume(file)}
-          onPickClick={() => fileRef.current?.click()}
+          onPickClick={() => void pickResume()}
           resumeName={resumeName}
           resumeError={resumeError}
           resumeUploading={resumeUploading}
