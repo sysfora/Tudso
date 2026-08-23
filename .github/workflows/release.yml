@@ -199,7 +199,12 @@ jobs:
           fi
           git commit -m "chore: release $VERSION"
           git push
+          # workflow_dispatch: the GitHub release step already created this tag.
           if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
-            git tag "$TAG"
-            git push origin "$TAG"
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+              echo "Tag $TAG already exists on remote"
+            else
+              git tag "$TAG"
+              git push origin "$TAG"
+            fi
           fi
