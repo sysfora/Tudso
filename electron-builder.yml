@@ -3,12 +3,17 @@ productName: Tudso
 directories:
   output: release
   buildResources: resources
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 files:
   - dist
   - dist-electron
   - node_modules/koffi/**/*
+  - node_modules/sharp/**/*
+  - node_modules/@img/**/*
 asarUnpack:
   - node_modules/koffi/**/*
+  - node_modules/sharp/**/*
+  - node_modules/@img/**/*
 extraResources:
   - from: server/public/icon.png
     to: icon.png
@@ -16,10 +21,19 @@ extraResources:
     to: icon.ico
 win:
   icon: public/icon.ico
-  target: nsis
+  target:
+    - nsis
 mac:
   icon: server/public/icon.png
-  target: dmg
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
   category: public.app-category.productivity
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -32,7 +46,8 @@ mac:
     NSAudioCaptureUsageDescription: Tudso captures system audio for live copilot.
 linux:
   icon: server/public/icon.png
-  target: AppImage
+  target:
+    - AppImage
   category: Utility
   synopsis: A lightweight floating desktop AI assistant
   desktop:
@@ -41,7 +56,11 @@ linux:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  shortcutName: Tudso
 protocols:
   - name: Tudso
     schemes:
       - tudso
+publish:
+  provider: github
+  releaseType: release

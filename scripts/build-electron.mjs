@@ -1,6 +1,7 @@
-import * as esbuild from 'esbuild'
+import { copyFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import * as esbuild from 'esbuild'
 import { electronDefines } from './load-env.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -15,7 +16,7 @@ export async function buildElectron() {
       platform: 'node',
       format: 'esm',
       outfile: path.join(root, 'dist-electron/main.js'),
-      external: ['electron', 'koffi'],
+      external: ['electron', 'koffi', 'sharp'],
       sourcemap: true,
       packages: 'bundle',
       define,
@@ -34,6 +35,10 @@ export async function buildElectron() {
       sourcemap: true,
     }),
   ])
+  await copyFile(
+    path.join(root, 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'),
+    path.join(root, 'dist-electron/pdf.worker.mjs'),
+  )
 }
 
 const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
