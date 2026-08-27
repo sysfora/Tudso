@@ -176,7 +176,7 @@
     "listRule": "id = @request.auth.id",
     "viewRule": "id = @request.auth.id",
     "createRule": "",
-    "updateRule": "id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.freeAccess:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false && @request.body.onboardingComplete:isset = false",
+    "updateRule": "id = @request.auth.id && @request.body.plan:isset = false && @request.body.planStatus:isset = false && @request.body.freeAccess:isset = false && @request.body.interviewCredits:isset = false && @request.body.stripeCustomerId:isset = false && @request.body.stripeSubscriptionId:isset = false && @request.body.expiresAt:isset = false && @request.body.onboardingComplete:isset = false",
     "deleteRule": "id = @request.auth.id",
     "name": "users",
     "type": "auth",
@@ -296,10 +296,12 @@
         "type": "select",
         "values": [
           "free",
+          "basic",
+          "plus",
+          "pro",
           "weekly",
           "monthly",
           "yearly",
-          "pro",
           "premium"
         ]
       },
@@ -330,10 +332,12 @@
         "system": false,
         "type": "select",
         "values": [
+          "basic",
+          "plus",
+          "pro",
           "weekly",
           "monthly",
           "yearly",
-          "pro",
           "premium"
         ]
       },
@@ -384,6 +388,18 @@
         "required": false,
         "system": false,
         "type": "bool"
+      },
+      {
+        "hidden": false,
+        "id": "number4100000914",
+        "max": null,
+        "min": 0,
+        "name": "interviewCredits",
+        "onlyInt": true,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
       },
       {
         "hidden": false,

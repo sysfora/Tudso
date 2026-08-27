@@ -1,7 +1,7 @@
 import PocketBase from 'pocketbase'
 import { config } from './config.js'
 import { log } from './log.js'
-import { isFreeAccessPlan, isPlan } from './plans.js'
+import { isFreeAccessPlan, isPlan, isUnlimitedPlan, isPaidStatus } from './plans.js'
 import { pbQuote } from './pb-filter.js'
 import {
   type DesktopSession,
@@ -53,13 +53,15 @@ export async function getUserByEmail(email: string): Promise<{ id: string; email
 export const DEFAULT_USER_BILLING = {
   plan: 'free' as const,
   planStatus: 'unpaid' as const,
+  interviewCredits: 3,
 }
 
 export interface UserBilling {
   id: string
   plan?: Plan
   planStatus?: EntitlementRecord['status']
-  freeAccess?: 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
+  freeAccess?: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
+  interviewCredits?: number
   onboardingComplete?: boolean
   stripeCustomerId?: string
   stripeSubscriptionId?: string
@@ -77,6 +79,7 @@ export async function getUserBilling(userId: string): Promise<UserBilling | null
       plan: isPlan(user.plan) ? user.plan : undefined,
       planStatus: typeof user.planStatus === 'string' ? user.planStatus as EntitlementRecord['status'] : undefined,
       freeAccess: isFreeAccessPlan(user.freeAccess) ? user.freeAccess : undefined,
+      interviewCredits: typeof user.interviewCredits === 'number' ? user.interviewCredits : undefined,
       onboardingComplete: user.onboardingComplete === true,
       stripeCustomerId: typeof user.stripeCustomerId === 'string' ? user.stripeCustomerId : undefined,
       stripeSubscriptionId: typeof user.stripeSubscriptionId === 'string' ? user.stripeSubscriptionId : undefined,
@@ -97,6 +100,7 @@ export async function syncUserBilling(
     stripeCustomerId?: string
     stripeSubscriptionId?: string
     expiresAt?: string
+    interviewCredits?: number
   },
 ): Promise<void> {
   const pb = await getAdminPb()
@@ -106,6 +110,7 @@ export async function syncUserBilling(
   if (data.stripeCustomerId !== undefined) payload.stripeCustomerId = data.stripeCustomerId
   if (data.stripeSubscriptionId !== undefined) payload.stripeSubscriptionId = data.stripeSubscriptionId
   if (data.expiresAt !== undefined) payload.expiresAt = data.expiresAt
+  if (data.interviewCredits !== undefined) payload.interviewCredits = data.interviewCredits
   if (!Object.keys(payload).length) return
   try {
     await pb.collection('users').update(userId, payload)
@@ -119,8 +124,13 @@ export async function ensureUserBilling(userId: string): Promise<void> {
   const pb = await getAdminPb()
   try {
     const user = await pb.collection('users').getOne(userId)
-    if (user.plan) return
-    await syncUserBilling(userId, DEFAULT_USER_BILLING)
+    if (!user.plan) {
+      await syncUserBilling(userId, DEFAULT_USER_BILLING)
+      return
+    }
+    if (typeof user.interviewCredits !== 'number') {
+      await syncUserBilling(userId, { interviewCredits: user.plan === 'free' ? 3 : 0 })
+    }
   } catch (error) {
     log.warn('Could not ensure user billing fields', { err: pocketbaseDetails(error) })
   }
@@ -168,6 +178,7 @@ export function unpaidEntitlement(userId: string, extra?: Partial<EntitlementRec
     user: userId,
     plan: extra?.plan && isPlan(extra.plan) ? extra.plan : 'free',
     status: extra?.status ?? 'unpaid',
+    interviewCredits: extra?.interviewCredits ?? 3,
     expiresAt: extra?.expiresAt ?? '',
     created: extra?.created ?? '',
     updated: extra?.updated ?? '',
@@ -178,6 +189,7 @@ export function entitlementFromBilling(billing: UserBilling | null, fallbackUser
   if (!billing?.plan || !isPlan(billing.plan)) {
     return unpaidEntitlement(fallbackUserId, {
       id: billing?.id,
+      interviewCredits: billing?.interviewCredits,
       expiresAt: billing?.expiresAt,
       created: billing?.created,
       updated: billing?.updated,
@@ -188,6 +200,7 @@ export function entitlementFromBilling(billing: UserBilling | null, fallbackUser
     user: fallbackUserId,
     plan: billing.plan,
     status: billing.planStatus ?? 'unpaid',
+    interviewCredits: billing.interviewCredits,
     expiresAt: billing.expiresAt ?? '',
     created: billing.created ?? '',
     updated: billing.updated ?? '',
@@ -202,6 +215,7 @@ export function entitlementFromFreeAccess(userId: string, billing: UserBilling):
     plan,
     status: 'active',
     freeAccess: plan,
+    interviewCredits: billing.interviewCredits,
     expiresAt: '',
     created: billing.created ?? '',
     updated: billing.updated ?? '',
@@ -388,6 +402,19 @@ export async function incrementUsage(userId: string, increments: Partial<Omit<Us
     const record = await pb.collection('usage').update(usage.id, withoutSessions)
     return record as unknown as UsageRecord
   }
+}
+
+export async function consumeInterviewCredit(userId: string): Promise<{ ok: true; interviewCredits?: number } | { ok: false; error: string }> {
+  const entitlement = await getEntitlementForUser(userId)
+  if (isUnlimitedPlan(entitlement.plan) && isPaidStatus(entitlement.status)) {
+    return { ok: true }
+  }
+  const credits = entitlement.interviewCredits ?? 0
+  if (credits <= 0) {
+    return { ok: false, error: 'No interview sessions left. Choose a plan to continue.' }
+  }
+  await syncUserBilling(userId, { interviewCredits: credits - 1 })
+  return { ok: true, interviewCredits: credits - 1 }
 }
 
 export async function getUsageHistory(userId: string, days = 14): Promise<UsageRecord[]> {

@@ -13,7 +13,7 @@ import {
 } from '@/lib/media-audio'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
-import { isPaidPlan } from '@shared/plans'
+import { hasProductAccess } from '@shared/plans'
 import { cleanTranscript, isActionableTranscript } from '@shared/transcript'
 
 export type AudioMode = 'mic' | 'system'
@@ -141,6 +141,10 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, ge
       set({ error: liveError() })
       return
     }
+    if (useAppStore.getState().expireLiveSession()) {
+      set({ error: 'This session reached its time limit.' })
+      return
+    }
     if (!useAppStore.getState().runningSessionId) {
       useAppStore.getState().newConversation()
       set({ error: 'Start a session first.' })
@@ -258,9 +262,9 @@ async function startSystemStream(): Promise<MediaStream> {
 
 function liveAllowed(): boolean {
   const entitlement = useAuthStore.getState().entitlement
-  return isPaidPlan(entitlement?.plan, entitlement?.status)
+  return hasProductAccess(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
 }
 
 function liveError(): string {
-  return 'Live copilot needs an active subscription.'
+  return 'Live copilot needs remaining interview sessions or an active plan.'
 }

@@ -2,7 +2,7 @@ import { ArrowUp, AudioLines, Mic, MicOff, Monitor, Paperclip, Radio, ScanSearch
 import { useEffect, useRef, useState } from 'react'
 import { formatAccelerator } from '@shared/accelerator'
 import { MODEL_OPTIONS, resolveChatModel } from '@shared/defaults'
-import { isPaidPlan } from '@shared/plans'
+import { hasProductAccess } from '@shared/plans'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -40,7 +40,7 @@ export function Composer() {
   const { listening, error: voiceError, toggle: toggleVoice } = useVoiceInput()
   const [attaching, setAttaching] = useState(false)
   const canSend = Boolean(composer.trim() || attachments.length) && !generatingId
-  const paid = isPaidPlan(entitlement?.plan, entitlement?.status)
+  const paid = hasProductAccess(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
   const screenAllowed = paid
   const audioAllowed = paid
 

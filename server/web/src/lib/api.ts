@@ -12,9 +12,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export type Entitlement = {
-  plan: 'free' | 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
+  plan: 'free' | 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
   status: string
-  freeAccess?: 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
+  freeAccess?: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
+  interviewCredits?: number
   expiresAt?: string
 }
 
@@ -118,10 +119,10 @@ export const api = {
     return request<Account>('/me/account/avatar', { method: 'POST', body })
   },
   removeAvatar: () => request<Account>('/me/account/avatar', { method: 'DELETE' }),
-  plans: () => request<{ plans: Array<{ id: 'weekly' | 'monthly' | 'yearly'; amount: number | null; currency: string; interval: string }> }>('/billing/plans'),
+  plans: () => request<{ plans: Array<{ id: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly'; amount: number | null; currency: string; interval: string }> }>('/billing/plans'),
   billingOverview: () => request<BillingOverview>('/billing/overview'),
-  checkout: (plan: 'weekly' | 'monthly' | 'yearly') => request<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
-  portal: (action: 'manage' | 'cancel' | 'upgrade' = 'manage', plan?: 'weekly' | 'monthly' | 'yearly') =>
+  checkout: (plan: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly') => request<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
+  portal: (action: 'manage' | 'cancel' | 'upgrade' = 'manage', plan?: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly') =>
     request<{ url: string }>('/billing/portal', { method: 'POST', body: JSON.stringify({ action, plan }) }),
   devices: () => request<Device[]>('/me/devices'),
   deleteDevice: (deviceId: string) => request<{ ok: boolean; current?: boolean }>(`/me/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),

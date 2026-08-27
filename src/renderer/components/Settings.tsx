@@ -175,7 +175,7 @@ function SettingsPages({ section, searching }: { section: SettingsSection; searc
         </SearchSection>
       ) : null}
       {searching || section === 'subscription' ? (
-          <SearchablePanel title="Subscription" terms={['plan', 'billing', 'upgrade', 'weekly', 'monthly', 'yearly', 'manage', 'cancel', 'subscribe']}>
+          <SearchablePanel title="Subscription" terms={['plan', 'billing', 'upgrade', 'basic', 'plus', 'pro', 'weekly', 'monthly', 'yearly', 'manage', 'cancel', 'subscribe']}>
           <SubscriptionSection />
         </SearchablePanel>
       ) : null}
@@ -266,7 +266,7 @@ function GeneralSection() {
   const latestVersion = useAppStore((state) => state.latestVersion)
   const updateDownloadUrl = useAppStore((state) => state.updateDownloadUrl)
   const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
+  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
   const [resetting, setResetting] = useState(false)
 
   return (
@@ -1160,7 +1160,7 @@ function PrivacySection() {
   const clearConversations = useAppStore((state) => state.clearConversations)
   const deleteLocalData = useAppStore((state) => state.deleteLocalData)
   const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
+  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
   const [status, setStatus] = useState<string | null>(null)
   const hint = (value: string) => formatAccelerator(value, desktop.platform)
 

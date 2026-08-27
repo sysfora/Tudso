@@ -23,6 +23,7 @@ win:
   icon: public/icon.ico
   target:
     - nsis
+afterPack: scripts/after-pack.cjs
 mac:
   icon: server/public/icon.png
   target:

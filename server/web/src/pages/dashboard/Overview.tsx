@@ -84,7 +84,7 @@ export default function Overview() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface-2 px-3 py-2.5">
           <p className="inline-flex items-center gap-1.5 text-[13px]">
             <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-            No active plan. Subscribe to use chat, screen answers, and live copilot.
+            No active paid plan. Free includes 3 interview sessions. Subscribe or buy a pack for more.
           </p>
           <Link className="text-[13px] font-medium text-accent hover:underline" to="/dashboard/subscription">Choose a plan</Link>
         </div>
@@ -96,7 +96,7 @@ export default function Overview() {
           <Stat
             icon={<CreditCard className="h-3.5 w-3.5" />}
             label="Plan"
-            value={planName}
+            value={planName === 'No plan' ? 'Free' : planName}
             hint={paid ? statusLabel(data.entitlement?.status) : 'Subscribe to use the app'}
             tone={paid ? (data.entitlement?.status === 'past_due' ? 'danger' : 'ok') : 'muted'}
           />

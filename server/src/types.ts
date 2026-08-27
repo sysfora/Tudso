@@ -1,4 +1,4 @@
-export type Plan = 'free' | 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
+export type Plan = 'free' | 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
 
 export interface UserProfile {
   id: string
@@ -77,7 +77,8 @@ export interface EntitlementRecord {
   user: string
   plan: Plan
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid'
-  freeAccess?: 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
+  freeAccess?: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
+  interviewCredits?: number
   expiresAt: string
   created: string
   updated: string

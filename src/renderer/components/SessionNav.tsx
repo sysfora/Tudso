@@ -19,10 +19,12 @@ export function SessionNav() {
   const conversation = useAppStore(activeConversation)
   const runningSessionId = useAppStore((state) => state.runningSessionId)
   const sessionStartedAt = useAppStore((state) => state.sessionStartedAt)
+  const sessionEndsAt = useAppStore((state) => state.sessionEndsAt)
   const sessionSetupOpen = useAppStore((state) => state.sessionSetupOpen)
   const shortcuts = useAppStore((state) => state.shortcuts)
   const newConversation = useAppStore((state) => state.newConversation)
   const endSession = useAppStore((state) => state.endSession)
+  const expireLiveSession = useAppStore((state) => state.expireLiveSession)
   const renameConversation = useAppStore((state) => state.renameConversation)
   const deleteConversation = useAppStore((state) => state.deleteConversation)
   const copyAnswer = useAppStore((state) => state.copyAnswer)
@@ -38,6 +40,11 @@ export function SessionNav() {
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
   }, [live, sessionStartedAt])
+
+  useEffect(() => {
+    if (!live) return
+    expireLiveSession()
+  }, [live, now, expireLiveSession])
 
   useEffect(() => {
     if (!editing) setDraft(conversation?.title ?? '')
@@ -60,6 +67,13 @@ export function SessionNav() {
     }
   }
 
+  const remainingMs = sessionEndsAt ? Math.max(0, sessionEndsAt - now) : null
+  const timerLabel = remainingMs != null
+    ? formatElapsed(remainingMs)
+    : sessionStartedAt
+      ? formatElapsed(now - sessionStartedAt)
+      : null
+  const timerUrgent = remainingMs != null && remainingMs <= 60_000
   const hasAnswer = Boolean(conversation?.messages.some((item) => item.role === 'assistant' && item.content.trim()))
 
   if (!live && !sessionSetupOpen) {
@@ -143,16 +157,16 @@ export function SessionNav() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label={`Session: ${conversation?.title ?? 'Live'}${sessionStartedAt ? `, ${formatElapsed(now - sessionStartedAt)}` : ''}`}
+            aria-label={`Session: ${conversation?.title ?? 'Live'}${timerLabel ? `, ${timerLabel} remaining` : ''}`}
             className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 text-left transition-colors duration-150 hover:bg-lift"
           >
             <span className="h-2 w-2 shrink-0 rounded-full bg-accent-fill" aria-hidden />
             <span className="min-w-0 truncate text-[13px] font-medium">
               {conversation?.title || 'Session'}
             </span>
-            {sessionStartedAt ? (
-              <span className="shrink-0 rounded-sm bg-surface px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted">
-                {formatElapsed(now - sessionStartedAt)}
+            {timerLabel ? (
+              <span className={cn('shrink-0 rounded-sm bg-surface px-1.5 py-0.5 text-[11px] font-medium tabular-nums', timerUrgent ? 'text-danger' : 'text-muted')}>
+                {timerLabel}
               </span>
             ) : null}
           </button>

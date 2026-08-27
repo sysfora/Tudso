@@ -2,7 +2,7 @@ import Stripe from 'stripe'
 import { config } from './config.js'
 import { log } from './log.js'
 import { getSubscription, upsertSubscription, syncUserBilling, type UserBilling } from './pocketbase.js'
-import { CHECKOUT_PLANS, isCheckoutPlan, type PaidPlan } from './plans.js'
+import { CHECKOUT_PLANS, isCheckoutPlan, isOneTimePlan, isRecurringPlan, sessionLimitForPlan, type PaidPlan } from './plans.js'
 import type { EntitlementRecord, Plan, SubscriptionRecord } from './types.js'
 
 const LIVE_PLAN_TTL_MS = 8_000
@@ -12,10 +12,12 @@ export const stripe = new Stripe(config.stripe.secretKey, { apiVersion: '2025-02
 
 export function priceIdToPlan(priceId: string): Plan {
   if (!priceId) return 'free'
+  if (priceId === config.stripe.priceIds.basic) return 'basic'
+  if (priceId === config.stripe.priceIds.plus) return 'plus'
+  if (priceId === config.stripe.priceIds.pro) return 'pro'
   if (priceId === config.stripe.priceIds.weekly) return 'weekly'
   if (priceId === config.stripe.priceIds.monthly) return 'monthly'
   if (priceId === config.stripe.priceIds.yearly) return 'yearly'
-  if (priceId === config.stripe.priceIds.pro) return 'pro'
   if (priceId === config.stripe.priceIds.premium) return 'premium'
   return 'free'
 }
@@ -158,6 +160,7 @@ export async function resolveLiveEntitlement(userId: string, billingHint?: UserB
       user: userId,
       plan: mapped.plan,
       status: mapped.planStatus,
+      interviewCredits: billing?.interviewCredits,
       expiresAt: mapped.currentPeriodEnd,
       created: billing?.created ?? '',
       updated: new Date().toISOString(),
@@ -169,9 +172,10 @@ export async function resolveLiveEntitlement(userId: string, billingHint?: UserB
     return entitlement
   }
 
-  if (stripeReachable && (subscriptionId || customerId)) {
+  if (stripeReachable && (subscriptionId || customerId) && !isOneTimePlan(billing?.plan)) {
     const unpaid = unpaidEntitlement(userId, {
       id: billing?.id,
+      interviewCredits: billing?.interviewCredits,
       created: billing?.created,
       updated: new Date().toISOString(),
     })
@@ -205,16 +209,17 @@ export async function createCheckoutSession(
   }
   const priceId = config.stripe.priceIds[plan]
   if (!priceId) throw new Error('Invalid plan selected')
+  const oneTime = isOneTimePlan(plan)
   try {
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      mode: 'subscription',
+      mode: oneTime ? 'payment' : 'subscription',
       success_url: urls?.successUrl ?? `${config.app.url}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: urls?.cancelUrl ?? `${config.app.url}/dashboard/subscription?billing=cancel`,
       client_reference_id: userId,
-      metadata: { userId },
-      subscription_data: { metadata: { userId } },
+      metadata: { userId, plan },
+      ...(oneTime ? {} : { subscription_data: { metadata: { userId, plan } } }),
     })
     return { url: session.url ?? `${config.app.url}/billing/error` }
   } catch (error) {
@@ -246,7 +251,7 @@ export async function createCustomerPortalSession(
   }
 
   if (action === 'upgrade') {
-    const target = isCheckoutPlan(options.plan) ? options.plan : null
+    const target = isRecurringPlan(options.plan) ? options.plan : null
     const priceId = target ? config.stripe.priceIds[target] : ''
     if (sub.stripeSubscriptionId && priceId) {
       const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId)
@@ -284,7 +289,7 @@ export async function listPaidPlanPrices(): Promise<Array<{
 }>> {
   return Promise.all(CHECKOUT_PLANS.map(async (id) => {
     const priceId = config.stripe.priceIds[id]
-    const interval = id === 'weekly' ? 'week' : id === 'yearly' ? 'year' : 'month'
+    const interval = isOneTimePlan(id) ? 'one_time' : id === 'weekly' ? 'week' : id === 'yearly' ? 'year' : 'month'
     if (!priceId) return { id, priceId: '', amount: null, currency: 'usd', interval }
     try {
       const price = await stripe.prices.retrieve(priceId)
@@ -302,15 +307,40 @@ export async function listPaidPlanPrices(): Promise<Array<{
 }
 
 export async function finalizeCheckoutSession(sessionId: string, userId: string): Promise<boolean> {
-  const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['subscription'] })
+  const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['subscription', 'line_items'] })
   if (session.metadata?.userId && session.metadata.userId !== userId) return false
   if (session.status !== 'complete' && session.payment_status !== 'paid') return false
+  if (session.mode === 'payment') {
+    await syncOneTimePurchaseFromCheckout(session)
+    return true
+  }
   const sub = session.subscription
   if (!sub) return session.payment_status === 'paid'
   const full = typeof sub === 'string' ? await stripe.subscriptions.retrieve(sub) : sub
   if (!full.metadata?.userId) full.metadata = { ...full.metadata, userId }
   await syncSubscriptionFromStripe(full)
   return true
+}
+
+async function syncOneTimePurchaseFromCheckout(session: Stripe.Checkout.Session): Promise<void> {
+  const userId = session.metadata?.userId
+  if (!userId) return
+  const priceId = session.line_items?.data[0]?.price?.id
+    ?? (typeof session.line_items?.data[0]?.price === 'string' ? session.line_items.data[0].price : '')
+    ?? ''
+  const plan = isCheckoutPlan(session.metadata?.plan) ? session.metadata.plan : priceIdToPlan(priceId)
+  if (!isOneTimePlan(plan)) return
+  const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
+  const credits = sessionLimitForPlan(plan) ?? 0
+  if (customerId) {
+    await syncUserBilling(userId, { stripeCustomerId: customerId })
+  }
+  await syncUserBilling(userId, {
+    plan,
+    planStatus: 'active',
+    interviewCredits: credits,
+  })
+  invalidateLiveEntitlement(userId)
 }
 
 export async function syncSubscriptionFromStripe(stripeSubscription: Stripe.Subscription): Promise<void> {
@@ -343,6 +373,11 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session
+      if (session.mode === 'payment') {
+        const full = await stripe.checkout.sessions.retrieve(session.id, { expand: ['line_items'] })
+        await syncOneTimePurchaseFromCheckout(full)
+        break
+      }
       if (session.subscription && typeof session.subscription === 'string') {
         const sub = await stripe.subscriptions.retrieve(session.subscription)
         await syncSubscriptionFromStripe(sub)

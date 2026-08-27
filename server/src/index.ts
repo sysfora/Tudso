@@ -65,6 +65,7 @@ app.use('/downloads', express.static(releasesDir(), {
       return
     }
     res.setHeader('Cache-Control', 'public, max-age=3600')
+    if (name.endsWith('.dmg')) res.setHeader('Content-Type', 'application/x-apple-diskimage')
     if (/\.(exe|dmg|zip|appimage|blockmap)$/i.test(filePath)) {
       res.setHeader('Content-Disposition', `attachment; filename="${filePath.split(/[/\\]/).pop()}"`)
     }

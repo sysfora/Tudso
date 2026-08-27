@@ -12,12 +12,18 @@ import { importPickedResume } from '@/lib/import-resume'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
 import { DEFAULT_PROFILE_PREFERENCES, snapshotLocalProfile } from '@/types/api'
+import { clampSessionMinutes, isUnlimitedPlan, isPaidStatus, sessionDurationOptions, sessionMinutesForPlan } from '@shared/plans'
+import { cn } from '@/lib/cn'
 import type { LocalProfile, ResumeImportResult } from '@shared/types'
 
 export function SessionSetup() {
   const profile = useAuthStore((state) => state.profile)
   const startSession = useAppStore((state) => state.startSession)
   const cancelSessionSetup = useAppStore((state) => state.cancelSessionSetup)
+  const entitlement = useAuthStore((state) => state.entitlement)
+  const maxMinutes = sessionMinutesForPlan(entitlement?.plan)
+  const durationChoices = sessionDurationOptions(maxMinutes)
+  const [durationMinutes, setDurationMinutes] = useState(maxMinutes)
   const [step, setStep] = useState(0)
   const [values, setValues] = useState<ProfileSetupValues>({
     preferredName: '',
@@ -42,6 +48,17 @@ export function SessionSetup() {
   const defaultLabel = profile?.preferredName
     ? `Use default info (${profile.preferredName})`
     : 'Use default info'
+  const remaining = entitlement?.interviewCredits
+  const unlimited = isUnlimitedPlan(entitlement?.plan) && isPaidStatus(entitlement?.status)
+  const sessionHint = unlimited
+    ? `${maxMinutes} min max per session`
+    : remaining
+      ? `${remaining} session${remaining === 1 ? '' : 's'} left · ${maxMinutes} min max`
+      : `${maxMinutes} min max per session`
+
+  const pickDuration = (minutes: number) => {
+    setDurationMinutes(clampSessionMinutes(minutes, entitlement?.plan))
+  }
 
   const finish = async (usedDefaults: boolean, resume?: { fileName: string; mimeType: string; data: ArrayBuffer } | null) => {
     if (busy) return
@@ -66,6 +83,7 @@ export function SessionSetup() {
       await startSession({
         profile: nextProfile,
         usedDefaults,
+        durationMinutes,
         resumeFile: usedDefaults ? undefined : resume ?? undefined,
         resumeImport: usedDefaults ? undefined : resumeImport ?? undefined,
         memoryFacts: usedDefaults ? undefined : memoryFacts,
@@ -130,8 +148,31 @@ export function SessionSetup() {
         <p className="text-[12px] font-medium text-muted">This session only</p>
         <h1 className="mt-1 text-[18px] font-semibold tracking-tight">Set up this session</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-          Same details as onboarding. Session fields stay here; resume facts also go into memory so answers stay useful.
+          Same details as onboarding. Session fields stay here; resume facts also go into memory so answers stay useful. {sessionHint}.
         </p>
+
+        <div className="mt-4">
+          <p className="text-[12px] font-medium text-muted">Session length</p>
+          {durationChoices.length === 1 ? (
+            <p className="mt-1.5 text-[13px] text-fg">{durationChoices[0]} minutes</p>
+          ) : (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {durationChoices.map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  className={cn(
+                    'h-8 rounded-md px-2.5 text-[12px] font-medium',
+                    durationMinutes === minutes ? 'bg-raised text-fg' : 'bg-surface-2 text-muted hover:text-fg',
+                  )}
+                  onClick={() => pickDuration(minutes)}
+                >
+                  {minutes} min
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <Button
           variant="outline"

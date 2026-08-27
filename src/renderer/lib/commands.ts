@@ -141,7 +141,7 @@ export function runAppCommand(command: AppCommand) {
       return
     case 'toggle-hide-from-capture': {
       const entitlement = useAuthStore.getState().entitlement
-      if (!canHideFromCapture(entitlement?.plan, entitlement?.status)) {
+      if (!canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)) {
         store.setSettingsOpen(true, 'subscription')
         desktop.app.notify('Subscription', 'Hide from screen share needs an active plan.')
         return

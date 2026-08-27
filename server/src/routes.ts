@@ -12,12 +12,12 @@ import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
 import { aiRateLimiter, rateLimiter, requireAuth, requireReleaseUpload, sensitiveRateLimiter } from './middleware.js'
 import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAccount, updateAccountAvatar, updateAccountName } from './account.js'
-import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, watchEntitlement } from './pocketbase.js'
+import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, consumeInterviewCredit, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
 import { getSessionPrompt, rememberSessionPrompt, SESSION_PROMPT_REQUIRED } from './session-prompt.js'
 import { isAllowedReleaseName, publishStagedRelease, readReleaseManifest, releasesDir, toLatestUpdate } from './releases.js'
 import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
-import { isPaidPlan, CHECKOUT_PLANS } from './plans.js'
+import { hasProductAccess, CHECKOUT_PLANS } from './plans.js'
 import type { AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
 import { WEB_DEVICE_ID, clearWebSessionCookie, setWebSessionCookie } from './web-session.js'
 
@@ -195,6 +195,10 @@ function resolveSessionPrompt(
   return buildSystemPrompt({})
 }
 
+function entitled(entitlement: { plan?: string | null; status?: string | null; interviewCredits?: number } | null | undefined): boolean {
+  return hasProductAccess(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
+}
+
 const router: Router = express.Router()
 
 const pendingCodeTokens = new Map<string, { token: string; userId: string; email: string; state: string; createdAt: number }>()
@@ -333,7 +337,7 @@ async function finishDesktopAuth(
   pendingCodeTokens.set(code, { token: auth.token, userId: auth.userId, email: auth.email, state, createdAt: Date.now() })
   res.setHeader('Content-Type', 'text/html')
   const entitlement = await getEntitlementForUser(auth.userId)
-  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
+  if (!entitled(entitlement)) {
     const prices = await listPaidPlanPrices()
     res.send(subscribePage({ code, state, email: auth.email, prices }))
     return
@@ -621,7 +625,7 @@ router.get('/auth/desktop/subscribe', async (req: Request, res: Response) => {
     return
   }
   const entitlement = await getEntitlementForUser(pending.userId)
-  if (isPaidPlan(entitlement?.plan, entitlement?.status)) {
+  if (entitled(entitlement)) {
     res.setHeader('Content-Type', 'text/html')
     res.send(authCompletePage(buildCallbackUrl(code, state), {
       title: "You're ready",
@@ -650,7 +654,7 @@ router.post('/auth/desktop/subscribe', express.urlencoded({ extended: true }), a
   }
   touchPending(code)
   const entitlement = await getEntitlementForUser(pending.userId)
-  if (isPaidPlan(entitlement?.plan, entitlement?.status)) {
+  if (entitled(entitlement)) {
     res.setHeader('Content-Type', 'text/html')
     res.send(authCompletePage(buildCallbackUrl(code, state), {
       title: "You're ready",
@@ -696,7 +700,7 @@ router.get('/auth/desktop/subscribed', async (req: Request, res: Response) => {
   }
   if (!paid) {
     const entitlement = await getEntitlementForUser(pending.userId)
-    paid = isPaidPlan(entitlement?.plan, entitlement?.status)
+    paid = entitled(entitlement)
   }
   if (!paid) {
     await sendSubscribePage(res, pending, code, state, 'Payment is not complete yet. Subscribe again, or wait a moment and refresh.')
@@ -1051,8 +1055,8 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
   const { message, stream, includeHistory, history: historyBody, model, profile: profileBody, memories, resume: resumeBody, conversationId } = schema.parse(req.body)
 
   const entitlement = await getEntitlementForUser(req.userId!)
-  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-    res.status(403).json({ error: 'Chat requires an active subscription' })
+  if (!entitled(entitlement)) {
+    res.status(403).json({ error: 'Chat requires remaining interview sessions or an active plan' })
     return
   }
 
@@ -1114,8 +1118,8 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
   const { image, message, history: historyBody, model, profile: profileBody, memories, resume: resumeBody, conversationId } = schema.parse(req.body)
 
   const entitlement = await getEntitlementForUser(req.userId!)
-  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-    res.status(403).json({ error: 'Screen answers require an active subscription' })
+  if (!entitled(entitlement)) {
+    res.status(403).json({ error: 'Screen answers require remaining interview sessions or an active plan' })
     return
   }
 
@@ -1154,8 +1158,8 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
 
 router.post('/ai/transcribe', requireAuth, aiRateLimiter, upload.single('audio'), async (req: Request, res: Response) => {
   const entitlement = await getEntitlementForUser(req.userId!)
-  if (!isPaidPlan(entitlement.plan, entitlement.status)) {
-    res.status(403).json({ error: 'Voice input requires an active subscription' })
+  if (!entitled(entitlement)) {
+    res.status(403).json({ error: 'Voice input requires remaining interview sessions or an active plan' })
     return
   }
   if (!req.file) {
@@ -1188,8 +1192,8 @@ router.post('/ai/memory-extract', requireAuth, aiRateLimiter, async (req: Reques
   })
   const { userMessage, assistantContent, existing } = schema.parse(req.body)
   const entitlement = await getEntitlementForUser(req.userId!)
-  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-    res.status(403).json({ error: 'Memory requires an active subscription' })
+  if (!entitled(entitlement)) {
+    res.status(403).json({ error: 'Memory requires remaining interview sessions or an active plan' })
     return
   }
   const facts = await extractMemoryFacts(userMessage, assistantContent, existing ?? [])
@@ -1212,8 +1216,8 @@ router.post('/ai/parse-resume', requireAuth, aiRateLimiter, async (req: Request,
 
 router.get('/ai/realtime/session', requireAuth, async (req: Request, res: Response) => {
   const entitlement = await getEntitlementForUser(req.userId!)
-  if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-    res.status(403).json({ error: 'Live copilot requires an active subscription' })
+  if (!entitled(entitlement)) {
+    res.status(403).json({ error: 'Live copilot requires remaining interview sessions or an active plan' })
     return
   }
   // For production, create a short-lived ephemeral session token from the provider
@@ -1261,8 +1265,13 @@ router.get('/usage', requireAuth, async (req: Request, res: Response) => {
 })
 
 router.post('/usage/session', requireAuth, rateLimiter, async (req: Request, res: Response) => {
+  const consumed = await consumeInterviewCredit(req.userId!)
+  if (!consumed.ok) {
+    res.status(403).json({ error: consumed.error })
+    return
+  }
   await incrementUsage(req.userId!, { sessions: 1 })
-  res.json({ ok: true })
+  res.json({ ok: true, interviewCredits: consumed.interviewCredits })
 })
 
 router.get('/me/dashboard', requireAuth, async (req: Request, res: Response) => {

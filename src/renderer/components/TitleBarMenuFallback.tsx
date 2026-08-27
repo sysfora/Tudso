@@ -50,7 +50,7 @@ export function TitleBarMenuFallback() {
   const mode = windowModeFromWidth(windowWidth)
   const email = useAuthStore((state) => state.session?.email)
   const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
+  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
   const hint = (value: string) => formatAccelerator(value, desktop.platform)
 
   return (

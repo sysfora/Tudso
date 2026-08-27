@@ -2,7 +2,7 @@ import { modifierCount } from '@shared/accelerator'
 import { APP_VERSION } from '@shared/app-version'
 import { DEFAULT_SETTINGS, DEFAULT_SHORTCUTS, normalizeShortcutMap, REALTIME_ASK_PROMPT, SCREEN_ASK_PROMPT, SHORTCUT_LABELS, applyQuickActionPrompt, resolveChatModel, type QuickActionId } from '@shared/defaults'
 import { isActionableTranscript } from '@shared/transcript'
-import { isPaidPlan } from '@shared/plans'
+import { hasProductAccess, clampSessionMinutes, sessionMinutesForPlan } from '@shared/plans'
 import type {
   Attachment,
   ChatMessage,
@@ -56,6 +56,7 @@ interface AppState {
   updateError: string | null
   runningSessionId: string | null
   sessionStartedAt: number | null
+  sessionEndsAt: number | null
   sessionEndedAtById: Record<string, number>
   sessionSetupOpen: boolean
   sessionSetupKey: number
@@ -81,12 +82,13 @@ interface AppActions {
   startSession: (input: {
     profile: LocalProfile
     usedDefaults: boolean
+    durationMinutes?: number
     resumeFile?: { fileName: string; mimeType: string; data: ArrayBuffer }
     resumeImport?: ResumeImportResult
     memoryFacts?: string[]
   }) => Promise<void>
   selectConversation: (id: string) => void
-  continueSession: (id?: string) => void
+  continueSession: (id?: string) => Promise<void>
   cycleConversation: (delta: number) => void
   deleteConversation: (id: string) => Promise<void>
   renameConversation: (id: string, title: string) => Promise<void>
@@ -94,6 +96,7 @@ interface AppActions {
   askFromScreen: () => Promise<void>
   stopGeneration: () => void
   endSession: () => void
+  expireLiveSession: () => boolean
   regenerate: (messageId?: string) => Promise<void>
   copyLastAnswer: (format?: 'markdown' | 'plain') => Promise<void>
   copyLastCode: () => Promise<void>
@@ -172,8 +175,50 @@ function liveMemoryTexts() {
   return useAuthStore.getState().memories.map((entry) => entry.text)
 }
 
-function trackSession() {
-  void api.usage.trackSession().catch(() => undefined)
+function currentEntitlement() {
+  return useAuthStore.getState().entitlement
+}
+
+function hasLiveAccess() {
+  const entitlement = currentEntitlement()
+  return hasProductAccess(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
+}
+
+function applyInterviewCredits(credits?: number) {
+  if (typeof credits !== 'number') return
+  const entitlement = currentEntitlement()
+  if (!entitlement) return
+  useAuthStore.setState({ entitlement: { ...entitlement, interviewCredits: credits } })
+}
+
+function openPlans(message: string) {
+  desktop.app.notify('Interview sessions', message)
+  useAppStore.getState().setSettingsOpen(true, 'subscription')
+}
+
+async function consumeSessionCredit(): Promise<boolean> {
+  if (!hasLiveAccess()) {
+    openPlans('Choose a one-time pack or a subscription to start a session.')
+    return false
+  }
+  try {
+    const result = await api.usage.trackSession()
+    applyInterviewCredits(result.interviewCredits)
+    return true
+  } catch (error) {
+    openPlans(error instanceof Error ? error.message : 'No interview sessions left.')
+    return false
+  }
+}
+
+function sessionWindow(durationMinutes?: number) {
+  const minutes = clampSessionMinutes(durationMinutes ?? sessionMinutesForPlan(currentEntitlement()?.plan), currentEntitlement()?.plan)
+  const startedAt = Date.now()
+  return { startedAt, endsAt: startedAt + minutes * 60_000, minutes }
+}
+
+function stopRealtimeCopilot() {
+  void import('@/store/realtime-store').then((mod) => mod.useRealtimeStore.getState().stop())
 }
 
 async function attachDefaultContext(conversation: Conversation): Promise<Conversation> {
@@ -261,6 +306,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   updateError: null,
   runningSessionId: null,
   sessionStartedAt: null,
+  sessionEndsAt: null,
   sessionEndedAtById: {},
   sessionSetupOpen: false,
   sessionSetupKey: 0,
@@ -372,6 +418,10 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   newConversation: () => {
     if (get().runningSessionId) return
+    if (!hasLiveAccess()) {
+      openPlans('Choose a one-time pack or a subscription to start a session.')
+      return
+    }
     set({
       sessionSetupOpen: true,
       sessionSetupKey: get().sessionSetupKey + 1,
@@ -385,6 +435,10 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   startSession: async (input) => {
     if (get().runningSessionId) return
+    if (!(await consumeSessionCredit())) {
+      set({ sessionSetupOpen: false })
+      return
+    }
     const conversation = createLocalConversation()
     const context: SessionContext = {
       profile: snapshotLocalProfile(input.profile),
@@ -418,14 +472,15 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     context.promptMemories = promptMemories.length ? promptMemories : undefined
     const next: Conversation = { ...conversation, context }
     persistLocal(next)
-    trackSession()
+    const timing = sessionWindow(input.durationMinutes)
     set({
       conversations: upsert(get().conversations, next),
       activeId: next.id,
       settingsOpen: false,
       sessionSetupOpen: false,
       runningSessionId: next.id,
-      sessionStartedAt: Date.now(),
+      sessionStartedAt: timing.startedAt,
+      sessionEndsAt: timing.endsAt,
     })
   },
 
@@ -435,27 +490,30 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     void get().loadMessages(id)
   },
 
-  continueSession: (id) => {
+  continueSession: async (id) => {
     const target = id ?? get().activeId
     if (get().runningSessionId && get().runningSessionId !== target) return
+    if (get().runningSessionId === target) return
     if (!target) {
       get().newConversation()
       return
     }
     const conversation = get().conversations.find((item) => item.id === target)
     if (!conversation) return
-    void attachDefaultContext(conversation).then((next) => {
-      if (get().runningSessionId && get().runningSessionId !== next.id) return
-      set({
-        conversations: upsert(get().conversations, next),
-        activeId: next.id,
-        runningSessionId: next.id,
-        sessionStartedAt: get().runningSessionId === next.id ? get().sessionStartedAt : Date.now(),
-        settingsOpen: false,
-        sessionSetupOpen: false,
-      })
-      void get().loadMessages(next.id)
+    if (!(await consumeSessionCredit())) return
+    const next = await attachDefaultContext(conversation)
+    if (get().runningSessionId && get().runningSessionId !== next.id) return
+    const timing = sessionWindow()
+    set({
+      conversations: upsert(get().conversations, next),
+      activeId: next.id,
+      runningSessionId: next.id,
+      sessionStartedAt: timing.startedAt,
+      sessionEndsAt: timing.endsAt,
+      settingsOpen: false,
+      sessionSetupOpen: false,
     })
+    void get().loadMessages(next.id)
   },
 
   cycleConversation: (delta) => {
@@ -482,7 +540,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     set({
       conversations,
       activeId: nextActive,
-      ...(stopping ? { runningSessionId: null, sessionStartedAt: null } : {}),
+      ...(stopping ? { runningSessionId: null, sessionStartedAt: null, sessionEndsAt: null } : {}),
     })
     if (nextActive && wasActive) void get().loadMessages(nextActive)
   },
@@ -502,8 +560,8 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   askFromScreen: async () => {
     if (get().generatingId) return
     const entitlement = useAuthStore.getState().entitlement
-    if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-      desktop.app.notify('Answer from screen', 'Screen answers require an active subscription.')
+    if (!hasProductAccess(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)) {
+      desktop.app.notify('Answer from screen', 'Screen answers need remaining interview sessions or an active plan.')
       return
     }
     await get().sendMessage(undefined, { fromScreen: true })
@@ -512,9 +570,10 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
   sendMessage: async (text, options) => {
     const state = get()
     if (state.generatingId) return
+    if (get().expireLiveSession()) return
     const entitlement = useAuthStore.getState().entitlement
-    if (!isPaidPlan(entitlement?.plan, entitlement?.status)) {
-      desktop.app.notify('Subscription required', 'This feature needs an active subscription.')
+    if (!hasProductAccess(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)) {
+      desktop.app.notify('Plan required', 'This feature needs remaining interview sessions or an active plan.')
       return
     }
     const fromScreen = options?.fromScreen === true
@@ -604,6 +663,8 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     const abortController = new AbortController()
     get().abortController = abortController
 
+    const startedAt = get().sessionStartedAt ?? Date.now()
+    const endsAt = get().sessionEndsAt ?? startedAt + sessionWindow().minutes * 60_000
     set({
       conversations: upsert(get().conversations, next),
       activeId: next.id,
@@ -611,7 +672,8 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       attachments: fromRealtime ? get().attachments : [],
       generatingId: assistantMessage.id,
       runningSessionId: next.id,
-      sessionStartedAt: get().sessionStartedAt ?? Date.now(),
+      sessionStartedAt: startedAt,
+      sessionEndsAt: endsAt,
     })
     persistLocal(next)
 
@@ -674,14 +736,24 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     const id = get().runningSessionId
     if (!id) return
     get().stopGeneration()
+    stopRealtimeCopilot()
     set({
       runningSessionId: null,
       sessionStartedAt: null,
+      sessionEndsAt: null,
       sessionEndedAtById: {
         ...get().sessionEndedAtById,
         [id]: Date.now(),
       },
     })
+  },
+
+  expireLiveSession: () => {
+    const { runningSessionId, sessionEndsAt } = get()
+    if (!runningSessionId || !sessionEndsAt || Date.now() < sessionEndsAt) return false
+    get().endSession()
+    desktop.app.notify('Session ended', 'This session reached its time limit.')
+    return true
   },
 
   regenerate: async (messageId) => {
@@ -799,7 +871,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   clearConversations: async () => {
     await desktop.conversations.clear()
-    set({ conversations: [], activeId: null, runningSessionId: null, sessionStartedAt: null, sessionEndedAtById: {}, sessionSetupOpen: false })
+    set({ conversations: [], activeId: null, runningSessionId: null, sessionStartedAt: null, sessionEndsAt: null, sessionEndedAtById: {}, sessionSetupOpen: false })
   },
 
   deleteLocalData: async () => {
@@ -812,6 +884,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       activeId: null,
       runningSessionId: null,
       sessionStartedAt: null,
+      sessionEndsAt: null,
       sessionEndedAtById: {},
       sessionSetupOpen: false,
       composer: '',

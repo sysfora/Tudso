@@ -192,7 +192,7 @@ export const api = {
   },
   usage: {
     get: () => fetchJson<{ usage: unknown }>('/usage'),
-    trackSession: () => fetchJson<{ ok: true }>('/usage/session', { method: 'POST' }),
+    trackSession: () => fetchJson<{ ok: true; interviewCredits?: number }>('/usage/session', { method: 'POST' }),
   },
   billing: {
     checkout: (plan: PaidPlan) => fetchJson<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),

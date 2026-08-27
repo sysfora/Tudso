@@ -4,7 +4,7 @@ import { transcription } from './ai.js'
 import { resolveAccessToken } from './auth.js'
 import { log, logError } from './log.js'
 import { incrementUsage, getEntitlementForUser } from './pocketbase.js'
-import { isPaidPlan } from './plans.js'
+import { hasProductAccess } from './plans.js'
 import { isActionableTranscript } from './transcript.js'
 
 interface RealtimeSession {
@@ -35,9 +35,9 @@ export function attachRealtimeAudio(server: Server): void {
       return
     }
     const entitlement = await getEntitlementForUser(user.userId)
-    if (!isPaidPlan(entitlement.plan, entitlement.status)) {
+    if (!hasProductAccess(entitlement.plan, entitlement.status, entitlement.interviewCredits)) {
       log.warn('Realtime audio rejected', { user: user.userId, reason: 'plan' })
-      ws.close(1008, 'Live copilot requires an active subscription')
+      ws.close(1008, 'Live copilot requires remaining interview sessions or an active plan')
       return
     }
 

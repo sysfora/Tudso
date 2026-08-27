@@ -1,4 +1,4 @@
-import { PAID_PLAN_CATALOG, type PaidPlan } from './plans.js'
+import { ONE_TIME_PLAN_CATALOG, SUBSCRIPTION_PLAN_CATALOG, planIntervalLabel, type PaidPlan, type PlanCatalogItem } from './plans.js'
 
 function escapeHtml(value: string): string {
   return value
@@ -296,11 +296,51 @@ const STYLES = `
     color: var(--quiet);
     font-size: 13px;
   }
+  .plan-tabs > input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .tab-bar {
+    display: flex;
+    width: fit-content;
+    margin: 0 auto 20px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--field);
+  }
+  .tab-bar label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 16px;
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .tab-bar label:hover { color: var(--fg); }
+  .plan-tabs:has(#tab-one-time:checked) label[for="tab-one-time"],
+  .plan-tabs:has(#tab-subs:checked) label[for="tab-subs"] {
+    background: var(--fg);
+    color: var(--surface);
+  }
+  .plan-panel { display: none; }
+  .plan-tabs:has(#tab-one-time:checked) .panel-one-time,
+  .plan-tabs:has(#tab-subs:checked) .panel-subs { display: block; }
   .plans {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 12px;
     align-items: stretch;
+  }
+  .plans.plans-subs {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
   }
   .plan {
     display: flex;
@@ -397,7 +437,7 @@ const STYLES = `
     background: var(--lift);
   }
   @media (max-width: 860px) {
-    .plans { grid-template-columns: 1fr; }
+    .plans, .plans.plans-subs { grid-template-columns: 1fr; }
   }
   ::selection {
     background: color-mix(in srgb, var(--accent) 28%, transparent);
@@ -566,12 +606,14 @@ type PlanPrice = {
   interval: string
 }
 
-function formatPlanPrice(price?: PlanPrice, fallbackAmount?: number): string {
-  const amount = price?.amount ?? fallbackAmount
+function formatPlanPrice(price?: PlanPrice, item?: PlanCatalogItem): string {
+  const amount = price?.amount ?? item?.fallbackAmount
   if (amount == null) return ''
+  if (amount <= 0) return 'Free'
   const dollars = Math.floor(Math.abs(amount) / 100)
   const cents = String(Math.abs(amount) % 100).padStart(2, '0')
-  return `$${dollars}<span class="cents">.${cents}</span>`
+  const suffix = item ? ` <span class="cents">/${planIntervalLabel(item.interval)}</span>` : ''
+  return `$${dollars}<span class="cents">.${cents}</span>${suffix}`
 }
 
 export function subscribePage(params: {
@@ -584,11 +626,22 @@ export function subscribePage(params: {
   const code = escapeHtml(params.code)
   const state = escapeHtml(params.state)
   const prices = Object.fromEntries(params.prices.map((price) => [price.id, price])) as Partial<Record<PaidPlan, PlanPrice>>
-  const cards = PAID_PLAN_CATALOG.map((plan) => {
-    const price = formatPlanPrice(prices[plan.id], plan.fallbackAmount)
+  const card = (plan: PlanCatalogItem) => {
+    const price = formatPlanPrice(plan.id === 'free' ? undefined : prices[plan.id], plan)
     const features = plan.features.map((feature) => `
           <li class="${feature.included ? '' : 'out'}">${feature.included ? CHECK : DASH}<span>${escapeHtml(feature.text)}</span></li>`).join('')
     const badge = plan.badge ? `<span class="plan-badge">${escapeHtml(plan.badge)}</span>` : ''
+    const action = plan.id === 'free'
+      ? `<form method="GET" action="/auth/desktop">
+          <input type="hidden" name="state" value="${state}">
+          <button type="submit">${escapeHtml(plan.action)}</button>
+        </form>`
+      : `<form method="POST" action="/auth/desktop/subscribe">
+          <input type="hidden" name="code" value="${code}">
+          <input type="hidden" name="state" value="${state}">
+          <input type="hidden" name="plan" value="${plan.id}">
+          <button type="submit">${escapeHtml(plan.action)}</button>
+        </form>`
     return `<article class="plan${plan.featured ? ' plan-featured' : ''}">
         ${badge}
         <p class="plan-mark">${escapeHtml(plan.mark)}</p>
@@ -597,23 +650,33 @@ export function subscribePage(params: {
         <p class="plan-copy">${escapeHtml(plan.description)}</p>
         <ul class="features">${features}
         </ul>
-        <form method="POST" action="/auth/desktop/subscribe">
-          <input type="hidden" name="code" value="${code}">
-          <input type="hidden" name="state" value="${state}">
-          <input type="hidden" name="plan" value="${plan.id}">
-          <button type="submit">${escapeHtml(plan.action)}</button>
-        </form>
+        ${action}
       </article>`
-  }).join('\n      ')
+  }
 
   const body = `  <main>
     ${brandMark()}
     <h1>Choose a plan</h1>
-    <p class="lede">Unlimited call time and real-time answers. Pick weekly, monthly, or yearly to open the app.</p>
+    <p class="lede">One-time packs or unlimited subscriptions. Same stealth, snap &amp; solve, and real-time answers.</p>
     <p class="who">Billing for ${escapeHtml(params.email)}</p>
     ${params.error ? `<p class="error" role="alert">${escapeHtml(params.error)}</p>` : ''}
-    <div class="plans">
-      ${cards}
+    <div class="plan-tabs">
+      <input type="radio" name="plan-tab" id="tab-one-time">
+      <input type="radio" name="plan-tab" id="tab-subs" checked>
+      <div class="tab-bar" role="tablist" aria-label="Plan type">
+        <label for="tab-subs" role="tab">Subscriptions</label>
+        <label for="tab-one-time" role="tab">One-Time</label>
+      </div>
+      <section class="plan-panel panel-one-time">
+        <div class="plans">
+        ${ONE_TIME_PLAN_CATALOG.map(card).join('\n        ')}
+        </div>
+      </section>
+      <section class="plan-panel panel-subs">
+        <div class="plans plans-subs">
+        ${SUBSCRIPTION_PLAN_CATALOG.map(card).join('\n        ')}
+        </div>
+      </section>
     </div>
     <p class="footnote">Checkout opens with Stripe. This window returns to Tudso when the plan is active.</p>
   </main>`

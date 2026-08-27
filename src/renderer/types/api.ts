@@ -1,6 +1,6 @@
 import type { LocalProfile, SessionPromptResume } from '@shared/types'
 
-export type Plan = 'free' | 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
+export type Plan = 'free' | 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
 
 export interface UserProfile {
   id: string
@@ -175,7 +175,8 @@ export interface Entitlement {
   user: string
   plan: Plan
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid'
-  freeAccess?: 'weekly' | 'monthly' | 'yearly' | 'pro' | 'premium'
+  freeAccess?: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
+  interviewCredits?: number
   expiresAt: string
 }
 
@@ -191,7 +192,7 @@ export interface Subscription {
 }
 
 export interface BillingPlanPrice {
-  id: 'weekly' | 'monthly' | 'yearly'
+  id: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly'
   priceId: string
   amount: number | null
   currency: string

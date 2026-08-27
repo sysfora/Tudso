@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Apple, AppWindow, Download as DownloadIcon, Monitor, ShieldCheck } from 'lucide-react'
+import { Apple, AppWindow, Copy, Download as DownloadIcon, Monitor, ShieldCheck } from 'lucide-react'
 import heroImg from '@/assets/hero-tudso.jpg'
 import { MarketingShell } from '@/components/MarketingShell'
 import { Button } from '@/components/ui/button'
@@ -58,6 +58,43 @@ function formatSize(bytes: number) {
   if (!bytes) return ''
   const mb = bytes / (1024 * 1024)
   return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`
+}
+
+const GATEKEEPER_CMD = 'xattr -cr /Applications/Tudso.app && open /Applications/Tudso.app'
+
+function MacGatekeeperHelp({ compact = false }: { compact?: boolean }) {
+  const [copied, setCopied] = useState(false)
+
+  async function copyCommand() {
+    try {
+      await navigator.clipboard.writeText(GATEKEEPER_CMD)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <div className={compact ? 'mt-4 text-sm text-foreground/80' : 'mx-auto mt-6 max-w-xl rounded-2xl bg-background/70 p-4 text-left text-sm text-foreground/80 sm:mt-8'}>
+      <p className="font-medium text-foreground">
+        Open the disk image and double-click Install Tudso. That copies the app, clears Gatekeeper, and launches it.
+      </p>
+      <p className="mt-2">
+        Do not open the Tudso icon in the disk image. If Install Tudso is blocked, right-click it and choose Open.
+      </p>
+      <p className="mt-2">Terminal fallback:</p>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <code className="block flex-1 overflow-x-auto rounded-xl bg-background px-3 py-2 text-xs">
+          {GATEKEEPER_CMD}
+        </code>
+        <Button type="button" size="sm" onClick={() => void copyCommand()}>
+          <Copy className="h-4 w-4" />
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 function detectPlatform(): 'windows' | 'mac' | 'linux' | null {
@@ -120,7 +157,10 @@ export default function Download() {
               {latest?.latestVersion ? (
                 <p className="text-xs text-foreground/70">Version {latest.latestVersion}</p>
               ) : null}
+              {platform === 'mac' ? <MacGatekeeperHelp /> : null}
             </div>
+          ) : platform === 'mac' ? (
+            <MacGatekeeperHelp />
           ) : null}
           <div className="mt-6 flex justify-center sm:mt-8">
             <img src={heroImg} alt="Tudso mascot" width={1280} height={800} className="w-full max-w-2xl rounded-2xl" />
@@ -161,6 +201,7 @@ export default function Download() {
                     )) : (
                       <p className="text-sm text-muted-foreground">Not published yet.</p>
                     )}
+                    {card.id === 'mac' && platform !== 'mac' ? <MacGatekeeperHelp compact /> : null}
                   </div>
                 </div>
               )

@@ -1,0 +1,24 @@
+extends: electron-builder.yml
+mac:
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  notarize: false
+dmg:
+  title: Tudso
+  iconSize: 80
+  window:
+    width: 620
+    height: 500
+  contents:
+    - x: 140
+      y: 150
+    - x: 480
+      y: 150
+      type: link
+      path: /Applications
+    - x: 310
+      y: 350
+      type: file
+      path: build/mac-install.command
+      name: Install Tudso.command

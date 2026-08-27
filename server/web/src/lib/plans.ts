@@ -1,8 +1,27 @@
-export const CHECKOUT_PLANS = ['weekly', 'monthly', 'yearly'] as const
+export const ONE_TIME_PLANS = ['basic', 'plus', 'pro'] as const
+export const RECURRING_PLANS = ['weekly', 'monthly', 'yearly'] as const
+export const CHECKOUT_PLANS = [...ONE_TIME_PLANS, ...RECURRING_PLANS] as const
+export type OneTimePlan = (typeof ONE_TIME_PLANS)[number]
+export type RecurringPlan = (typeof RECURRING_PLANS)[number]
 export type PaidPlan = (typeof CHECKOUT_PLANS)[number]
 
-export function isCheckoutPlan(value: unknown): value is PaidPlan {
+export type PlanGroup = 'one_time' | 'subscription'
+export type PlanInterval = 'one_time' | 'week' | 'month' | 'year'
+
+export function isOneTimePlan(value: unknown): value is OneTimePlan {
+  return value === 'basic' || value === 'plus' || value === 'pro'
+}
+
+export function isRecurringPlan(value: unknown): value is RecurringPlan {
   return value === 'weekly' || value === 'monthly' || value === 'yearly'
+}
+
+export function isCheckoutPlan(value: unknown): value is PaidPlan {
+  return isOneTimePlan(value) || isRecurringPlan(value)
+}
+
+export function isUnlimitedPlan(plan?: string | null): boolean {
+  return isRecurringPlan(plan) || plan === 'premium'
 }
 
 export function isPaidStatus(status?: string | null): boolean {
@@ -10,16 +29,53 @@ export function isPaidStatus(status?: string | null): boolean {
 }
 
 export function isPaidPlan(plan?: string | null, status?: string | null): boolean {
-  return (isCheckoutPlan(plan) || plan === 'pro' || plan === 'premium') && isPaidStatus(status)
+  return (isCheckoutPlan(plan) || plan === 'premium') && isPaidStatus(status)
+}
+
+export function hasProductAccess(plan?: string | null, status?: string | null, credits?: number): boolean {
+  if (isUnlimitedPlan(plan) && isPaidStatus(status)) return true
+  if (isOneTimePlan(plan) && isPaidStatus(status) && (credits ?? 0) > 0) return true
+  return (credits ?? 0) > 0
+}
+
+export const FREE_SESSION_MINUTES = 15
+export const PAID_SESSION_MINUTES = 60
+
+export function sessionMinutesForPlan(plan?: string | null): number {
+  if (isUnlimitedPlan(plan) || isOneTimePlan(plan) || plan === 'premium') return PAID_SESSION_MINUTES
+  return FREE_SESSION_MINUTES
+}
+
+export function sessionDurationOptions(maxMinutes: number): number[] {
+  const steps = [15, 30, 45, 60]
+  const allowed = steps.filter((value) => value <= maxMinutes)
+  return allowed.length ? allowed : [maxMinutes]
+}
+
+export function clampSessionMinutes(minutes: number, plan?: string | null): number {
+  const max = sessionMinutesForPlan(plan)
+  const next = Math.round(minutes)
+  if (!Number.isFinite(next) || next <= 0) return max
+  return Math.min(max, next)
 }
 
 export function planDisplayName(plan?: string | null): string {
+  if (plan === 'basic') return 'Basic'
+  if (plan === 'plus') return 'Plus'
+  if (plan === 'pro') return 'Pro'
   if (plan === 'weekly') return 'Weekly'
   if (plan === 'monthly') return 'Monthly'
   if (plan === 'yearly') return 'Yearly'
   if (plan === 'premium') return 'Premium'
-  if (plan === 'pro') return 'Pro'
+  if (plan === 'free') return 'Free'
   return 'No plan'
+}
+
+export function planIntervalLabel(interval: PlanInterval): string {
+  if (interval === 'one_time') return 'one time'
+  if (interval === 'week') return 'week'
+  if (interval === 'month') return 'month'
+  return 'year'
 }
 
 export function splitPrice(amountCents: number): { dollars: string; cents: string } {
@@ -30,8 +86,9 @@ export function splitPrice(amountCents: number): { dollars: string; cents: strin
 
 export type PlanFeature = { text: string; included: boolean }
 
-export type PaidPlanCatalogItem = {
-  id: PaidPlan
+export type PlanCatalogItem = {
+  id: PaidPlan | 'free'
+  group: PlanGroup
   name: string
   mark: string
   description: string
@@ -39,53 +96,135 @@ export type PaidPlanCatalogItem = {
   featured?: boolean
   badge?: string
   fallbackAmount: number
-  interval: 'week' | 'month' | 'year'
+  interval: PlanInterval
+  sessions: number | null
+  sessionMinutes: number
   features: PlanFeature[]
 }
 
-export const PAID_PLAN_CATALOG: PaidPlanCatalogItem[] = [
+export type PaidPlanCatalogItem = PlanCatalogItem & { id: PaidPlan }
+
+const CORE_FEATURES: PlanFeature[] = [
+  { text: '100% Stealth', included: true },
+  { text: 'Snap & Solve', included: true },
+  { text: 'Real-Time Answers', included: true },
+]
+
+function packFeatures(sessions: number, minutes: number): PlanFeature[] {
+  return [
+    { text: `${sessions} Interview Sessions`, included: true },
+    { text: `${minutes} min per session`, included: true },
+    ...CORE_FEATURES,
+  ]
+}
+
+function unlimitedFeatures(minutes: number): PlanFeature[] {
+  return [
+    { text: 'Unlimited Interview Sessions', included: true },
+    { text: `${minutes} min per session`, included: true },
+    ...CORE_FEATURES,
+  ]
+}
+
+export const PLAN_CATALOG: PlanCatalogItem[] = [
+  {
+    id: 'basic',
+    group: 'one_time',
+    name: 'Basic',
+    mark: '*',
+    description: 'Pay once. Three 60-minute interview sessions.',
+    action: 'Get Basic',
+    fallbackAmount: 5900,
+    interval: 'one_time',
+    sessions: 3,
+    sessionMinutes: PAID_SESSION_MINUTES,
+    features: packFeatures(3, PAID_SESSION_MINUTES),
+  },
+  {
+    id: 'plus',
+    group: 'one_time',
+    name: 'Plus',
+    mark: '**',
+    description: 'Pay once. Eight 60-minute interview sessions.',
+    action: 'Get Plus',
+    fallbackAmount: 11800,
+    interval: 'one_time',
+    sessions: 8,
+    sessionMinutes: PAID_SESSION_MINUTES,
+    features: packFeatures(8, PAID_SESSION_MINUTES),
+  },
+  {
+    id: 'pro',
+    group: 'one_time',
+    name: 'Pro',
+    mark: '***',
+    description: 'Pay once. Fifteen 60-minute interview sessions.',
+    action: 'Get Pro',
+    fallbackAmount: 17700,
+    interval: 'one_time',
+    sessions: 15,
+    sessionMinutes: PAID_SESSION_MINUTES,
+    features: packFeatures(15, PAID_SESSION_MINUTES),
+  },
+  {
+    id: 'free',
+    group: 'subscription',
+    name: 'Free',
+    mark: '*',
+    description: 'Three 15-minute interview sessions to get started.',
+    action: 'Get started',
+    fallbackAmount: 0,
+    interval: 'one_time',
+    sessions: 3,
+    sessionMinutes: FREE_SESSION_MINUTES,
+    features: packFeatures(3, FREE_SESSION_MINUTES),
+  },
   {
     id: 'weekly',
+    group: 'subscription',
     name: 'Weekly',
-    mark: '*',
-    description: 'Try unlimited for a week.',
+    mark: '**',
+    description: 'Unlimited 60-minute sessions, billed weekly.',
     action: 'Get Weekly',
     fallbackAmount: 7800,
     interval: 'week',
-    features: [
-      { text: 'Unlimited call time', included: true },
-      { text: 'Unlimited real-time answers', included: true },
-      { text: 'Cancel anytime', included: true },
-    ],
+    sessions: null,
+    sessionMinutes: PAID_SESSION_MINUTES,
+    features: unlimitedFeatures(PAID_SESSION_MINUTES),
   },
   {
     id: 'monthly',
+    group: 'subscription',
     name: 'Monthly',
-    mark: '**',
-    description: 'Smart choice. Covers every call.',
+    mark: '***',
+    description: 'Unlimited 60-minute sessions, billed monthly.',
     action: 'Get Monthly',
     featured: true,
     badge: 'Most popular',
     fallbackAmount: 14990,
     interval: 'month',
-    features: [
-      { text: 'Unlimited call time', included: true },
-      { text: 'Unlimited real-time answers', included: true },
-      { text: 'Best price per month', included: true },
-    ],
+    sessions: null,
+    sessionMinutes: PAID_SESSION_MINUTES,
+    features: unlimitedFeatures(PAID_SESSION_MINUTES),
   },
   {
     id: 'yearly',
+    group: 'subscription',
     name: 'Yearly',
-    mark: '***',
-    description: 'Go all-in. Never think about credits.',
+    mark: '****',
+    description: 'Unlimited 60-minute sessions, billed yearly.',
     action: 'Get Yearly',
     fallbackAmount: 59990,
     interval: 'year',
-    features: [
-      { text: 'Unlimited call time', included: true },
-      { text: 'Unlimited real-time answers', included: true },
-      { text: 'Two months free', included: true },
-    ],
+    sessions: null,
+    sessionMinutes: PAID_SESSION_MINUTES,
+    features: unlimitedFeatures(PAID_SESSION_MINUTES),
   },
 ]
+
+export const PAID_PLAN_CATALOG: PaidPlanCatalogItem[] = PLAN_CATALOG.filter(
+  (item): item is PaidPlanCatalogItem => item.id !== 'free',
+)
+
+export const ONE_TIME_PLAN_CATALOG = PAID_PLAN_CATALOG.filter((item) => item.group === 'one_time')
+export const SUBSCRIPTION_PLAN_CATALOG = PLAN_CATALOG.filter((item) => item.group === 'subscription')

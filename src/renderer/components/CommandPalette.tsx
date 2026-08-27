@@ -98,7 +98,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const shortcuts = useAppStore((state) => state.shortcuts)
   const runningSessionId = useAppStore((state) => state.runningSessionId)
   const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status)
+  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
 
   const filtered = useMemo(() => {
     let available = hideAllowed

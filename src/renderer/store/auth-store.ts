@@ -35,7 +35,7 @@ function startEntitlementStream(onUpdate: (entitlement: Entitlement | null) => v
 }
 
 function syncHideFromCapture(entitlement: Entitlement | null) {
-  void desktop.window.setHideFromCaptureAllowed(canHideFromCapture(entitlement?.plan, entitlement?.status))
+  void desktop.window.setHideFromCaptureAllowed(canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits))
 }
 
 interface AuthState {
