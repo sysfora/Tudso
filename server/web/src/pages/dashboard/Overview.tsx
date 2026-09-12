@@ -120,39 +120,8 @@ export default function Overview() {
           <p className="text-[12px] tabular-nums text-muted-foreground">Max {formatNumber(maxRequests)}</p>
         </div>
 
-        <div className="dashboard-surface bg-card p-6">
-          <div className="flex h-44 items-end gap-1" role="img" aria-label="Requests per day for the last 14 days">
-            {history.map((day) => {
-              const value = day.requests || 0
-              const active = day.date === selectedKey
-              const today = day.date === todayKey
-              const height = value === 0 ? 4 : Math.max(10, Math.round((value / maxRequests) * 100))
-              return (
-                <button
-                  key={day.date}
-                  type="button"
-                  className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-1.5"
-                  onClick={() => setSelected(day.date ?? null)}
-                  aria-pressed={active}
-                  aria-label={`${formatLong(day.date)}: ${value} requests`}
-                >
-                  <span className={cn('text-[10px] tabular-nums', active ? 'text-fg' : 'text-transparent group-hover:text-muted-foreground')}>
-                    {value || ''}
-                  </span>
-                  <span
-                    className={cn(
-                      'w-full max-w-6 rounded-sm transition-colors duration-150',
-                      active ? 'bg-accent-fill' : value ? 'bg-lift group-hover:bg-raised' : 'bg-raised/70 group-hover:bg-lift',
-                    )}
-                    style={{ height: `${height}%` }}
-                  />
-                  <span className={cn('text-[10px] leading-none', active || today ? 'font-medium text-fg' : 'text-muted-foreground')}>
-                    {formatWeekday(day.date)}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+        <div className="dashboard-surface overflow-hidden bg-card p-4 sm:p-6">
+          <UsageChart history={history} maxRequests={maxRequests} selectedKey={selectedKey} todayKey={todayKey} onSelect={setSelected} />
 
           {selectedDay ? (
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-3 text-[12px]">
@@ -176,6 +145,93 @@ export default function Overview() {
           <Meter icon={<Mic className="h-3.5 w-3.5" />} label="Voice" value={formatMinutes(usage.audioMinutes)} amount={usage.audioMinutes ?? 0} ratio={ratio(usage.audioMinutes, history, 'audioMinutes')} />
         </div>
       </section>
+    </div>
+  )
+}
+
+function UsageChart({
+  history,
+  maxRequests,
+  selectedKey,
+  todayKey,
+  onSelect,
+}: {
+  history: Usage[]
+  maxRequests: number
+  selectedKey: string
+  todayKey: string
+  onSelect: (date: string | null) => void
+}) {
+  const width = 960
+  const height = 230
+  const plotLeft = 24
+  const plotRight = 936
+  const plotTop = 22
+  const plotBottom = 178
+  const points = history.map((day, index) => {
+    const x = plotLeft + (index / Math.max(1, history.length - 1)) * (plotRight - plotLeft)
+    const y = plotBottom - ((day.requests || 0) / maxRequests) * (plotBottom - plotTop)
+    return { ...day, x, y, value: day.requests || 0 }
+  })
+  const line = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
+  const area = `${line} L ${plotRight} ${plotBottom} L ${plotLeft} ${plotBottom} Z`
+  const selectedPoint = points.find((point) => point.date === selectedKey) ?? points[points.length - 1]
+  const hasActivity = points.some((point) => point.value > 0)
+
+  return (
+    <div className="relative h-[230px]" role="img" aria-label="Requests per day for the last 14 days">
+      <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="usage-area" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="var(--chart-fill)" stopOpacity="0.32" />
+            <stop offset="100%" stopColor="var(--chart-fill)" stopOpacity="0.02" />
+          </linearGradient>
+          <linearGradient id="usage-line" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stopColor="var(--chart-line-soft)" />
+            <stop offset="52%" stopColor="var(--chart-line)" />
+            <stop offset="100%" stopColor="var(--chart-line-soft)" />
+          </linearGradient>
+        </defs>
+        {[plotTop, plotTop + 52, plotTop + 104, plotBottom].map((y) => (
+          <line key={y} x1={plotLeft} x2={plotRight} y1={y} y2={y} stroke="var(--chart-grid)" strokeDasharray="2 8" />
+        ))}
+        <path d={area} fill="url(#usage-area)" />
+        <path d={line} fill="none" stroke="url(#usage-line)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+        {hasActivity ? points.map((point) => (
+          <circle key={point.date} cx={point.x} cy={point.y} r={point.date === selectedKey ? 6 : 3.5} fill="var(--chart-dot)" stroke="var(--chart-dot-ring)" strokeWidth="3" />
+        )) : (
+          <path d={`M ${plotLeft} ${plotBottom} C 220 ${plotBottom - 20}, 350 ${plotBottom + 12}, 480 ${plotBottom - 10} S 740 ${plotBottom - 24}, ${plotRight} ${plotBottom - 4}`} fill="none" stroke="var(--chart-line-soft)" strokeDasharray="5 8" strokeLinecap="round" strokeWidth="2" />
+        )}
+        {selectedPoint ? <line x1={selectedPoint.x} x2={selectedPoint.x} y1={plotTop} y2={plotBottom} stroke="var(--chart-guide)" strokeDasharray="3 6" /> : null}
+      </svg>
+
+      {!hasActivity ? (
+        <div className="pointer-events-none absolute inset-x-0 top-[72px] text-center">
+          <span className="inline-flex items-center rounded-full border border-border bg-card/85 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+            Your activity will appear here
+          </span>
+        </div>
+      ) : null}
+
+      <div className="absolute inset-x-0 bottom-0 flex h-11" role="group" aria-label="Select a day">
+        {points.map((point) => {
+          const active = point.date === selectedKey
+          const today = point.date === todayKey
+          return (
+            <button
+              key={point.date}
+              type="button"
+              className={cn('group relative flex min-w-0 flex-1 items-end justify-center rounded-md pb-1.5 text-[10px] leading-none transition-colors hover:bg-surface-2/70 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent', active ? 'text-fg' : 'text-muted-foreground')}
+              onClick={() => onSelect(point.date ?? null)}
+              aria-pressed={active}
+              aria-label={`${formatLong(point.date)}: ${point.value} requests`}
+            >
+              <span className={cn(today || active ? 'font-semibold' : 'font-normal')}>{formatWeekday(point.date)}</span>
+              {today ? <span className="absolute bottom-0.5 h-0.5 w-1 rounded-full bg-accent-fill" /> : null}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

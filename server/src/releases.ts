@@ -25,11 +25,26 @@ export type LatestUpdate = {
   downloadUrl: string
   releaseNotesUrl: string
   files: Array<ReleaseFile & { url: string }>
+  source?: 'local' | 'github'
+}
+
+type GitHubRelease = {
+  tag_name?: string
+  html_url?: string
+  assets?: Array<{ name?: string; size?: number; browser_download_url?: string }>
+}
+
+type GitHubReleaseResult = {
+  manifest: ReleaseManifest
+  urls: Map<string, string>
+  releaseNotesUrl: string
 }
 
 const INSTALLER_EXT = new Set(['.exe', '.dmg', '.appimage'])
 const RELEASE_NAME =
   /^[A-Za-z0-9._()[\] -]+\.(exe|dmg|zip|appimage|blockmap|yml|yaml|json)$/i
+const GITHUB_CACHE_MS = 5 * 60 * 1000
+let githubCache: { expiresAt: number; result: GitHubReleaseResult | null } | null = null
 
 export function releasesDir() {
   return resolve(config.storage.releasesDir)
@@ -85,6 +100,42 @@ export async function scanReleaseDir(dir: string): Promise<ReleaseManifest | nul
   const version = files.map((file) => versionFromFileName(file.fileName)).find(Boolean) ?? ''
   if (!version) return null
   return { version, releasedAt: '', files }
+}
+
+export async function readGitHubRelease(): Promise<GitHubReleaseResult | null> {
+  if (githubCache && githubCache.expiresAt > Date.now()) return githubCache.result
+  const repository = config.app.githubRepository.trim()
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) return null
+  try {
+    const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'Tudso-downloads',
+      },
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (!response.ok) throw new Error(`GitHub release request failed: ${response.status}`)
+    const release = await response.json() as GitHubRelease
+    const assets = (release.assets ?? []).flatMap((asset) => {
+      const fileName = typeof asset.name === 'string' ? asset.name : ''
+      const url = typeof asset.browser_download_url === 'string' ? asset.browser_download_url : ''
+      const classified = fileName && url ? classifyInstaller(fileName) : null
+      return classified ? [{ ...classified, fileName, size: Number(asset.size) || 0, url }] : []
+    })
+    if (!assets.length) throw new Error('GitHub release has no supported installers')
+    const version = String(release.tag_name || '').replace(/^v/, '')
+    if (!version) throw new Error('GitHub release has no version tag')
+    const result: GitHubReleaseResult = {
+      manifest: { version, releasedAt: '', files: assets.map(({ url: _url, ...file }) => file) },
+      urls: new Map(assets.map((file) => [file.fileName, file.url])),
+      releaseNotesUrl: release.html_url || `https://github.com/${repository}/releases/latest`,
+    }
+    githubCache = { expiresAt: Date.now() + GITHUB_CACHE_MS, result }
+    return result
+  } catch {
+    githubCache = { expiresAt: Date.now() + 30_000, result: null }
+    return null
+  }
 }
 
 export function isAllowedReleaseName(fileName: string) {
@@ -156,17 +207,23 @@ export function buildManifest(version: string, files: Array<{ name: string; size
   }
 }
 
-export function toLatestUpdate(manifest: ReleaseManifest | null, currentVersion: string, channel: string): LatestUpdate {
+export function toLatestUpdate(
+  manifest: ReleaseManifest | null,
+  currentVersion: string,
+  channel: string,
+  options: { fileUrls?: ReadonlyMap<string, string>; releaseNotesUrl?: string; source?: LatestUpdate['source'] } = {},
+): LatestUpdate {
   const latestVersion = manifest?.version || currentVersion
-  const files = (manifest?.files ?? []).map((file) => ({ ...file, url: downloadFileUrl(file.fileName) }))
+  const files = (manifest?.files ?? []).map((file) => ({ ...file, url: options.fileUrls?.get(file.fileName) || downloadFileUrl(file.fileName) }))
   return {
     channel,
     currentVersion,
     latestVersion,
     updateAvailable: Boolean(manifest?.version) && compareVersions(currentVersion, latestVersion) < 0,
     downloadUrl: downloadPageUrl(),
-    releaseNotesUrl: downloadPageUrl(),
+    releaseNotesUrl: options.releaseNotesUrl || downloadPageUrl(),
     files,
+    source: options.source || 'local',
   }
 }
 

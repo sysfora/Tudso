@@ -194,6 +194,13 @@ html[data-theme='dark'] {
   --dash-lavender: #e9e4fb;
   --dash-yellow: #fff2c8;
   --dash-pink: #f9e4ea;
+  --chart-fill: #635bdb;
+  --chart-line: #635bdb;
+  --chart-line-soft: #9a94ed;
+  --chart-dot: #635bdb;
+  --chart-dot-ring: #ffffff;
+  --chart-grid: color-mix(in srgb, #635bdb 14%, transparent);
+  --chart-guide: color-mix(in srgb, #635bdb 32%, transparent);
   min-height: 100vh;
   background:
     radial-gradient(55% 35% at 100% 0%, oklch(0.78 0.12 305 / 0.18), transparent 70%),
@@ -242,6 +249,13 @@ html[data-theme='dark'] {
   --dash-lavender: #302b45;
   --dash-yellow: #443a24;
   --dash-pink: #432d36;
+  --chart-fill: #9b9eff;
+  --chart-line: #c4c6ff;
+  --chart-line-soft: #777be6;
+  --chart-dot: #c4c6ff;
+  --chart-dot-ring: #26262b;
+  --chart-grid: color-mix(in srgb, #c4c6ff 20%, transparent);
+  --chart-guide: color-mix(in srgb, #c4c6ff 38%, transparent);
 }
 
 .dashboard-page {

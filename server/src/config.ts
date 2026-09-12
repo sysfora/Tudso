@@ -28,6 +28,7 @@ export const config = {
   app: {
     name: optional('APP_NAME', 'Tudso'),
     url: optional('APP_URL', 'http://localhost:3000'),
+    githubRepository: optional('GITHUB_REPOSITORY', 'Sysfora/Tudso'),
     env: optional('APP_ENV', 'development'),
     version: PACKAGE_VERSION,
     port: Number(optional('PORT', '3000')),

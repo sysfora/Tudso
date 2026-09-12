@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Apple, AppWindow, Copy, Download as DownloadIcon, Monitor, ShieldCheck } from 'lucide-react'
+import { Apple, AppWindow, Check, Copy, Download as DownloadIcon, ExternalLink, Monitor, ShieldCheck } from 'lucide-react'
 import heroImg from '@/assets/hero-desktop.jpg'
 import { MarketingShell } from '@/components/MarketingShell'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ type ReleaseFile = {
 type LatestUpdate = {
   latestVersion: string
   files: ReleaseFile[]
+  releaseNotesUrl?: string
+  source?: 'local' | 'github'
 }
 
 const CARDS: Array<{
@@ -139,39 +141,61 @@ export default function Download() {
   return (
     <MarketingShell>
       <section className="mx-auto max-w-6xl px-4 pt-24 sm:px-5 sm:pt-28">
-        <div className="relative overflow-hidden rounded-3xl bg-brand-mint p-6 sm:p-8 md:p-14">
-          <h1 className="text-center text-3xl font-black leading-tight sm:text-4xl md:text-6xl" style={displayFont}>
-            Download your interview copilot
-          </h1>
-          <p className="mx-auto mt-4 max-w-xl text-center text-sm text-foreground/80 sm:text-base">
-            Keep Tudso ready for your next interview on Windows, macOS, or Linux. New releases replace the previous installers on this page.
-          </p>
-          {recommended ? (
-            <div className="mt-6 flex flex-col items-center gap-2 sm:mt-8">
-              <Button size="lg" asChild>
-                <a href={recommended.url}>
-                  <DownloadIcon className="h-4 w-4" />
-                  Download for {recommended.label}
-                </a>
-              </Button>
-              {latest?.latestVersion ? (
-                <p className="text-xs text-foreground/70">Version {latest.latestVersion}</p>
+        <div className="relative overflow-hidden rounded-[2rem] bg-secondary text-white shadow-2xl shadow-secondary/15">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_10%,rgba(196,198,255,0.28),transparent_30%),radial-gradient(circle_at_20%_100%,rgba(226,244,237,0.16),transparent_35%)]" />
+          <div className="relative grid items-center gap-10 p-6 sm:p-10 md:grid-cols-[1.05fr_.95fr] md:p-14">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-mint" />
+                Desktop app
+              </div>
+              <h1 className="mt-6 max-w-xl text-4xl font-black leading-[0.98] sm:text-5xl md:text-7xl" style={displayFont}>
+                Your best answers, always within reach.
+              </h1>
+              <p className="mt-5 max-w-lg text-sm leading-7 text-white/70 sm:text-base">
+                Keep Tudso ready for your next interview with a focused desktop copilot for Windows, macOS, and Linux.
+              </p>
+              {recommended ? (
+                <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                  <Button size="lg" className="bg-white text-secondary shadow-lg shadow-black/10 hover:bg-white/90" asChild>
+                    <a href={recommended.url}>
+                      <DownloadIcon className="h-4 w-4" />
+                      Download for {recommended.label}
+                    </a>
+                  </Button>
+                  {latest?.latestVersion ? <span className="text-xs text-white/55">v{latest.latestVersion}</span> : null}
+                </div>
+              ) : null}
+              {latest?.source === 'github' ? (
+                <p className="mt-4 inline-flex items-center gap-2 text-xs text-white/55">
+                  <Check className="h-3.5 w-3.5 text-brand-mint" />
+                  Latest release served directly from GitHub
+                </p>
               ) : null}
               {platform === 'mac' ? <MacGatekeeperHelp /> : null}
             </div>
-          ) : platform === 'mac' ? (
-            <MacGatekeeperHelp />
-          ) : null}
-          <div className="mt-6 flex justify-center sm:mt-8">
-            <img src={heroImg} alt="Tudso interview copilot over a live interview" width={1920} height={1200} className="w-full max-w-3xl rounded-2xl" />
+            <div className="relative">
+              <div className="absolute -inset-5 rounded-[2rem] border border-white/10" />
+              <img src={heroImg} alt="Tudso interview copilot over a live interview" width={1920} height={1200} className="relative w-full rounded-[1.5rem] border border-white/10 shadow-2xl" />
+              <div className="absolute -bottom-4 left-4 rounded-xl border border-white/15 bg-secondary/90 px-3 py-2 text-xs text-white/75 shadow-xl backdrop-blur sm:left-6">
+                Private by design <span className="mx-1 text-white/30">·</span> Built for focus
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-5 sm:py-16">
-        <div className="text-center">
-          <h2 className="text-2xl font-black sm:text-3xl md:text-4xl" style={displayFont}>Ready for every platform</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Always the current version. Older builds are removed when a release goes out.</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">Choose your setup</p>
+            <h2 className="mt-2 text-3xl font-black sm:text-4xl" style={displayFont}>Ready for every platform</h2>
+          </div>
+          {latest?.releaseNotesUrl ? (
+            <a href={latest.releaseNotesUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+              View release notes <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
         </div>
         {error ? (
           <p className="mt-10 text-center text-sm text-muted-foreground">{error}</p>
@@ -181,9 +205,12 @@ export default function Download() {
               const files = (latest?.files ?? []).filter(card.match)
               const Icon = card.icon
               return (
-                <div key={card.id} className={`rounded-3xl ${card.bg} p-6 sm:p-8`}>
-                  <div className="grid h-12 w-12 place-items-center rounded-2xl bg-background/70">
+                <div key={card.id} className={`group rounded-3xl ${card.bg} p-6 transition-transform duration-300 hover:-translate-y-1 sm:p-8`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="grid h-12 w-12 place-items-center rounded-2xl bg-background/70">
                     <Icon className="h-6 w-6" />
+                    </div>
+                    {files.length ? <span className="rounded-full bg-background/60 px-2.5 py-1 text-[11px] font-medium text-foreground/70">{files.length} build{files.length === 1 ? '' : 's'}</span> : null}
                   </div>
                   <h3 className="mt-5 text-xl font-black" style={displayFont}>{card.title}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">{card.hint}</p>
@@ -199,7 +226,7 @@ export default function Download() {
                         </a>
                       </Button>
                     )) : (
-                      <p className="text-sm text-muted-foreground">Not published yet.</p>
+                      <p className="rounded-xl bg-background/45 px-3 py-2 text-sm text-muted-foreground">No installer available for this platform yet.</p>
                     )}
                     {card.id === 'mac' && platform !== 'mac' ? <MacGatekeeperHelp compact /> : null}
                   </div>

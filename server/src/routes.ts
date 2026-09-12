@@ -15,7 +15,7 @@ import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAcco
 import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, ensureUserBilling, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, consumeInterviewCredit, syncUserBilling, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
 import { getSessionPrompt, rememberSessionPrompt, SESSION_PROMPT_REQUIRED } from './session-prompt.js'
-import { isAllowedReleaseName, publishStagedRelease, readReleaseManifest, releasesDir, toLatestUpdate } from './releases.js'
+import { isAllowedReleaseName, publishStagedRelease, readGitHubRelease, readReleaseManifest, releasesDir, toLatestUpdate } from './releases.js'
 import { clearLiveEntitlementCache, createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
 import { hasProductAccess, CHECKOUT_PLANS } from './plans.js'
 import type { AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
@@ -231,8 +231,19 @@ router.get('/health', (_req, res) => {
 router.get('/updates/latest', async (req, res) => {
   const channel = (req.query.channel as 'stable' | 'beta' | 'alpha') ?? 'stable'
   const currentVersion = (req.query.currentVersion as string) ?? config.app.version
-  const manifest = await readReleaseManifest()
-  res.json(toLatestUpdate(manifest, currentVersion, channel))
+  const localManifest = await readReleaseManifest()
+  if (localManifest?.files.length) {
+    res.json(toLatestUpdate(localManifest, currentVersion, channel))
+    return
+  }
+  const githubRelease = await readGitHubRelease()
+  res.json(githubRelease
+    ? toLatestUpdate(githubRelease.manifest, currentVersion, channel, {
+      fileUrls: githubRelease.urls,
+      releaseNotesUrl: githubRelease.releaseNotesUrl,
+      source: 'github',
+    })
+    : toLatestUpdate(null, currentVersion, channel))
 })
 
 const MAX_RELEASE_BYTES = 512 * 1024 * 1024
