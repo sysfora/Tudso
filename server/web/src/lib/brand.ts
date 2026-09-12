@@ -1,1 +1,1 @@
-export const displayFont = { fontFamily: 'Fraunces, Georgia, serif' }
+export const displayFont = { fontFamily: 'Instrument Serif, Georgia, serif' }

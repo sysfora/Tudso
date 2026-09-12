@@ -109,7 +109,7 @@ const STYLES = `
   }
   h1 {
     margin: 0 0 8px;
-    font-family: "Fraunces", Georgia, serif;
+    font-family: "Instrument Serif", Georgia, serif;
     font-size: 38px;
     font-weight: 400;
     letter-spacing: -0.02em;
@@ -407,7 +407,7 @@ const STYLES = `
   }
   .plan h2 {
     margin: 0;
-    font-family: "Fraunces", Georgia, serif;
+    font-family: "Instrument Serif", Georgia, serif;
     font-size: 28px;
     font-weight: 400;
     letter-spacing: -0.02em;
@@ -415,7 +415,7 @@ const STYLES = `
   .plan-featured h2 { color: var(--accent); }
   .price {
     margin: 10px 0 0;
-    font-family: "Fraunces", Georgia, serif;
+    font-family: "Instrument Serif", Georgia, serif;
     font-size: 42px;
     font-weight: 400;
     letter-spacing: -0.03em;
