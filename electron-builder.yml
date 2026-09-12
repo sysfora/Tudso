@@ -15,17 +15,19 @@ asarUnpack:
   - node_modules/sharp/**/*
   - node_modules/@img/**/*
 extraResources:
-  - from: server/public/icon.png
-    to: icon.png
+  - from: resources/icon.icns
+    to: icon.icns
   - from: public/icon.ico
     to: icon.ico
+  - from: resources/linux-icons/512x512.png
+    to: icon.png
 win:
   icon: public/icon.ico
   target:
     - nsis
 afterPack: scripts/after-pack.cjs
 mac:
-  icon: server/public/icon.png
+  icon: resources/icon.icns
   target:
     - target: dmg
       arch:
@@ -46,7 +48,7 @@ mac:
     NSCameraUsageDescription: Tudso may use the camera if you share it.
     NSAudioCaptureUsageDescription: Tudso captures system audio for live copilot.
 linux:
-  icon: server/public/icon.png
+  icon: resources/linux-icons
   target:
     - AppImage
   category: Utility

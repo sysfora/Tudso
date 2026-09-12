@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const source = join(root, 'public', 'icon.png')
+const source = join(root, 'resources', 'icon.png')
 const outDir = join(root, 'server', 'public')
+const linuxIconDir = join(root, 'resources', 'linux-icons')
 const ICON_FILL = { r: 91, g: 95, b: 238, alpha: 1 }
 
 mkdirSync(outDir, { recursive: true })
+mkdirSync(linuxIconDir, { recursive: true })
 copyFileSync(source, join(outDir, 'icon.png'))
 
 async function pngBuffer(size, { flatten = false } = {}) {
@@ -25,6 +27,11 @@ async function png(size, name, { flatten = false } = {}) {
   const buffer = await pngBuffer(size, { flatten })
   writeFileSync(join(outDir, name), buffer.data)
   return buffer
+}
+
+async function linuxPng(size) {
+  const buffer = await pngBuffer(size, { flatten: true })
+  writeFileSync(join(linuxIconDir, `${size}x${size}.png`), buffer.data)
 }
 
 function encodeIco(images) {
@@ -55,6 +62,21 @@ function encodeIco(images) {
   return buf
 }
 
+function encodeIcns(images) {
+  const payloadSize = images.reduce((total, image) => total + 8 + image.data.length, 0)
+  const buffer = Buffer.alloc(8 + payloadSize)
+  buffer.write('icns', 0, 4, 'ascii')
+  buffer.writeUInt32BE(buffer.length, 4)
+  let offset = 8
+  for (const image of images) {
+    buffer.write(image.type, offset, 4, 'ascii')
+    buffer.writeUInt32BE(8 + image.data.length, offset + 4)
+    image.data.copy(buffer, offset + 8)
+    offset += 8 + image.data.length
+  }
+  return buffer
+}
+
 const favicon16 = await png(16, 'favicon-16.png')
 const favicon32 = await png(32, 'favicon-32.png')
 const favicon48 = await png(48, 'favicon-48.png')
@@ -68,6 +90,16 @@ const appIco = encodeIco(
   await Promise.all([16, 24, 32, 48, 64, 128, 256].map((size) => pngBuffer(size, { flatten: true }))),
 )
 writeFileSync(join(root, 'public', 'icon.ico'), appIco)
+
+const macIconSizes = [16, 32, 128, 256, 512, 1024]
+const macIconTypes = ['icp4', 'icp5', 'ic07', 'ic08', 'ic09', 'ic10']
+const macIconImages = await Promise.all(macIconSizes.map(async (size, index) => ({
+  type: macIconTypes[index],
+  data: (await pngBuffer(size)).data,
+})))
+writeFileSync(join(root, 'resources', 'icon.icns'), encodeIcns(macIconImages))
+
+for (const size of [16, 32, 48, 64, 128, 256, 512]) await linuxPng(size)
 
 writeFileSync(
   join(outDir, 'site.webmanifest'),
@@ -90,3 +122,5 @@ writeFileSync(
 
 console.log(`Wrote brand icons to ${outDir}`)
 console.log(`Wrote app icon to ${join(root, 'public', 'icon.ico')}`)
+console.log(`Wrote macOS icon to ${join(root, 'resources', 'icon.icns')}`)
+console.log(`Wrote Linux icons to ${linuxIconDir}`)

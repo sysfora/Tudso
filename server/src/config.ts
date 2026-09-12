@@ -5,12 +5,18 @@ import { fileURLToPath } from 'node:url'
 
 const envDir = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(envDir, '..', '.env') })
+dotenv.config({ path: join(envDir, '..', '..', '.env') })
+dotenv.config()
 
 const PACKAGE_VERSION = (createRequire(import.meta.url)('../package.json') as { version: string }).version
 
 function required(name: string): string {
   const value = process.env[name]
-  if (!value) throw new Error(`Missing required environment variable: ${name}`)
+  if (!value) {
+    console.error(`\n[FATAL CONFIG ERROR] Missing required environment variable: ${name}`)
+    console.error(`Please ensure ${name} is set in your deployment environment variables.\n`)
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
   return value
 }
 

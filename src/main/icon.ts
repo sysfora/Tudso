@@ -2,7 +2,7 @@ import { app, nativeImage, type BrowserWindow, type NativeImage } from 'electron
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isMac } from './platform'
+import { isLinux, isMac, isWindows } from './platform'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -27,9 +27,16 @@ function iconRoots() {
 }
 
 function iconCandidates() {
+  const names = isMac
+    ? ['icon.icns', 'icon.png']
+    : isWindows
+      ? ['icon.ico', 'icon.png']
+      : isLinux
+        ? ['icon.png', 'icon.ico']
+        : ['icon.png', 'icon.ico', 'icon.icns']
   const files: string[] = []
   const seen = new Set<string>()
-  for (const name of ['icon.png', 'icon.ico']) {
+  for (const name of names) {
     for (const dir of iconRoots()) {
       const file = path.join(dir, name)
       if (!existsSync(file) || seen.has(file)) continue
