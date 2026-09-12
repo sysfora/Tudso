@@ -30,7 +30,7 @@ export function isUnlimitedPlan(plan?: string | null): boolean {
 }
 
 export function isPlan(value: unknown): value is Plan {
-  return value === 'free' || isCheckoutPlan(value) || value === 'premium'
+  return value === 'none' || value === 'free' || isCheckoutPlan(value) || value === 'premium'
 }
 
 export function isPaidStatus(status?: string | null): boolean {
@@ -46,6 +46,7 @@ export function isFreeAccessPlan(value: unknown): value is FreeAccessPlan {
 }
 
 export function sessionLimitForPlan(plan?: string | null): number | null {
+  if (plan === 'none') return 0
   if (plan === 'basic' || plan === 'free') return 3
   if (plan === 'plus') return 8
   if (plan === 'pro') return 15

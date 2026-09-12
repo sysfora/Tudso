@@ -16,7 +16,7 @@ export function AppShell({
   const theme = useAppTheme()
   useEffect(() => {
     const previous = document.body.style.backgroundColor
-    document.body.style.backgroundColor = theme.dark ? '#1c1c1f' : '#f4f4f5'
+    document.body.style.backgroundColor = theme.dark ? '#17152a' : '#f8f6ff'
     return () => {
       document.body.style.backgroundColor = previous
     }
@@ -46,6 +46,12 @@ export function ThemeToggle({ className }: { className?: string }) {
   )
 }
 
+export function useAppThemeContext() {
+  const theme = useContext(ThemeContext)
+  if (!theme) throw new Error('useAppThemeContext must be used inside AppShell')
+  return theme
+}
+
 export function ThemeSwitch({ className }: { className?: string }) {
   const theme = useContext(ThemeContext)
   if (!theme) return null
@@ -54,15 +60,15 @@ export function ThemeSwitch({ className }: { className?: string }) {
     { id: 'dark' as const, label: 'Dark', icon: Moon, active: theme.dark },
   ]
   return (
-    <div className={cn('grid grid-cols-2 gap-0.5 rounded-md bg-surface-2 p-0.5', className)} role="group" aria-label="Theme">
+    <div className={cn('grid grid-cols-2 gap-1 rounded-full bg-secondary p-1', className)} role="group" aria-label="Theme">
       {options.map((option) => (
         <button
           key={option.id}
           type="button"
           aria-pressed={option.active}
           className={cn(
-            'flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-[12px] transition-colors duration-150',
-            option.active ? 'bg-raised font-medium text-fg' : 'text-muted-foreground hover:bg-lift hover:text-fg',
+            'flex h-8 items-center justify-center gap-1.5 rounded-full px-3 text-[12px] transition-colors duration-150',
+            option.active ? 'bg-card font-medium text-fg shadow-sm' : 'text-muted-foreground hover:bg-lift hover:text-fg',
           )}
           onClick={() => theme.setTheme(option.id)}
         >

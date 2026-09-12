@@ -51,9 +51,9 @@ export async function getUserByEmail(email: string): Promise<{ id: string; email
 }
 
 export const DEFAULT_USER_BILLING = {
-  plan: 'free' as const,
+  plan: 'none' as const,
   planStatus: 'unpaid' as const,
-  interviewCredits: 3,
+  interviewCredits: 0,
 }
 
 export interface UserBilling {
@@ -176,9 +176,9 @@ export function unpaidEntitlement(userId: string, extra?: Partial<EntitlementRec
   return {
     id: extra?.id ?? userId,
     user: userId,
-    plan: extra?.plan && isPlan(extra.plan) ? extra.plan : 'free',
+    plan: extra?.plan && isPlan(extra.plan) ? extra.plan : 'none',
     status: extra?.status ?? 'unpaid',
-    interviewCredits: extra?.interviewCredits ?? 3,
+    interviewCredits: extra?.interviewCredits ?? 0,
     expiresAt: extra?.expiresAt ?? '',
     created: extra?.created ?? '',
     updated: extra?.updated ?? '',

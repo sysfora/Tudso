@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Apple, AppWindow, Copy, Download as DownloadIcon, Monitor, ShieldCheck } from 'lucide-react'
-import heroImg from '@/assets/hero-tudso.jpg'
+import heroImg from '@/assets/hero-desktop.jpg'
 import { MarketingShell } from '@/components/MarketingShell'
 import { Button } from '@/components/ui/button'
 import { displayFont } from '@/lib/brand'
@@ -138,13 +138,13 @@ export default function Download() {
 
   return (
     <MarketingShell>
-      <section className="mx-auto max-w-6xl px-4 sm:px-5">
+      <section className="mx-auto max-w-6xl px-4 pt-24 sm:px-5 sm:pt-28">
         <div className="relative overflow-hidden rounded-3xl bg-brand-mint p-6 sm:p-8 md:p-14">
           <h1 className="text-center text-3xl font-black leading-tight sm:text-4xl md:text-6xl" style={displayFont}>
-            Download Tudso
+            Download your interview copilot
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-center text-sm text-foreground/80 sm:text-base">
-            The floating desktop assistant for Windows, macOS, and Linux. New releases replace the previous installers on this page.
+            Keep Tudso ready for your next interview on Windows, macOS, or Linux. New releases replace the previous installers on this page.
           </p>
           {recommended ? (
             <div className="mt-6 flex flex-col items-center gap-2 sm:mt-8">
@@ -163,14 +163,14 @@ export default function Download() {
             <MacGatekeeperHelp />
           ) : null}
           <div className="mt-6 flex justify-center sm:mt-8">
-            <img src={heroImg} alt="Tudso mascot" width={1280} height={800} className="w-full max-w-2xl rounded-2xl" />
+            <img src={heroImg} alt="Tudso interview copilot over a live interview" width={1920} height={1200} className="w-full max-w-3xl rounded-2xl" />
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-5 sm:py-16">
         <div className="text-center">
-          <h2 className="text-2xl font-black sm:text-3xl md:text-4xl" style={displayFont}>Choose your system</h2>
+          <h2 className="text-2xl font-black sm:text-3xl md:text-4xl" style={displayFont}>Ready for every platform</h2>
           <p className="mt-2 text-sm text-muted-foreground">Always the current version. Older builds are removed when a release goes out.</p>
         </div>
         {error ? (

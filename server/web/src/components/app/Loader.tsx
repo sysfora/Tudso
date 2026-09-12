@@ -26,7 +26,7 @@ export function PageLoader({ label = 'Loading' }: { label?: string }) {
 
 export function ChartSkeleton({ className }: { className?: string }) {
   return (
-    <div className={cn('flex h-44 items-end gap-1 rounded-md bg-surface-2 px-3 py-3', className)} aria-hidden>
+    <div className={cn('flex h-44 items-end gap-1 rounded-3xl bg-card px-6 py-5', className)} aria-hidden>
       {WAVE.map((height, index) => (
         <div key={index} className="flex min-w-0 flex-1 flex-col items-center justify-end">
           <div
@@ -41,14 +41,14 @@ export function ChartSkeleton({ className }: { className?: string }) {
 
 export function OverviewSkeleton() {
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading analytics">
+    <div className="dashboard-page space-y-8" aria-busy="true" aria-label="Loading analytics">
       <div>
         <SkeletonBar className="h-5 w-28" />
         <SkeletonBar className="mt-2 h-3 w-72 max-w-full" delay={80} />
       </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {['a', 'b', 'c', 'd'].map((key, index) => (
-          <div key={key} className="rounded-md bg-surface-2 px-3 py-2.5">
+          <div key={key} className="rounded-3xl bg-surface-2 px-5 py-5">
             <SkeletonBar className="h-3 w-16" delay={index * 60} />
             <SkeletonBar className="mt-2 h-5 w-12" delay={80 + index * 60} />
           </div>
@@ -60,7 +60,7 @@ export function OverviewSkeleton() {
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {['e', 'f', 'g', 'h'].map((key, index) => (
-          <div key={key} className="rounded-md bg-surface-2 px-3 py-2.5">
+          <div key={key} className="rounded-3xl bg-card px-5 py-5">
             <SkeletonBar className="h-3 w-20" delay={index * 70} />
             <SkeletonBar className="mt-3 h-1.5 w-full" delay={80 + index * 70} />
           </div>

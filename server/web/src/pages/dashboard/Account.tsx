@@ -20,8 +20,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, type Account as AccountRecord, type Device } from '@/lib/api'
 import { SkeletonBar } from '@/components/app/Loader'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 
 type DashboardContext = AccountRecord & { setAccount: (account: AccountRecord) => void }
+type ConfirmAction =
+  | { kind: 'device'; deviceId: string }
+  | { kind: 'revoke-others' }
+  | { kind: 'export' }
+  | null
 
 export default function Account() {
   const session = useOutletContext<DashboardContext>()
@@ -38,6 +44,7 @@ export default function Account() {
   const [passwordConfirm, setPasswordConfirm] = React.useState('')
   const [showPassword, setShowPassword] = React.useState(false)
   const [preview, setPreview] = React.useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = React.useState<ConfirmAction>(null)
   const fileRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
@@ -95,18 +102,49 @@ export default function Account() {
   const avatarSrc = preview || session.avatarUrl
   const nameDirty = name.trim() !== (session.name ?? '').trim()
 
+  const runConfirmedAction = () => {
+    const action = confirmAction
+    setConfirmAction(null)
+    if (!action) return
+    if (action.kind === 'device') {
+      void run(`device-${action.deviceId}`, async () => {
+        await api.deleteDevice(action.deviceId)
+        await loadDevices()
+      }, 'Device revoked.')
+      return
+    }
+    if (action.kind === 'revoke-others') {
+      void run('revoke-others', async () => {
+        await api.revokeOthers()
+        await loadDevices()
+      }, 'Other sessions signed out.')
+      return
+    }
+    void run('export', async () => {
+      const data = await api.exportData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `tudso-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    }, 'Export downloaded.')
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="dashboard-page space-y-8">
       <div>
-        <h1 className="text-[18px] font-semibold tracking-tight">Account</h1>
-        <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Your profile</p>
+        <h1 className="mt-2 text-4xl tracking-tight sm:text-5xl">Make it yours.</h1>
+        <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
           Name, avatar, and password. Email cannot be changed. Devices and deletion use the same records as the Tudso app.
         </p>
       </div>
 
       <section>
-        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Profile</h2>
-        <div className="rounded-md bg-surface-2 px-3 py-3">
+        <h2 className="mb-3 text-2xl tracking-tight">Profile</h2>
+        <div className="dashboard-surface dashboard-tint-lavender">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <div className="flex items-start gap-3">
               <button
@@ -199,9 +237,9 @@ export default function Account() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Password</h2>
+        <h2 className="mb-3 text-2xl tracking-tight">Password</h2>
         <form
-          className="space-y-3 rounded-md bg-surface-2 px-3 py-3"
+          className="dashboard-surface dashboard-tint-mint space-y-3"
           onSubmit={(event) => {
             event.preventDefault()
             void run('password', async () => {
@@ -269,17 +307,17 @@ export default function Account() {
 
       <div className="grid gap-6 lg:grid-cols-2">
       <section>
-        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Devices</h2>
+        <h2 className="mb-3 text-2xl tracking-tight">Devices</h2>
         {!loaded ? (
-          <div className="space-y-2 rounded-md bg-surface-2 p-3" aria-busy="true" aria-label="Loading devices">
+          <div className="dashboard-surface dashboard-tint-yellow space-y-2" aria-busy="true" aria-label="Loading devices">
             <SkeletonBar className="h-3 w-5/6" />
             <SkeletonBar className="h-3 w-2/3" delay={80} />
             <SkeletonBar className="h-3 w-3/4" delay={160} />
           </div>
         ) : devices.length === 0 ? (
-          <p className="rounded-md bg-surface-2 px-3 py-6 text-center text-[13px] text-muted-foreground">No devices on this account yet.</p>
+          <p className="dashboard-surface dashboard-tint-yellow px-3 py-6 text-center text-[13px] text-muted-foreground">No devices on this account yet.</p>
         ) : (
-          <ul className="divide-y divide-border overflow-hidden rounded-md bg-surface-2">
+          <ul className="dashboard-surface dashboard-tint-yellow divide-y divide-border overflow-hidden p-0">
             {devices.map((device) => {
               const current = isCurrent(device)
               return (
@@ -305,13 +343,7 @@ export default function Account() {
                       size="compact"
                       disabled={Boolean(busy)}
                       loading={busy === `device-${device.id}`}
-                      onClick={() => {
-                        if (!window.confirm('Revoke this device? It must sign in again.')) return
-                        void run(`device-${device.id}`, async () => {
-                          await api.deleteDevice(device.deviceId)
-                          await loadDevices()
-                        }, 'Device revoked.')
-                      }}
+                      onClick={() => setConfirmAction({ kind: 'device', deviceId: device.deviceId })}
                     >
                       Revoke
                     </Button>
@@ -322,7 +354,7 @@ export default function Account() {
           </ul>
         )}
         {devices.some((device) => !isCurrent(device)) ? (
-          <div className="mt-2 flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
+          <div className="dashboard-surface dashboard-tint-pink mt-2 flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-start gap-2.5">
               <LogOut className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <div>
@@ -335,13 +367,7 @@ export default function Account() {
               size="compact"
               disabled={Boolean(busy)}
               loading={busy === 'revoke-others'}
-              onClick={() => {
-                if (!window.confirm('Sign out every other device? This browser stays signed in.')) return
-                void run('revoke-others', async () => {
-                  await api.revokeOthers()
-                  await loadDevices()
-                }, 'Other sessions signed out.')
-              }}
+              onClick={() => setConfirmAction({ kind: 'revoke-others' })}
             >
               Sign out others
             </Button>
@@ -351,8 +377,8 @@ export default function Account() {
 
       <div className="space-y-6">
       <section>
-        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Data</h2>
-        <div className="flex items-center justify-between gap-4 rounded-md bg-surface-2 px-3 py-2.5">
+        <h2 className="mb-3 text-2xl tracking-tight">Data</h2>
+        <div className="dashboard-surface dashboard-tint-yellow flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-start gap-2.5">
             <Download className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <div>
@@ -365,19 +391,7 @@ export default function Account() {
             size="compact"
             disabled={Boolean(busy)}
             loading={busy === 'export'}
-            onClick={() => {
-              if (!window.confirm('Export billing and usage from this account. Continue?')) return
-              void run('export', async () => {
-                const data = await api.exportData()
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `tudso-export-${new Date().toISOString().slice(0, 10)}.json`
-                a.click()
-                URL.revokeObjectURL(url)
-              }, 'Export downloaded.')
-            }}
+            onClick={() => setConfirmAction({ kind: 'export' })}
           >
             Export
           </Button>
@@ -385,8 +399,8 @@ export default function Account() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Delete account</h2>
-        <div className="rounded-md bg-surface-2 px-3 py-2.5">
+        <h2 className="mb-3 text-2xl tracking-tight">Delete account</h2>
+        <div className="dashboard-surface dashboard-tint-pink">
           <div className="flex items-start gap-2.5">
             <Trash2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
             <p className="text-[12px] leading-relaxed text-muted-foreground">
@@ -418,6 +432,18 @@ export default function Account() {
 
       {error ? <p className="text-[12px] text-danger">{error}</p> : null}
       {!error && status ? <p className="text-[12px] text-muted-foreground">{status}</p> : null}
+      <ConfirmDialog
+        open={confirmAction !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
+        title={confirmAction?.kind === 'device' ? 'Revoke this device?' : confirmAction?.kind === 'revoke-others' ? 'Sign out other sessions?' : 'Export account data?'}
+        description={confirmAction?.kind === 'device' ? 'This device will need to sign in again before it can access Tudso.' : confirmAction?.kind === 'revoke-others' ? 'Every other session will be ended. This browser will stay signed in.' : 'A JSON file containing your billing and usage data will be downloaded.'}
+        confirmLabel={confirmAction?.kind === 'export' ? 'Export data' : confirmAction?.kind === 'device' ? 'Revoke device' : 'Sign out others'}
+        destructive={confirmAction?.kind !== 'export'}
+        busy={Boolean(busy)}
+        onConfirm={runConfirmedAction}
+      />
     </div>
   )
 }

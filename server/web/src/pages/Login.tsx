@@ -46,7 +46,7 @@ export default function Login() {
         return
       }
       if (result.user && !desktopState) {
-        navigate(next, { replace: true })
+        navigate(result.plan === 'none' ? '/dashboard/subscription' : next, { replace: true })
         return
       }
       setChecking(false)
@@ -58,12 +58,12 @@ export default function Login() {
     }
   }, [desktopState, navigate, next, params])
 
-  const goToApp = () => {
+  const goToApp = (plan?: string) => {
     if (desktopState) {
       window.location.assign(appContinueUrl(desktopState))
       return
     }
-    navigate(next, { replace: true })
+    navigate(plan === 'none' ? '/dashboard/subscription' : next, { replace: true })
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -72,17 +72,20 @@ export default function Login() {
     setBusy(true)
     setError(null)
     try {
+      let plan: string | undefined
       if (mode === 'register') {
         const result = await api.register({ email, password, passwordConfirm, name: name || undefined })
+        plan = result.plan
         if (result.needsVerification) {
           setError('Check your email for a verification link, then sign in.')
           setMode('login')
           return
         }
       } else {
-        await api.login(email, password)
+        const result = await api.login(email, password)
+        plan = result.plan
       }
-      goToApp()
+      goToApp(plan)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not sign in.')
     } finally {
@@ -107,27 +110,42 @@ export default function Login() {
 
   if (checking) {
     return (
-      <AppShell className="flex min-h-screen flex-col items-center justify-center px-5">
+      <AppShell className="marketing-page flex min-h-screen flex-col items-center justify-center px-5">
         <PageLoader label={desktopState ? 'Connecting to the Tudso app' : 'Loading'} />
       </AppShell>
     )
   }
 
   return (
-    <AppShell className="flex min-h-screen flex-col">
+    <AppShell className="marketing-page marketing-auth flex min-h-screen flex-col">
       <ThemeToggle className="fixed right-4 top-4 z-20" />
-      <main className="mx-auto flex w-full max-w-[360px] flex-1 flex-col justify-center px-5 py-16">
-        <Link to="/" className="mb-7 inline-flex">
-          <BrandMark className="h-12 w-12" alt="Tudso" />
-        </Link>
-        <h1 className="text-[22px] font-semibold tracking-tight">
-          {register ? 'Create your account' : 'Sign in'}
-        </h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-          {register
-            ? 'Use this account in the Tudso app without entering your password again.'
-            : 'After you sign in here, the Tudso app can connect without asking for your password.'}
-        </p>
+      <div className="mx-auto flex w-full max-w-6xl flex-1 items-center gap-12 px-5 py-10 sm:px-8 lg:gap-24">
+        <div className="hidden max-w-xl flex-1 md:block">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <BrandMark className="h-8 w-8" alt="Tudso" />
+            Tudso
+          </Link>
+          <p className="mt-12 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Your unfair interview advantage</p>
+          <h1 className="mt-4 font-display text-5xl leading-[1.02] tracking-tight lg:text-7xl">
+            Walk into every interview with <em className="italic">confidence.</em>
+          </h1>
+          <p className="mt-6 max-w-md text-base leading-relaxed text-muted-foreground">
+            Real-time, private support for live interviews. Your copilot stays invisible while you stay focused.
+          </p>
+        </div>
+        <main className="mx-auto w-full max-w-[420px] rounded-3xl border border-border bg-card p-6 shadow-xl shadow-secondary/20 sm:p-8">
+          <Link to="/" className="mb-7 inline-flex md:hidden">
+            <BrandMark className="h-12 w-12" alt="Tudso" />
+          </Link>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{register ? 'Start for free' : 'Welcome back'}</p>
+          <h2 className="mt-2 font-display text-4xl tracking-tight">
+            {register ? 'Create your account' : 'Sign in'}
+          </h2>
+          <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
+            {register
+              ? 'Use this account in the Tudso app without entering your password again.'
+              : 'After you sign in here, the Tudso app can connect without asking for your password.'}
+          </p>
 
         {error ? <p className="mt-4 text-[13px] text-danger" role="alert">{error}</p> : null}
 
@@ -215,7 +233,8 @@ export default function Login() {
             <>New here? <button type="button" className="font-medium text-fg hover:underline" onClick={() => setMode('register')}>Create an account</button></>
           )}
         </p>
-      </main>
+        </main>
+      </div>
     </AppShell>
   )
 }

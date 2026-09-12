@@ -12,11 +12,11 @@ import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
 import { aiRateLimiter, rateLimiter, requireAuth, requireReleaseUpload, sensitiveRateLimiter } from './middleware.js'
 import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAccount, updateAccountAvatar, updateAccountName } from './account.js'
-import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, consumeInterviewCredit, watchEntitlement } from './pocketbase.js'
+import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, ensureUserBilling, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, consumeInterviewCredit, syncUserBilling, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
 import { getSessionPrompt, rememberSessionPrompt, SESSION_PROMPT_REQUIRED } from './session-prompt.js'
 import { isAllowedReleaseName, publishStagedRelease, readReleaseManifest, releasesDir, toLatestUpdate } from './releases.js'
-import { createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
+import { clearLiveEntitlementCache, createCheckoutSession, createCustomerPortalSession, finalizeCheckoutSession, getBillingOverview, handleStripeWebhook, listPaidPlanPrices, stripe } from './stripe.js'
 import { hasProductAccess, CHECKOUT_PLANS } from './plans.js'
 import type { AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
 import { WEB_DEVICE_ID, clearWebSessionCookie, setWebSessionCookie } from './web-session.js'
@@ -762,8 +762,10 @@ router.post('/auth/desktop/start', (req: Request, res: Response) => {
 
 async function startWebSession(res: Response, auth: { userId: string; email: string }) {
   const session = await createAppSession(auth.userId, auth.email, WEB_DEVICE_ID, 'web', 'dashboard')
+  await ensureUserBilling(auth.userId)
   setWebSessionCookie(res, session.desktopToken)
-  return session
+  const entitlement = await getEntitlementForUser(auth.userId)
+  return { ...session, plan: entitlement?.plan ?? 'none' }
 }
 
 router.get('/auth/web/session', async (req: Request, res: Response) => {
@@ -779,9 +781,10 @@ router.get('/auth/web/session', async (req: Request, res: Response) => {
   }
   try {
     const identity = await getAccountIdentity(resolved.userId)
-    res.json({ user: publicAccount(identity) })
+    const entitlement = await getEntitlementForUser(resolved.userId)
+    res.json({ user: publicAccount(identity), plan: entitlement?.plan ?? 'none' })
   } catch {
-    res.json({ user: { userId: resolved.userId, email: resolved.email, name: '', avatarUrl: null } })
+    res.json({ user: { userId: resolved.userId, email: resolved.email, name: '', avatarUrl: null }, plan: 'none' })
   }
 })
 
@@ -802,7 +805,7 @@ router.post('/auth/web/login', rateLimiter, async (req: Request, res: Response) 
     return
   }
   const session = await startWebSession(res, auth)
-  res.json({ userId: session.userId, email: session.email })
+  res.json({ userId: session.userId, email: session.email, plan: session.plan })
 })
 
 router.post('/auth/web/register', rateLimiter, async (req: Request, res: Response) => {
@@ -830,7 +833,7 @@ router.post('/auth/web/register', rateLimiter, async (req: Request, res: Respons
     return
   }
   const session = await startWebSession(res, auth)
-  res.json({ userId: session.userId, email: session.email })
+  res.json({ userId: session.userId, email: session.email, plan: session.plan })
 })
 
 router.post('/auth/web/oauth', rateLimiter, async (req: Request, res: Response) => {
@@ -872,8 +875,8 @@ router.get('/auth/web/oauth/callback', async (req: Request, res: Response) => {
     await finishDesktopAuth(res, auth, authState)
     return
   }
-  await startWebSession(res, auth)
-  res.redirect('/dashboard')
+  const session = await startWebSession(res, auth)
+  res.redirect(session.plan === 'none' ? '/dashboard/subscription' : '/dashboard')
 })
 
 router.post('/auth/logout', requireAuth, async (req: Request, res: Response) => {
@@ -1322,6 +1325,17 @@ router.get('/billing/return', (_req: Request, res: Response) => {
 router.get('/billing/plans', async (_req: Request, res: Response) => {
   const prices = await listPaidPlanPrices()
   res.json({ plans: prices })
+})
+
+router.post('/billing/free', requireAuth, rateLimiter, async (req: Request, res: Response) => {
+  const billing = await getUserBilling(req.userId!)
+  if (billing?.plan !== 'none') {
+    res.status(409).json({ error: 'The free plan is only available before choosing a paid plan.' })
+    return
+  }
+  await syncUserBilling(req.userId!, { plan: 'free', planStatus: 'unpaid', interviewCredits: 3 })
+  clearLiveEntitlementCache(req.userId!)
+  res.json({ plan: 'free', interviewCredits: 3 })
 })
 
 router.post('/billing/checkout', requireAuth, rateLimiter, async (req: Request, res: Response) => {

@@ -295,6 +295,7 @@
         "system": false,
         "type": "select",
         "values": [
+          "none",
           "free",
           "basic",
           "plus",

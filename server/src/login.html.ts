@@ -18,39 +18,39 @@ const GOOGLE_MARK = `<svg class="google-mark" xmlns="http://www.w3.org/2000/svg"
 const STYLES = `
   :root {
     color-scheme: dark;
-    --bg: #1c1c1f;
+    --bg: #17152a;
     --fg: #f3f3f5;
     --muted: #a8a8b0;
     --quiet: #8a8a94;
     --border: color-mix(in srgb, #ffffff 8%, transparent);
-    --surface: #26262b;
-    --field: #44444e;
-    --lift: #5c5c68;
-    --accent: #c4c6ff;
-    --fill: #5b5fee;
-    --fill-hover: color-mix(in srgb, #5b5fee 82%, #ffffff);
+    --surface: #26223d;
+    --field: #332e4e;
+    --lift: #40395f;
+    --accent: #cfc7ff;
+    --fill: #7568e8;
+    --fill-hover: color-mix(in srgb, #7568e8 82%, #ffffff);
     --fill-fg: #ffffff;
     --danger: #e07070;
     --google: var(--surface);
     --google-fg: var(--fg);
     --google-hover: var(--lift);
     --google-border: var(--border);
-    --radius: 8px;
+    --radius: 12px;
     --motion: 140ms;
   }
   html.light {
     color-scheme: light;
-    --bg: #f4f4f5;
-    --fg: #1a1a1e;
-    --muted: #6d6d76;
+    --bg: #f8f6ff;
+    --fg: #292440;
+    --muted: #706a84;
     --quiet: #8a8a94;
     --border: color-mix(in srgb, #000000 8%, transparent);
     --surface: #ffffff;
     --field: #ffffff;
-    --lift: #d0d0d8;
-    --accent: #5b5fee;
-    --fill: #5b5fee;
-    --fill-hover: color-mix(in srgb, #5b5fee 82%, #000000);
+    --lift: #ebe7fb;
+    --accent: #635bdb;
+    --fill: #635bdb;
+    --fill-hover: color-mix(in srgb, #635bdb 82%, #000000);
     --fill-fg: #ffffff;
     --danger: #c44444;
   }
@@ -63,28 +63,37 @@ const STYLES = `
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 32px 20px;
-    font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
+    padding: 40px 20px;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.45;
-    background: var(--bg);
+    background:
+      radial-gradient(60% 50% at 10% 20%, rgba(117, 104, 232, 0.22), transparent 70%),
+      radial-gradient(55% 45% at 90% 80%, rgba(117, 104, 232, 0.16), transparent 70%),
+      var(--bg);
     color: var(--fg);
   }
   main {
     width: 100%;
-    max-width: 360px;
+    max-width: 430px;
+    padding: 32px;
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    background: var(--surface);
+    box-shadow: 0 24px 70px rgba(20, 15, 50, 0.18);
   }
   .mark {
     display: block;
     width: 48px;
     height: 48px;
-    margin: 0 0 28px;
+    margin: 0 0 24px;
     object-fit: contain;
   }
   h1 {
     margin: 0 0 8px;
-    font-size: 22px;
-    font-weight: 600;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 38px;
+    font-weight: 400;
     letter-spacing: -0.02em;
     line-height: 1.2;
     text-wrap: balance;
@@ -310,7 +319,8 @@ const STYLES = `
     margin: 0 auto 20px;
     padding: 4px;
     border-radius: 999px;
-    background: var(--field);
+    border: 1px solid var(--border);
+    background: var(--surface);
   }
   .tab-bar label {
     display: inline-flex;
@@ -347,14 +357,15 @@ const STYLES = `
     flex-direction: column;
     position: relative;
     min-height: 100%;
-    padding: 22px 20px 20px;
+    padding: 28px 24px 24px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 24px;
     background: var(--surface);
+    box-shadow: 0 10px 30px rgba(20, 15, 50, 0.08);
   }
   .plan-featured {
     border-color: var(--accent);
-    background: var(--field);
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   }
   .plan-mark {
     margin: 0 0 12px;
@@ -378,15 +389,17 @@ const STYLES = `
   }
   .plan h2 {
     margin: 0;
-    font-size: 18px;
-    font-weight: 600;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 28px;
+    font-weight: 400;
     letter-spacing: -0.02em;
   }
   .plan-featured h2 { color: var(--accent); }
   .price {
     margin: 10px 0 0;
-    font-size: 32px;
-    font-weight: 600;
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 42px;
+    font-weight: 400;
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
     line-height: 1;
@@ -456,7 +469,7 @@ const THEME_BOOT = `<script>
   } catch (e) {}
   if (light) document.documentElement.classList.add('light')
   var meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute('content', light ? '#f4f4f5' : '#1c1c1f')
+  if (meta) meta.setAttribute('content', light ? '#f8f6ff' : '#17152a')
 })()
 </script>`
 
@@ -517,7 +530,7 @@ export function loginPage(params: { state: string; error?: string; mode?: 'login
   const heading = isRegister ? 'Create your account' : 'Sign in to Tudso'
   const lede = isRegister
     ? 'Set up Tudso so it can learn how you work.'
-    : 'Your personal AI assistant for desktop.'
+    : 'Your private real-time copilot for live interviews.'
   const googleLabel = isRegister ? 'Sign up with Google' : 'Continue with Google'
   const switchLine = isRegister
     ? `Already have an account? <a href="/auth/desktop?state=${encodeURIComponent(state)}">Sign in</a>`

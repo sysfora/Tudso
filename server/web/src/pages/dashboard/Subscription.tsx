@@ -54,13 +54,13 @@ export default function SubscriptionPage() {
   const plan = entitlement?.plan
   const activeTab = tab ?? (isOneTimePlan(plan) ? 'one_time' : 'subscription')
   const catalog = activeTab === 'one_time' ? ONE_TIME_PLAN_CATALOG : SUBSCRIPTION_PLAN_CATALOG
-  const currentItem = [...ONE_TIME_PLAN_CATALOG, ...SUBSCRIPTION_PLAN_CATALOG].find((item) => item.id === (plan ?? 'free'))
+  const currentItem = [...ONE_TIME_PLAN_CATALOG, ...SUBSCRIPTION_PLAN_CATALOG].find((item) => item.id === plan)
   const amount = (plan && isCheckoutPlan(plan) ? prices[plan]?.amount : null) ?? currentItem?.fallbackAmount ?? 0
   const { dollars, cents } = splitPrice(amount)
   const period = billing?.currentPeriodEnd ? formatDate(billing.currentPeriodEnd) : (entitlement?.expiresAt ? formatDate(entitlement.expiresAt) : '')
   const canceling = Boolean(paid && billing?.cancelAtPeriodEnd)
   const hasCustomer = Boolean(billing?.stripeCustomerId)
-  const currentName = planDisplayName(plan ?? 'free')
+  const currentName = planDisplayName(plan)
   const remaining = entitlement?.interviewCredits
   const currentDetail = entitlement?.freeAccess
     ? 'Complimentary access. Same unlimited features as a paid plan.'
@@ -120,14 +120,22 @@ export default function SubscriptionPage() {
     void run(`plan-${target}`, () => openUrl(() => api.checkout(target)), 'Opened checkout.')
   }
 
+  const chooseFreePlan = () => {
+    void run('plan-free', async () => {
+      const result = await api.activateFreePlan()
+      setEntitlement((current) => current ? { ...current, plan: result.plan, interviewCredits: result.interviewCredits } : current)
+    }, 'Free plan activated.')
+  }
+
   if (!ready) return <SubscriptionSkeleton />
 
   return (
-    <div className="space-y-6">
+    <div className="dashboard-page space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">Subscription</h1>
-          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Plans & access</p>
+          <h1 className="mt-2 text-4xl tracking-tight sm:text-5xl">Choose your edge.</h1>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
             Unlimited interview sessions on a subscription, or pay once for a session pack.
           </p>
         </div>
@@ -139,20 +147,20 @@ export default function SubscriptionPage() {
         ) : null}
       </div>
 
-      <section className="rounded-md bg-surface-2 p-4">
+      <section className="dashboard-surface dashboard-tint-lavender">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <p className="text-[16px] font-semibold tracking-tight">{currentName}</p>
+              <p className="font-display text-3xl tracking-tight">{currentName}</p>
               <StatusPill status={entitlement?.status} paid={paid} canceling={canceling} complimentary={Boolean(entitlement?.freeAccess)} />
             </div>
             <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">{currentDetail}</p>
           </div>
           {paid && amount ? (
             <p className="flex items-start leading-none">
-              <span className="text-[16px] font-medium">$</span>
-              <span className="text-[28px] font-semibold tracking-tight tabular-nums">{dollars}</span>
+              <span className="text-lg font-medium">$</span>
+              <span className="font-display text-4xl tracking-tight tabular-nums">{dollars}</span>
               <span className="mt-1 text-[12px] text-muted-foreground">.{cents}{currentItem ? <span className="ml-1 font-normal">/{planIntervalLabel(currentItem.interval)}</span> : null}</span>
             </p>
           ) : null}
@@ -178,8 +186,8 @@ export default function SubscriptionPage() {
       </section>
 
       {hasCustomer ? (
-        <section className="rounded-md bg-surface-2 px-3 py-3">
-          <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Payment method</p>
+        <section className="dashboard-surface dashboard-tint-yellow">
+            <p className="font-display text-2xl tracking-tight">Payment method</p>
           {overview.paymentMethod ? (
             <div className="mt-2 flex items-start gap-2.5">
               <span className="flex h-8 w-8 items-center justify-center rounded-md bg-raised">
@@ -202,15 +210,17 @@ export default function SubscriptionPage() {
 
       <section id="plans">
         <PlanTabs value={activeTab} onChange={setTab} />
-        <div className={cn('mt-3 grid gap-2 md:items-stretch', activeTab === 'one_time' ? 'md:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4')}>
+        <div className={cn('mt-4 grid gap-4 md:items-stretch', activeTab === 'one_time' ? 'md:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4')}>
           {catalog.map((item) => (
             <DashPlanCard
-              key={item.id}
+              key={`${activeTab}-${item.id}`}
+              data-plan-card
               item={item}
               current={item.id === 'free' ? (plan ?? 'free') === 'free' : paid && plan === item.id}
               amount={item.id === 'free' ? 0 : (isCheckoutPlan(item.id) ? prices[item.id]?.amount : null) ?? item.fallbackAmount}
               busy={busy}
               onChoose={item.id === 'free' ? undefined : choosePlan}
+              onChooseFree={item.id === 'free' && plan === 'none' ? chooseFreePlan : undefined}
             />
           ))}
         </div>
@@ -230,7 +240,7 @@ function PlanTabs({
   onChange: (value: PlanTab) => void
 }) {
   return (
-    <div role="tablist" aria-label="Plan type" className="mx-auto flex w-fit rounded-md bg-surface-2 p-0.5">
+    <div role="tablist" aria-label="Plan type" className="mx-auto flex w-fit rounded-full border border-border bg-card p-1">
       <TabButton selected={value === 'subscription'} onClick={() => onChange('subscription')}>Subscriptions</TabButton>
       <TabButton selected={value === 'one_time'} onClick={() => onChange('one_time')}>One-Time</TabButton>
     </div>
@@ -252,8 +262,8 @@ function TabButton({
       role="tab"
       aria-selected={selected}
       className={cn(
-        'h-8 rounded-md px-3 text-[12px] font-medium',
-        selected ? 'bg-raised text-fg' : 'text-muted-foreground hover:text-fg',
+        'h-9 rounded-full px-4 text-[12px] font-medium transition-all duration-300 ease-out',
+        selected ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary/10 hover:text-fg',
       )}
       onClick={onClick}
     >
@@ -268,24 +278,26 @@ function DashPlanCard({
   amount,
   busy,
   onChoose,
+  onChooseFree,
 }: {
   item: PlanCatalogItem
   current: boolean
   amount: number
   busy: string | null
   onChoose?: (id: PaidPlan) => void
+  onChooseFree?: () => void
 }) {
   const price = splitPrice(amount)
   const checkoutId = item.id !== 'free' && isCheckoutPlan(item.id) ? item.id : null
   return (
     <div
       className={cn(
-        'flex flex-col rounded-md p-4',
-        current || item.featured ? 'bg-surface-2 ring-1 ring-accent' : 'bg-surface-2',
+        'flex flex-col rounded-3xl border p-6 transition-all duration-300 ease-out hover:-translate-y-1',
+        current || item.featured ? 'border-accent bg-accent/20 shadow-lg shadow-accent/10 ring-1 ring-accent' : item.id === 'free' ? 'dashboard-tint-mint border-transparent' : item.id === 'plus' ? 'dashboard-tint-lavender border-transparent' : item.id === 'pro' ? 'dashboard-tint-pink border-transparent' : 'bg-card border-border hover:shadow-lg hover:shadow-secondary/10',
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[13px] font-semibold">{item.name}</p>
+        <p className="font-display text-2xl">{item.name}</p>
         {current ? (
           <span className="rounded-md bg-raised px-1.5 py-0.5 text-[10px] font-medium text-ok">Current</span>
         ) : item.badge ? (
@@ -295,11 +307,11 @@ function DashPlanCard({
         ) : null}
       </div>
       {amount <= 0 ? (
-        <p className="mt-3 text-[28px] font-semibold tracking-tight">Free</p>
+        <p className="mt-4 font-display text-3xl tracking-tight">Free</p>
       ) : (
         <p className="mt-3 flex items-baseline leading-none">
           <span className="text-[15px] font-medium">$</span>
-          <span className="text-[32px] font-semibold tracking-tight tabular-nums">{price.dollars}</span>
+          <span className="font-display text-4xl tracking-tight tabular-nums">{price.dollars}</span>
           <span className="text-[13px] text-muted-foreground">.{price.cents}</span>
           <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">/{planIntervalLabel(item.interval)}</span>
         </p>
@@ -313,7 +325,18 @@ function DashPlanCard({
           </li>
         ))}
       </ul>
-      {checkoutId && onChoose ? (
+      {item.id === 'free' && onChooseFree ? (
+        <Button
+          className="w-full"
+          size="compact"
+          variant="fill"
+          disabled={Boolean(busy)}
+          loading={busy === 'plan-free'}
+          onClick={onChooseFree}
+        >
+          Get started free
+        </Button>
+      ) : checkoutId && onChoose ? (
         <Button
           className="w-full"
           size="compact"
@@ -361,23 +384,23 @@ function StatusPill({
 
 function SubscriptionSkeleton() {
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading subscription">
+    <div className="dashboard-page space-y-8" aria-busy="true" aria-label="Loading subscription">
       <div>
         <SkeletonBar className="h-5 w-32" />
         <SkeletonBar className="mt-2 h-3 w-80 max-w-full" delay={80} />
       </div>
-      <div className="rounded-md bg-surface-2 p-4">
+      <div className="dashboard-surface dashboard-tint-lavender">
         <SkeletonBar className="h-4 w-28" />
         <SkeletonBar className="mt-2 h-3 w-56" delay={80} />
         <SkeletonBar className="mt-4 h-8 w-32" delay={140} />
       </div>
-      <div className="rounded-md bg-surface-2 px-3 py-3">
+      <div className="dashboard-surface dashboard-tint-yellow">
         <SkeletonBar className="h-3 w-24" />
         <SkeletonBar className="mt-3 h-4 w-40" delay={80} />
       </div>
       <div className="grid gap-2 md:grid-cols-3">
         {['a', 'b', 'c'].map((key, index) => (
-          <div key={key} className="rounded-md bg-surface-2 p-4">
+          <div key={key} className="rounded-3xl bg-card p-6">
             <SkeletonBar className="h-3 w-16" delay={index * 70} />
             <SkeletonBar className="mt-4 h-8 w-24" delay={80 + index * 70} />
             <SkeletonBar className="mt-3 h-3 w-40" delay={120 + index * 70} />

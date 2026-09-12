@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { AppShell, ThemeSwitch } from '@/components/app/AppShell'
 import { BrandMark } from '@/components/app/BrandMark'
 import { PageLoader } from '@/components/app/Loader'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { cn } from '@/lib/utils'
 
 type DashboardContext = Account & { setAccount: (account: Account) => void }
@@ -22,6 +23,7 @@ export default function DashboardLayout() {
   const [session, setSession] = React.useState<Account | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [menuOpen, setMenuOpen] = React.useState(false)
+  const [logoutOpen, setLogoutOpen] = React.useState(false)
 
   React.useEffect(() => {
     void api.session().then((result) => {
@@ -61,25 +63,26 @@ export default function DashboardLayout() {
   }
 
   return (
-    <AppShell className="flex h-dvh overflow-hidden">
-      {menuOpen ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-20 bg-fg/30 md:hidden"
-          aria-label="Close menu"
-          onClick={() => setMenuOpen(false)}
-        />
-      ) : null}
+    <AppShell className="dashboard-page flex h-dvh overflow-hidden">
+      <button
+        type="button"
+        className={cn(
+          'fixed inset-0 z-20 bg-fg/30 opacity-0 transition-opacity duration-300 ease-out md:hidden',
+          menuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none',
+        )}
+        aria-label="Close menu"
+        onClick={() => setMenuOpen(false)}
+      />
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-30 flex w-[220px] flex-col border-r border-border bg-surface transition-transform duration-150 md:static md:translate-x-0',
+          'fixed inset-y-0 left-0 z-30 flex w-[236px] flex-col border-r border-border bg-card/80 backdrop-blur transition-transform duration-300 ease-out md:static md:translate-x-0',
           menuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         )}
         aria-label="Dashboard"
       >
-        <div className="flex h-12 items-center justify-between gap-2 border-b border-border px-3">
-          <NavLink to="/dashboard" className="flex min-w-0 items-center gap-2 text-[13px] font-semibold tracking-tight">
+        <div className="flex h-16 items-center justify-between gap-2 border-b border-border px-4">
+          <NavLink to="/dashboard" className="flex min-w-0 items-center gap-2 text-[15px] font-semibold tracking-tight">
             <BrandMark />
             Tudso
           </NavLink>
@@ -122,10 +125,7 @@ export default function DashboardLayout() {
             variant="soft"
             size="compact"
             className="mt-2 w-full text-muted-foreground hover:bg-danger/20 hover:text-danger"
-            onClick={() => {
-              if (!window.confirm('Log out of this browser?')) return
-              void logout()
-            }}
+            onClick={() => setLogoutOpen(true)}
           >
             <LogOut className="h-3.5 w-3.5" />
             Log out
@@ -134,18 +134,30 @@ export default function DashboardLayout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 items-center gap-2 border-b border-border bg-surface px-3 md:hidden">
+        <header className="flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur md:hidden">
           <Button type="button" variant="quiet" size="icon" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu className="h-4 w-4" />
           </Button>
           <span className="text-[13px] font-medium">{pageTitle(location.pathname)}</span>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-6">
+          <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
             <Outlet context={{ ...session, setAccount: setSession } satisfies DashboardContext} />
           </div>
         </main>
       </div>
+      <ConfirmDialog
+        open={logoutOpen}
+        onOpenChange={setLogoutOpen}
+        title="Log out of this browser?"
+        description="Your session will end on this browser. You can sign in again at any time."
+        confirmLabel="Log out"
+        destructive
+        onConfirm={() => {
+          setLogoutOpen(false)
+          void logout()
+        }}
+      />
     </AppShell>
   )
 }
@@ -163,7 +175,7 @@ function DashLink({ to, end, icon, children }: { to: string; end?: boolean; icon
       end={end}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px]',
+          'flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-all duration-200 ease-out',
           isActive ? 'bg-surface-2 font-medium text-fg' : 'text-muted-foreground hover:bg-lift hover:text-fg',
         )
       }

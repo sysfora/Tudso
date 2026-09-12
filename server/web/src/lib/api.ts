@@ -12,7 +12,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export type Entitlement = {
-  plan: 'free' | 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
+  plan: 'none' | 'free' | 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
   status: string
   freeAccess?: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
   interviewCredits?: number
@@ -53,6 +53,8 @@ export type Account = {
   avatarUrl: string | null
 }
 
+export type AuthPlan = Entitlement['plan']
+
 export type BillingInvoice = {
   id: string
   number: string | null
@@ -91,14 +93,14 @@ export type DashboardPayload = {
 }
 
 export const api = {
-  session: () => request<{ user: Account | null }>('/auth/web/session'),
+  session: () => request<{ user: Account | null; plan?: AuthPlan }>('/auth/web/session'),
   login: (email: string, password: string) =>
-    request<{ userId: string; email: string; needsVerification?: boolean }>('/auth/web/login', {
+    request<{ userId: string; email: string; plan?: AuthPlan; needsVerification?: boolean }>('/auth/web/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
   register: (body: { email: string; password: string; passwordConfirm: string; name?: string }) =>
-    request<{ userId?: string; email: string; needsVerification?: boolean }>('/auth/web/register', {
+    request<{ userId?: string; email: string; plan?: AuthPlan; needsVerification?: boolean }>('/auth/web/register', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
@@ -121,6 +123,7 @@ export const api = {
   removeAvatar: () => request<Account>('/me/account/avatar', { method: 'DELETE' }),
   plans: () => request<{ plans: Array<{ id: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly'; amount: number | null; currency: string; interval: string }> }>('/billing/plans'),
   billingOverview: () => request<BillingOverview>('/billing/overview'),
+  activateFreePlan: () => request<{ plan: 'free'; interviewCredits: number }>('/billing/free', { method: 'POST', body: JSON.stringify({}) }),
   checkout: (plan: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly') => request<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),
   portal: (action: 'manage' | 'cancel' | 'upgrade' = 'manage', plan?: 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly') =>
     request<{ url: string }>('/billing/portal', { method: 'POST', body: JSON.stringify({ action, plan }) }),

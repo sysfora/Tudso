@@ -8,6 +8,10 @@ import type { EntitlementRecord, Plan, SubscriptionRecord } from './types.js'
 const LIVE_PLAN_TTL_MS = 8_000
 const liveEntitlementCache = new Map<string, { at: number; value: EntitlementRecord }>()
 
+export function clearLiveEntitlementCache(userId: string): void {
+  liveEntitlementCache.delete(userId)
+}
+
 export const stripe = new Stripe(config.stripe.secretKey, { apiVersion: '2025-02-24.acacia' })
 
 export function priceIdToPlan(priceId: string): Plan {

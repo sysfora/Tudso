@@ -30,8 +30,8 @@ function PlanCard({ item }: { item: PlanCatalogItem }) {
   return (
     <div
       className={cn(
-        'relative flex flex-col rounded-3xl border p-6 sm:p-8',
-        featured ? 'border-2 border-foreground bg-brand-mint/30' : 'border-border bg-card',
+        'relative flex flex-col rounded-3xl border p-6 shadow-sm transition-shadow hover:shadow-lg sm:p-8',
+        featured ? 'border-2 border-primary bg-brand-mint/30 shadow-lg shadow-primary/10' : item.id === 'free' ? 'border-transparent bg-brand-mint/35' : item.id === 'plus' ? 'border-transparent bg-brand-lavender/50' : item.id === 'pro' ? 'border-transparent bg-brand-pink/45' : 'border-border bg-card',
       )}
     >
       {item.badge ? (
@@ -41,7 +41,7 @@ function PlanCard({ item }: { item: PlanCatalogItem }) {
       ) : null}
       <div className="flex-1">
         <p className="text-xl font-black tracking-wide">{item.mark}</p>
-        <h3 className="mt-3 text-2xl font-black" style={displayFont}>{item.name}</h3>
+        <h3 className="mt-3 text-3xl font-black" style={displayFont}>{item.name}</h3>
         <PlanPriceDisplay item={item} />
         <p className="mt-3 text-sm text-muted-foreground">{item.description}</p>
         <ul className="mt-6 space-y-3 text-sm">
@@ -81,7 +81,7 @@ function PlanTabs({
   onChange: (value: 'one_time' | 'subscription') => void
 }) {
   return (
-    <div role="tablist" aria-label="Plan type" className="mx-auto flex w-fit rounded-full bg-secondary p-1">
+    <div role="tablist" aria-label="Plan type" className="mx-auto flex w-fit rounded-full border border-border bg-card p-1">
       <TabButton selected={value === 'subscription'} onClick={() => onChange('subscription')}>Subscriptions</TabButton>
       <TabButton selected={value === 'one_time'} onClick={() => onChange('one_time')}>One-Time</TabButton>
     </div>
@@ -104,7 +104,7 @@ function TabButton({
       aria-selected={selected}
       className={cn(
         'h-9 rounded-full px-4 text-sm font-semibold',
-        selected ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+        selected ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:text-foreground',
       )}
       onClick={onClick}
     >

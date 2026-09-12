@@ -1,4 +1,4 @@
-export type Plan = 'free' | 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
+export type Plan = 'none' | 'free' | 'basic' | 'plus' | 'pro' | 'weekly' | 'monthly' | 'yearly' | 'premium'
 
 export interface UserProfile {
   id: string

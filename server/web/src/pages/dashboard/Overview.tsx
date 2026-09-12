@@ -34,7 +34,7 @@ export default function Overview() {
 
   if (error) {
     return (
-      <div className="rounded-md bg-surface-2 px-3 py-6 text-center">
+      <div className="dashboard-surface dashboard-tint-pink px-6 py-8 text-center">
         <p className="text-[13px] text-danger">{error}</p>
         <button type="button" className="mt-2 text-[13px] font-medium text-accent hover:underline" onClick={() => { setError(null); load() }}>
           Try again
@@ -64,11 +64,12 @@ export default function Overview() {
   const greeting = session.name ? `Hi ${session.name.split(' ')[0]}` : 'Overview'
 
   return (
-    <div className="space-y-6">
+    <div className="dashboard-page space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight">{greeting}</h1>
-          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Your interview command center</p>
+          <h1 className="mt-2 text-4xl tracking-tight sm:text-5xl">{greeting}</h1>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
             {data.email || session.email}. Usage from the last 14 days, including the Tudso app.
           </p>
         </div>
@@ -81,7 +82,7 @@ export default function Overview() {
       </div>
 
       {!paid ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface-2 px-3 py-2.5">
+        <div className="dashboard-surface dashboard-tint-mint flex flex-wrap items-center justify-between gap-3">
           <p className="inline-flex items-center gap-1.5 text-[13px]">
             <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
             No active paid plan. Free includes 3 interview sessions. Subscribe or buy a pack for more.
@@ -91,13 +92,13 @@ export default function Overview() {
       ) : null}
 
       <section>
-        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Account</h2>
+        <h2 className="mb-3 text-2xl tracking-tight">Account snapshot</h2>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             icon={<CreditCard className="h-3.5 w-3.5" />}
             label="Plan"
-            value={planName === 'No plan' ? 'Free' : planName}
-            hint={paid ? statusLabel(data.entitlement?.status) : 'Subscribe to use the app'}
+            value={planName}
+            hint={paid ? statusLabel(data.entitlement?.status) : data.entitlement?.plan === 'free' ? '3 sessions included' : 'Choose a plan to begin'}
             tone={paid ? (data.entitlement?.status === 'past_due' ? 'danger' : 'ok') : 'muted'}
           />
           <Stat icon={<MessageSquare className="h-3.5 w-3.5" />} label="Sessions · 14 days" value={formatNumber(data.sessionCount ?? data.conversationCount ?? 0)} />
@@ -109,7 +110,7 @@ export default function Overview() {
       <section>
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Last 14 days</h2>
+            <h2 className="text-2xl tracking-tight">Last 14 days</h2>
             <p className="mt-0.5 text-[12px] text-muted-foreground">
               {hasActivity
                 ? `${formatNumber(periodRequests)} requests · ${formatNumber(periodTokens)} tokens${peak?.requests ? ` · Peak ${formatDay(peak.date)}` : ''}`
@@ -119,7 +120,7 @@ export default function Overview() {
           <p className="text-[12px] tabular-nums text-muted-foreground">Max {formatNumber(maxRequests)}</p>
         </div>
 
-        <div className="rounded-md bg-surface-2 p-3">
+        <div className="dashboard-surface bg-card p-6">
           <div className="flex h-44 items-end gap-1" role="img" aria-label="Requests per day for the last 14 days">
             {history.map((day) => {
               const value = day.requests || 0
@@ -167,7 +168,7 @@ export default function Overview() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">Usage today</h2>
+        <h2 className="mb-3 text-2xl tracking-tight">Usage today</h2>
         <div className="grid gap-2 sm:grid-cols-2">
           <Meter icon={<Coins className="h-3.5 w-3.5" />} label="Tokens" value={formatNumber(usage.tokens ?? 0)} amount={usage.tokens ?? 0} ratio={ratio(usage.tokens, history, 'tokens')} />
           <Meter icon={<ScanSearch className="h-3.5 w-3.5" />} label="Screen answers" value={formatNumber(usage.screenAnalyses ?? 0)} amount={usage.screenAnalyses ?? 0} ratio={ratio(usage.screenAnalyses, history, 'screenAnalyses')} />
@@ -193,12 +194,12 @@ function Stat({
   tone?: 'muted' | 'ok' | 'danger'
 }) {
   return (
-    <div className="rounded-md bg-surface-2 px-3 py-2.5">
+    <div className="dashboard-surface bg-card px-5 py-5">
       <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-raised">{icon}</span>
         {label}
       </div>
-      <div className="mt-2 truncate text-[18px] font-semibold tracking-tight tabular-nums">{value}</div>
+      <div className="mt-3 truncate font-display text-3xl tracking-tight tabular-nums">{value}</div>
       {hint ? (
         <div className={cn('mt-0.5 text-[12px]', tone === 'ok' ? 'text-ok' : tone === 'danger' ? 'text-danger' : 'text-muted-foreground')}>
           {hint}
@@ -223,13 +224,13 @@ function Meter({
 }) {
   const width = amount <= 0 ? 0 : Math.max(6, Math.round(Math.min(1, Math.max(0, ratio)) * 100))
   return (
-    <div className="rounded-md bg-surface-2 px-3 py-2.5">
+    <div className="dashboard-surface bg-card px-5 py-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-raised">{icon}</span>
           {label}
         </div>
-        <p className="shrink-0 text-[14px] font-medium tabular-nums">{value}</p>
+        <p className="shrink-0 font-display text-2xl tabular-nums">{value}</p>
       </div>
       <div className="mt-2.5 h-1.5 overflow-hidden rounded-md bg-raised">
         <div className="h-full rounded-md bg-accent-fill" style={{ width: `${width}%` }} />

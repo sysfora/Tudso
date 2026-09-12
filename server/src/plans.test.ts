@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { entitlementFromFreeAccess } from './pocketbase.js'
-import { clampSessionMinutes, hasProductAccess, isCheckoutPlan, isFreeAccessPlan, isOneTimePlan, isPaidPlan, isPlan, sessionDurationOptions, sessionMinutesForPlan, FREE_SESSION_MINUTES, PAID_SESSION_MINUTES } from './plans.js'
+import { clampSessionMinutes, hasProductAccess, isCheckoutPlan, isFreeAccessPlan, isOneTimePlan, isPaidPlan, isPlan, sessionDurationOptions, sessionLimitForPlan, sessionMinutesForPlan, FREE_SESSION_MINUTES, PAID_SESSION_MINUTES } from './plans.js'
 
 describe('plans', () => {
+  it('treats none as an unconfigured plan without product access', () => {
+    expect(isPlan('none')).toBe(true)
+    expect(hasProductAccess('none', 'unpaid', 0)).toBe(false)
+    expect(sessionLimitForPlan('none')).toBe(0)
+  })
+
   it('treats active weekly, monthly, and yearly as paid', () => {
     expect(isPlan('weekly')).toBe(true)
     expect(isPlan('monthly')).toBe(true)
