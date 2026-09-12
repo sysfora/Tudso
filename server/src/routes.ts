@@ -10,7 +10,7 @@ import { beginPlainStream, endPlainStream, writePlainStream } from './stream.js'
 import { config } from './config.js'
 import { logError } from './log.js'
 import { authCompletePage, checkEmailPage, confirmEmailChangePage, forgotPasswordPage, loginPage, resetPasswordPage, sessionExpiredPage, statusPage, subscribePage } from './login.html.js'
-import { aiRateLimiter, rateLimiter, requireAuth, requireReleaseUpload, sensitiveRateLimiter } from './middleware.js'
+import { aiRateLimiter, rateLimiter, requireAuth, requireInterviewSession, requireReleaseUpload, sensitiveRateLimiter } from './middleware.js'
 import { changeAccountPassword, getAccountAvatar, getAccountIdentity, publicAccount, updateAccountAvatar, updateAccountName } from './account.js'
 import { deleteDesktopSession, deleteDevice, deleteOtherDesktopSessions, deleteUserData, ensureUserBilling, getDevices, getEntitlementForUser, getSubscription, getUsageHistory, getUsageToday, getUserBilling, incrementUsage, consumeInterviewCredit, syncUserBilling, watchEntitlement } from './pocketbase.js'
 import { MAX_MEMORIES, MAX_MEMORY_CHARS } from './memory.js'
@@ -20,6 +20,7 @@ import { clearLiveEntitlementCache, createCheckoutSession, createCustomerPortalS
 import { hasProductAccess, CHECKOUT_PLANS } from './plans.js'
 import type { AIStreamHandler, ChatMessage, ParsedResume, UserProfile } from './types.js'
 import { WEB_DEVICE_ID, clearWebSessionCookie, setWebSessionCookie } from './web-session.js'
+import { createInterviewSession } from './interview-session.js'
 
 const DEVICE_ID = z.string().min(1).max(128).regex(/^[a-zA-Z0-9._:-]+$/)
 
@@ -1042,7 +1043,7 @@ function historyFromBody(history: z.infer<typeof chatHistorySchema>, includeHist
 }
 
 // AI
-router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Response) => {
+router.post('/ai/chat', requireAuth, requireInterviewSession, aiRateLimiter, async (req: Request, res: Response) => {
   const schema = z.object({
     conversationId: z.string().optional(),
     message: z.string().min(1),
@@ -1084,6 +1085,9 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
         },
         onDone: () => {
           endPlainStream(res)
+          void incrementUsage(req.userId!, { requests: 1 }).catch((error) => {
+            logError('Failed to persist streamed chat usage', error, { user: req.userId })
+          })
           void persistChat(req.userId!, message, content)
         },
         onError: (error) => {
@@ -1107,7 +1111,7 @@ router.post('/ai/chat', requireAuth, aiRateLimiter, async (req: Request, res: Re
   res.json(result)
 })
 
-router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: Response) => {
+router.post('/ai/vision', requireAuth, requireInterviewSession, aiRateLimiter, async (req: Request, res: Response) => {
   const schema = z.object({
     image: z.string().min(1),
     message: z.string().min(1),
@@ -1146,6 +1150,9 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
       },
       onDone: () => {
         endPlainStream(res)
+        void incrementUsage(req.userId!, { requests: 1, screenAnalyses: 1 }).catch((error) => {
+          logError('Failed to persist vision usage', error, { user: req.userId })
+        })
         void persistVision(req.userId!, message, content)
       },
       onError: (error) => {
@@ -1159,7 +1166,7 @@ router.post('/ai/vision', requireAuth, aiRateLimiter, async (req: Request, res: 
   )
 })
 
-router.post('/ai/transcribe', requireAuth, aiRateLimiter, upload.single('audio'), async (req: Request, res: Response) => {
+router.post('/ai/transcribe', requireAuth, requireInterviewSession, aiRateLimiter, upload.single('audio'), async (req: Request, res: Response) => {
   const entitlement = await getEntitlementForUser(req.userId!)
   if (!entitled(entitlement)) {
     res.status(403).json({ error: 'Voice input requires remaining interview sessions or an active plan' })
@@ -1178,6 +1185,7 @@ router.post('/ai/transcribe', requireAuth, aiRateLimiter, upload.single('audio')
     }
     const fileName = req.file.originalname?.includes('.') ? req.file.originalname : 'audio.webm'
     const text = await transcription(buffer, fileName)
+    await incrementUsage(req.userId!, { audioMinutes: Math.max(1, Math.ceil(buffer.length / 210_000)) })
     res.json({ text })
   } catch (error) {
     logError('Failed to transcribe audio', error, { user: req.userId })
@@ -1187,7 +1195,7 @@ router.post('/ai/transcribe', requireAuth, aiRateLimiter, upload.single('audio')
   }
 })
 
-router.post('/ai/memory-extract', requireAuth, aiRateLimiter, async (req: Request, res: Response) => {
+router.post('/ai/memory-extract', requireAuth, requireInterviewSession, aiRateLimiter, async (req: Request, res: Response) => {
   const schema = z.object({
     userMessage: z.string().min(1).max(20_000),
     assistantContent: z.string().min(1).max(100_000),
@@ -1208,8 +1216,14 @@ router.post('/ai/parse-resume', requireAuth, aiRateLimiter, async (req: Request,
     text: z.string().min(1).max(20_000),
   })
   const { text } = schema.parse(req.body)
+  const entitlement = await getEntitlementForUser(req.userId!)
+  if (!entitled(entitlement)) {
+    res.status(403).json({ error: 'Resume parsing requires an active plan or remaining interview sessions' })
+    return
+  }
   try {
     const result = await extractResumeStructured(text)
+    await incrementUsage(req.userId!, { requests: 1 })
     res.json(result)
   } catch (error) {
     logError('Failed to parse resume with AI', error, { user: req.userId })
@@ -1268,13 +1282,20 @@ router.get('/usage', requireAuth, async (req: Request, res: Response) => {
 })
 
 router.post('/usage/session', requireAuth, rateLimiter, async (req: Request, res: Response) => {
+  const requestedMinutes = z.object({ durationMinutes: z.number().int().min(1).max(120).optional() }).safeParse(req.body ?? {})
+  if (!requestedMinutes.success) {
+    res.status(400).json({ error: 'Invalid session duration' })
+    return
+  }
   const consumed = await consumeInterviewCredit(req.userId!)
   if (!consumed.ok) {
     res.status(403).json({ error: consumed.error })
     return
   }
+  const entitlement = await getEntitlementForUser(req.userId!)
+  const interviewSession = createInterviewSession(req.userId!, requestedMinutes.data.durationMinutes, entitlement.plan)
   await incrementUsage(req.userId!, { sessions: 1 })
-  res.json({ ok: true, interviewCredits: consumed.interviewCredits })
+  res.json({ ok: true, interviewCredits: consumed.interviewCredits, sessionToken: interviewSession.token, expiresAt: interviewSession.expiresAt })
 })
 
 router.get('/me/dashboard', requireAuth, async (req: Request, res: Response) => {

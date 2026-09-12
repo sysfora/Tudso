@@ -6,9 +6,11 @@ import { log, logError } from './log.js'
 import { incrementUsage, getEntitlementForUser } from './pocketbase.js'
 import { hasProductAccess } from './plans.js'
 import { isActionableTranscript } from './transcript.js'
+import { verifyInterviewSession } from './interview-session.js'
 
 interface RealtimeSession {
   userId: string
+  sessionToken: string
   chunks: Buffer[]
   lastTranscript: string
   totalAudioSeconds: number
@@ -19,7 +21,7 @@ interface RealtimeSession {
 const sessions = new Map<WebSocket, RealtimeSession>()
 
 export function attachRealtimeAudio(server: Server): void {
-  const wss = new WebSocketServer({ server, path: '/realtime/audio' })
+  const wss = new WebSocketServer({ server, path: '/realtime/audio', maxPayload: 512 * 1024 })
 
   wss.on('connection', async (ws, req) => {
     const token = extractToken(req.url)
@@ -34,6 +36,12 @@ export function attachRealtimeAudio(server: Server): void {
       ws.close(1008, 'Invalid token')
       return
     }
+    const sessionToken = extractSessionToken(req.url)
+    if (!sessionToken || !verifyInterviewSession(sessionToken, user.userId)) {
+      log.warn('Realtime audio rejected', { user: user.userId, reason: 'interview session' })
+      ws.close(1008, 'Start an interview session first')
+      return
+    }
     const entitlement = await getEntitlementForUser(user.userId)
     if (!hasProductAccess(entitlement.plan, entitlement.status, entitlement.interviewCredits)) {
       log.warn('Realtime audio rejected', { user: user.userId, reason: 'plan' })
@@ -43,6 +51,7 @@ export function attachRealtimeAudio(server: Server): void {
 
     const session: RealtimeSession = {
       userId: user.userId,
+      sessionToken,
       chunks: [],
       lastTranscript: '',
       totalAudioSeconds: 0,
@@ -55,8 +64,18 @@ export function attachRealtimeAudio(server: Server): void {
 
     ws.on('message', (data) => {
       if (session.closed) return
+      if (!verifyInterviewSession(session.sessionToken, session.userId)) {
+        ws.close(1008, 'Interview session expired')
+        cleanup(session, ws)
+        return
+      }
       const buffer = asBuffer(data)
       if (!buffer.length) return
+      if (session.chunks.length >= 20) {
+        ws.close(1009, 'Audio queue is full')
+        cleanup(session, ws)
+        return
+      }
       session.chunks.push(buffer)
       void processAudio(ws, session)
     })
@@ -70,6 +89,12 @@ function extractToken(url?: string): string | null {
   if (!url) return null
   const parsed = new URL(url, 'http://localhost')
   return parsed.searchParams.get('token')
+}
+
+function extractSessionToken(url?: string): string | null {
+  if (!url) return null
+  const parsed = new URL(url, 'http://localhost')
+  return parsed.searchParams.get('session')
 }
 
 function asBuffer(data: RawData): Buffer {

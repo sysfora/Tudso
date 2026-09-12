@@ -12,6 +12,7 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
+    "predev": "npm install --include=optional --no-audit --no-fund && npm install --prefix server --include=optional --no-audit --no-fund",
     "dev": "concurrently -k -n server,renderer,electron -c blue,cyan,magenta \"npm run dev:server\" \"vite\" \"node scripts/electron-dev.mjs\"",
     "dev:server": "cd server && npm run dev",
     "dev:renderer": "vite",
@@ -22,6 +23,7 @@
     "typecheck": "tsc -b && cd server && npm run typecheck",
     "test": "cd server && npm test",
     "build:desktop": "vite build && node scripts/build-electron.mjs",
+    "dev:electron-only": "npm run build:desktop && electron .",
     "package": "npm run build:desktop && electron-builder --publish never",
     "package:win": "npm run build:desktop && electron-builder --win --publish never",
     "package:mac": "npm run build:desktop && electron-builder --mac --publish never",

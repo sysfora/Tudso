@@ -200,6 +200,7 @@ export async function exchangeOAuthCallback(provider: 'google', code: string, st
     if (result.meta?.isNew || !record.plan) {
       await ensureUserBilling(record.id)
     }
+    clearAuthState(state)
     return { token: result.token, userId: record.id, email: record.email, verified: Boolean(record.verified) }
   } catch (error) {
     logError('Google OAuth exchange failed', error)

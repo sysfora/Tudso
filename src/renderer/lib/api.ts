@@ -4,9 +4,14 @@ import { toPromptProfile, toPromptResume } from '@/types/api'
 import type { PaidPlan } from '@shared/plans'
 
 const API_BASE = config.serverUrl
+let interviewSessionToken: string | null = null
 
 export function getToken(): string | null {
   return localStorage.getItem('tudso.token')
+}
+
+export function getInterviewSessionToken(): string | null {
+  return interviewSessionToken
 }
 
 function headers(body?: BodyInit | null): Record<string, string> {
@@ -15,6 +20,7 @@ function headers(body?: BodyInit | null): Record<string, string> {
   return {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(interviewSessionToken ? { 'X-Interview-Session': interviewSessionToken } : {}),
   }
 }
 
@@ -192,7 +198,14 @@ export const api = {
   },
   usage: {
     get: () => fetchJson<{ usage: unknown }>('/usage'),
-    trackSession: () => fetchJson<{ ok: true; interviewCredits?: number }>('/usage/session', { method: 'POST' }),
+    trackSession: async (durationMinutes?: number) => {
+      const result = await fetchJson<{ ok: true; interviewCredits?: number; sessionToken: string }>('/usage/session', {
+        method: 'POST',
+        body: JSON.stringify({ durationMinutes }),
+      })
+      interviewSessionToken = result.sessionToken
+      return result
+    },
   },
   billing: {
     checkout: (plan: PaidPlan) => fetchJson<{ url: string }>('/billing/checkout', { method: 'POST', body: JSON.stringify({ plan }) }),

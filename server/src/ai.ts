@@ -247,8 +247,7 @@ export function buildChatMessages(
   return [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content: userMessage }]
 }
 
-const ALLOWED_CHAT_MODELS = ['gpt-4.1-nano', 'gpt-4.1'] as const
-type ChatModel = (typeof ALLOWED_CHAT_MODELS)[number]
+type ChatModel = 'gpt-4.1-nano' | 'gpt-4.1'
 
 export function resolveChatModel(requested?: string): ChatModel {
   if (requested === 'gpt-4.1' || requested === 'gpt-4.1-nano') return requested

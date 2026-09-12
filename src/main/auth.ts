@@ -30,6 +30,11 @@ export async function startLogin(deviceId: string, platform: string, appVersion:
 }
 
 export async function openLogin(url: string): Promise<void> {
+  const parsed = new URL(url)
+  const expected = new URL(SERVER_URL)
+  if (parsed.origin !== expected.origin || parsed.pathname !== '/login') {
+    throw new Error('Refusing to open an untrusted login URL')
+  }
   await shell.openExternal(url)
 }
 

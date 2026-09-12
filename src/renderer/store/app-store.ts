@@ -196,13 +196,13 @@ function openPlans(message: string) {
   useAppStore.getState().setSettingsOpen(true, 'subscription')
 }
 
-async function consumeSessionCredit(): Promise<boolean> {
+async function consumeSessionCredit(durationMinutes?: number): Promise<boolean> {
   if (!hasLiveAccess()) {
     openPlans('Choose a one-time pack or a subscription to start a session.')
     return false
   }
   try {
-    const result = await api.usage.trackSession()
+    const result = await api.usage.trackSession(durationMinutes)
     applyInterviewCredits(result.interviewCredits)
     return true
   } catch (error) {
@@ -435,7 +435,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   startSession: async (input) => {
     if (get().runningSessionId) return
-    if (!(await consumeSessionCredit())) {
+    if (!(await consumeSessionCredit(input.durationMinutes))) {
       set({ sessionSetupOpen: false })
       return
     }

@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express'
 import rateLimit from 'express-rate-limit'
 import { resolveAccessToken } from './auth.js'
 import { config } from './config.js'
+import { verifyInterviewSession } from './interview-session.js'
 import { log } from './log.js'
 import type { EntitlementRecord } from './types.js'
 
@@ -56,6 +57,15 @@ export function requireReleaseUpload(req: Request, res: Response, next: NextFunc
   if (!tokenEquals(token, expected)) {
     log.warn('Release upload rejected', { method: req.method, path: req.path })
     res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+  next()
+}
+
+export function requireInterviewSession(req: Request, res: Response, next: NextFunction): void {
+  const token = typeof req.headers['x-interview-session'] === 'string' ? req.headers['x-interview-session'] : ''
+  if (!req.userId || !token || !verifyInterviewSession(token, req.userId)) {
+    res.status(403).json({ error: 'Start an interview session before using the copilot.' })
     return
   }
   next()

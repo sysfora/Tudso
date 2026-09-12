@@ -39,7 +39,16 @@ app.use(helmet({
     },
   },
 }))
-app.use(cors({ origin: true, credentials: true }))
+app.use(cors({
+  credentials: true,
+  origin: (origin, callback) => {
+    if (!origin || origin === config.app.url.replace(/\/$/, '')) {
+      callback(null, true)
+      return
+    }
+    callback(null, false)
+  },
+}))
 app.use(cookieParser())
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }))
 app.use(express.json({

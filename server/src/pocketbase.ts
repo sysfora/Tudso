@@ -13,6 +13,7 @@ import {
 } from './types.js'
 
 let adminPb: PocketBase | null = null
+const creditLocks = new Map<string, Promise<void>>()
 
 export async function getAdminPb(): Promise<PocketBase> {
   if (!adminPb) {
@@ -405,16 +406,27 @@ export async function incrementUsage(userId: string, increments: Partial<Omit<Us
 }
 
 export async function consumeInterviewCredit(userId: string): Promise<{ ok: true; interviewCredits?: number } | { ok: false; error: string }> {
-  const entitlement = await getEntitlementForUser(userId)
-  if (isUnlimitedPlan(entitlement.plan) && isPaidStatus(entitlement.status)) {
-    return { ok: true }
+  const previous = creditLocks.get(userId) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => { release = resolve })
+  const queued = previous.then(() => current)
+  creditLocks.set(userId, queued)
+  await previous
+  try {
+    const entitlement = await getEntitlementForUser(userId)
+    if (isUnlimitedPlan(entitlement.plan) && isPaidStatus(entitlement.status)) {
+      return { ok: true }
+    }
+    const credits = entitlement.interviewCredits ?? 0
+    if (credits <= 0) {
+      return { ok: false, error: 'No interview sessions left. Choose a plan to continue.' }
+    }
+    await syncUserBilling(userId, { interviewCredits: credits - 1 })
+    return { ok: true, interviewCredits: credits - 1 }
+  } finally {
+    release()
+    if (creditLocks.get(userId) === queued) creditLocks.delete(userId)
   }
-  const credits = entitlement.interviewCredits ?? 0
-  if (credits <= 0) {
-    return { ok: false, error: 'No interview sessions left. Choose a plan to continue.' }
-  }
-  await syncUserBilling(userId, { interviewCredits: credits - 1 })
-  return { ok: true, interviewCredits: credits - 1 }
 }
 
 export async function getUsageHistory(userId: string, days = 14): Promise<UsageRecord[]> {

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { config } from '@/config'
-import { getToken } from '@/lib/api'
+import { getInterviewSessionToken, getToken } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import {
   captureMicrophone,
@@ -45,13 +45,13 @@ let speaking = false
 let unsent = ''
 let lastSent = ''
 
-function realtimeUrl(token: string): string {
-  return `${config.serverUrl.replace(/^http/, 'ws')}/realtime/audio?token=${encodeURIComponent(token)}`
+function realtimeUrl(token: string, sessionToken: string): string {
+  return `${config.serverUrl.replace(/^http/, 'ws')}/realtime/audio?token=${encodeURIComponent(token)}&session=${encodeURIComponent(sessionToken)}`
 }
 
-function connectSocket(token: string): Promise<WebSocket> {
+function connectSocket(token: string, sessionToken: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const next = new WebSocket(realtimeUrl(token))
+    const next = new WebSocket(realtimeUrl(token, sessionToken))
     let settled = false
     const timer = setTimeout(() => {
       if (settled) return
@@ -155,6 +155,11 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, ge
       set({ error: 'Sign in to use live copilot.' })
       return
     }
+    const sessionToken = getInterviewSessionToken()
+    if (!sessionToken) {
+      set({ error: 'Start an interview session first.' })
+      return
+    }
 
     intentionalStop = false
     sending = false
@@ -167,7 +172,7 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, ge
 
     try {
       await primeAudioContext()
-      const nextSocket = await connectSocket(token)
+      const nextSocket = await connectSocket(token, sessionToken)
       socket = nextSocket
       nextSocket.onmessage = (event) => {
         const data = JSON.parse(String(event.data)) as { type: string; transcript?: string; message?: string }

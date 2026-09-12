@@ -16,7 +16,7 @@ function applyTheme(light) {
   document.documentElement.classList.toggle('light', light)
   try {
     localStorage.setItem(THEME_KEY, light ? 'light' : 'dark')
-  } catch (e) {}
+  } catch {}
   const meta = document.querySelector('meta[name="theme-color"]')
   if (meta) meta.setAttribute('content', light ? '#f4f4f5' : '#1c1c1f')
   syncThemeButton()

@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build --config web/vite.config.ts && vite build --config web/vite.config.ts --ssr src/entry-server.tsx",
     "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "lint": "eslint .",
-    "test": "set POCKETBASE_URL=http://localhost:8090&& set POCKETBASE_ADMIN_EMAIL=admin@test.com&& set POCKETBASE_ADMIN_PASSWORD=test&& set AI_API_KEY=test&& set JWT_SECRET=0123456789abcdef0123456789abcdef&& set ENCRYPTION_KEY=0123456789abcdef0123456789abcdef&& set STRIPE_SECRET_KEY=sk_test_123&& set STRIPE_WEBHOOK_SECRET=whsec_test&& set STRIPE_PUBLISHABLE_KEY=pk_test_123&& set STRIPE_PRICE_BASIC=price_basic_123&& set STRIPE_PRICE_PLUS=price_plus_123&& set STRIPE_PRICE_PRO=price_pro_123&& set STRIPE_PRICE_WEEKLY=price_weekly_123&& set STRIPE_PRICE_MONTHLY=price_monthly_123&& set STRIPE_PRICE_YEARLY=price_yearly_123&& set STRIPE_PRICE_PREMIUM=price_premium_123&& vitest run"
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
