@@ -19,15 +19,18 @@ export function Subscription() {
   const [billing, setBilling] = useState<BillingSubscription | null>(null)
   const [overview, setOverview] = useState<{ paymentMethod: { brand: string; last4: string; expMonth: number; expYear: number } | null }>({ paymentMethod: null })
   const [prices, setPrices] = useState<Partial<Record<PaidPlan, BillingPlanPrice>>>({})
+  // U-2: Track loading state so we show a skeleton instead of flickering "No plan"
+  const [isLoading, setIsLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [tab, setTab] = useState<PlanTab>(isOneTimePlan(plan) ? 'one_time' : 'subscription')
 
   useEffect(() => {
-    void api.billing.subscription().then(setBilling).catch(() => setBilling(null))
-    void api.billing.overview().then((result) => setOverview({ paymentMethod: result.paymentMethod })).catch(() => undefined)
-    void api.billing.plans()
+    // U-2: Fetch all billing data in parallel and mark loading complete only after all settle
+    const billingPromise = api.billing.subscription().then(setBilling).catch(() => setBilling(null))
+    const overviewPromise = api.billing.overview().then((result) => setOverview({ paymentMethod: result.paymentMethod })).catch(() => undefined)
+    const plansPromise = api.billing.plans()
       .then((result) => {
         const next: Partial<Record<PaidPlan, BillingPlanPrice>> = {}
         for (const item of result.plans ?? []) {
@@ -36,6 +39,7 @@ export function Subscription() {
         setPrices(next)
       })
       .catch(() => setPrices({}))
+    void Promise.allSettled([billingPromise, overviewPromise, plansPromise]).then(() => setIsLoading(false))
   }, [])
 
   const run = async (key: string, work: () => Promise<unknown>, message: string) => {
@@ -94,6 +98,27 @@ export function Subscription() {
             : (entitlement?.status ?? 'Active')
 
   const catalog = tab === 'one_time' ? ONE_TIME_PLAN_CATALOG : SUBSCRIPTION_PLAN_CATALOG
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4" aria-busy="true" aria-label="Loading subscription">
+        <div className="h-3 w-48 animate-pulse rounded-md bg-surface-2" />
+        <div className="rounded-md bg-surface-2 p-3 space-y-2">
+          <div className="h-4 w-32 animate-pulse rounded-md bg-raised" />
+          <div className="h-3 w-56 animate-pulse rounded-md bg-raised" />
+        </div>
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded-md bg-surface-2 p-3 space-y-2">
+              <div className="h-4 w-24 animate-pulse rounded-md bg-raised" />
+              <div className="h-6 w-16 animate-pulse rounded-md bg-raised" />
+              <div className="h-3 w-full animate-pulse rounded-md bg-raised" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

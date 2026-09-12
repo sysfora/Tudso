@@ -24,6 +24,15 @@ export function findOAuthProvider(
 }
 
 const pendingStates = new Map<string, AuthState>()
+const AUTH_STATE_TTL_MS = 10 * 60 * 1000
+
+// B-4: Periodically evict expired auth states to prevent unbounded map growth
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, record] of pendingStates) {
+    if (now - record.createdAt > AUTH_STATE_TTL_MS) pendingStates.delete(key)
+  }
+}, 5 * 60 * 1000).unref()
 
 export function generateAuthState(kind: 'desktop' | 'web' = 'desktop'): { state: string; codeVerifier: string; url: string } {
   const state = crypto.randomBytes(32).toString('hex')
@@ -37,7 +46,7 @@ export function generateAuthState(kind: 'desktop' | 'web' = 'desktop'): { state:
 export function verifyAuthState(state: string): AuthState | null {
   const record = pendingStates.get(state)
   if (!record) return null
-  if (Date.now() - record.createdAt > 10 * 60 * 1000) {
+  if (Date.now() - record.createdAt > AUTH_STATE_TTL_MS) {
     pendingStates.delete(state)
     return null
   }

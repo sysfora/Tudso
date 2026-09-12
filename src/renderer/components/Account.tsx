@@ -85,13 +85,21 @@ export function Account() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadDevices()
-    void api.me.getAccount().then((account) => {
-      setName(account.name)
-      setSavedName(account.name)
-      setAvatarUrl(account.avatarUrl)
-    }).catch(() => undefined)
+    // U-3: Guard all async setState calls so they do nothing if the component unmounts first
+    let mounted = true
+    api.devices.list()
+      .then((list) => { if (mounted) setDevices(list) })
+      .catch((err) => { if (mounted) { setError(err instanceof Error ? err.message : 'Could not load devices.'); setDevices([]) } })
+      .finally(() => { if (mounted) setDevicesLoaded(true) })
+    api.me.getAccount()
+      .then((account) => {
+        if (!mounted) return
+        setName(account.name)
+        setSavedName(account.name)
+        setAvatarUrl(account.avatarUrl)
+      })
+      .catch(() => undefined)
+    return () => { mounted = false }
   }, [])
 
   useEffect(() => {

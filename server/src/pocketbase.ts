@@ -1,7 +1,7 @@
 import PocketBase from 'pocketbase'
 import { config } from './config.js'
 import { log } from './log.js'
-import { isFreeAccessPlan, isPlan, isUnlimitedPlan, isPaidStatus } from './plans.js'
+import { isFreeAccessPlan, isPlan, isUnlimitedPlan, isPaidStatus, sessionLimitForPlan } from './plans.js'
 import { pbQuote } from './pb-filter.js'
 import {
   type DesktopSession,
@@ -19,7 +19,8 @@ export async function getAdminPb(): Promise<PocketBase> {
   if (!adminPb) {
     adminPb = new PocketBase(config.pocketbase.url)
     adminPb.autoCancellation(false)
-    await adminPb.admins.authWithPassword(config.pocketbase.adminEmail, config.pocketbase.adminPassword)
+    // B-3: Use _superusers collection (admins.authWithPassword is deprecated in PocketBase v0.23+)
+    await adminPb.collection('_superusers').authWithPassword(config.pocketbase.adminEmail, config.pocketbase.adminPassword)
   }
   return adminPb
 }
@@ -130,7 +131,8 @@ export async function ensureUserBilling(userId: string): Promise<void> {
       return
     }
     if (typeof user.interviewCredits !== 'number') {
-      await syncUserBilling(userId, { interviewCredits: user.plan === 'free' ? 3 : 0 })
+      // B-2: Use sessionLimitForPlan so one-time plans (basic=3, plus=8, pro=15) get correct defaults
+      await syncUserBilling(userId, { interviewCredits: sessionLimitForPlan(user.plan) ?? 0 })
     }
   } catch (error) {
     log.warn('Could not ensure user billing fields', { err: pocketbaseDetails(error) })
@@ -542,18 +544,11 @@ export async function deleteOtherDesktopSessions(userId: string, keepToken: stri
 
 export async function deleteUserData(userId: string): Promise<void> {
   const pb = await getAdminPb()
-  const collections = ['subscriptions', 'usage', 'devices', 'desktop_sessions']
-  for (const collection of collections) {
-    try {
-      const records = await pb.collection(collection).getFullList({ filter: `user="${userId}"`, batch: 500 })
-      await Promise.all(records.map((r) => pb.collection(collection).delete(r.id)))
-    } catch {
-      // collection may not exist or other error
-    }
-  }
+  // B-6: Child collections all have cascadeDelete:true on the user relation,
+  // so deleting the user record automatically removes all child records.
   try {
     await pb.collection('users').delete(userId)
   } catch {
-    // ignore
+    // ignore — user may have already been deleted
   }
 }

@@ -16,6 +16,7 @@ export function AppShell({
   const theme = useAppTheme()
   useEffect(() => {
     const previous = document.body.style.backgroundColor
+    document.documentElement.dataset.theme = theme.dark ? 'dark' : 'light'
     document.body.style.backgroundColor = theme.dark ? '#17152a' : '#f8f6ff'
     return () => {
       document.body.style.backgroundColor = previous

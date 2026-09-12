@@ -78,6 +78,9 @@
   --border: oklch(0.929 0.013 255.508);
   --input: oklch(0.929 0.013 255.508);
   --ring: oklch(0.704 0.04 256.788);
+  --scrollbar-thumb: oklch(0.68 0.08 285 / 0.55);
+  --scrollbar-thumb-hover: oklch(0.56 0.16 277 / 0.75);
+  --scrollbar-track: transparent;
 }
 
 .dark {
@@ -100,6 +103,44 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.551 0.027 264.364);
+  --scrollbar-thumb: oklch(0.72 0.08 285 / 0.5);
+  --scrollbar-thumb-hover: oklch(0.78 0.12 285 / 0.78);
+  --scrollbar-track: transparent;
+}
+
+html {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html[data-theme='dark'] {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 @layer base {

@@ -320,6 +320,8 @@
           "trialing",
           "past_due",
           "canceled",
+          "incomplete",
+          "incomplete_expired",
           "unpaid"
         ]
       },
@@ -1148,7 +1150,7 @@
       },
       {
         "autogeneratePattern": "",
-        "hidden": false,
+        "hidden": true,
         "id": "text4100000030",
         "max": 255,
         "min": 0,
@@ -1162,7 +1164,7 @@
       },
       {
         "autogeneratePattern": "",
-        "hidden": false,
+        "hidden": true,
         "id": "text4100000031",
         "max": 255,
         "min": 0,
@@ -1355,7 +1357,7 @@
         "max": null,
         "min": 0,
         "name": "realtimeMinutes",
-        "onlyInt": false,
+        "onlyInt": true,
         "presentable": false,
         "required": false,
         "system": false,
@@ -1367,7 +1369,7 @@
         "max": null,
         "min": 0,
         "name": "audioMinutes",
-        "onlyInt": false,
+        "onlyInt": true,
         "presentable": false,
         "required": false,
         "system": false,

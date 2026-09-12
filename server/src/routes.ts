@@ -205,6 +205,14 @@ const router: Router = express.Router()
 const pendingCodeTokens = new Map<string, { token: string; userId: string; email: string; state: string; createdAt: number }>()
 const PENDING_CODE_TTL_MS = 30 * 60 * 1000
 
+// B-4: Periodically evict expired pending code tokens to prevent unbounded map growth
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of pendingCodeTokens) {
+    if (now - entry.createdAt > PENDING_CODE_TTL_MS) pendingCodeTokens.delete(key)
+  }
+}, 5 * 60 * 1000).unref()
+
 function pendingAuth(code: string, state: string) {
   const pending = pendingCodeTokens.get(code)
   if (!pending || pending.state !== state || Date.now() - pending.createdAt > PENDING_CODE_TTL_MS) return null
@@ -1085,9 +1093,7 @@ router.post('/ai/chat', requireAuth, requireInterviewSession, aiRateLimiter, asy
         },
         onDone: () => {
           endPlainStream(res)
-          void incrementUsage(req.userId!, { requests: 1 }).catch((error) => {
-            logError('Failed to persist streamed chat usage', error, { user: req.userId })
-          })
+          // B-1: persistChat already calls incrementUsage; do not call it again here
           void persistChat(req.userId!, message, content)
         },
         onError: (error) => {
@@ -1150,9 +1156,7 @@ router.post('/ai/vision', requireAuth, requireInterviewSession, aiRateLimiter, a
       },
       onDone: () => {
         endPlainStream(res)
-        void incrementUsage(req.userId!, { requests: 1, screenAnalyses: 1 }).catch((error) => {
-          logError('Failed to persist vision usage', error, { user: req.userId })
-        })
+        // B-1: persistVision already calls incrementUsage; do not call it again here
         void persistVision(req.userId!, message, content)
       },
       onError: (error) => {

@@ -56,6 +56,24 @@ const STYLES = `
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
+  html {
+    scrollbar-color: color-mix(in srgb, var(--accent) 58%, transparent) transparent;
+    scrollbar-width: thin;
+  }
+  *::-webkit-scrollbar { width: 12px; height: 12px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    min-height: 48px;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 58%, transparent);
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-corner { background: transparent; }
   body {
     margin: 0;
     min-height: 100vh;
@@ -452,6 +470,186 @@ const STYLES = `
   @media (max-width: 860px) {
     .plans, .plans.plans-subs { grid-template-columns: 1fr; }
   }
+  body.choose-plan {
+    --choose-bg: #1c1c1f;
+    --choose-fg: #f3f3f5;
+    --choose-muted: #a8a8b0;
+    --choose-border: rgba(255, 255, 255, 0.08);
+    --choose-card: #26262b;
+    --choose-secondary: #303036;
+    --choose-primary: #5b5fee;
+    --choose-primary-hover: #514bd5;
+    --choose-mint: #263b35;
+    --choose-lavender: #302b45;
+    --choose-yellow: #443a24;
+    --choose-pink: #432d36;
+    align-items: flex-start;
+    padding: 88px 20px 72px;
+    background:
+      radial-gradient(55% 35% at 100% 0%, rgba(117, 95, 238, 0.18), transparent 70%),
+      radial-gradient(55% 35% at 0% 100%, rgba(67, 118, 94, 0.16), transparent 70%),
+      var(--choose-bg);
+    color: var(--choose-fg);
+  }
+  html.light body.choose-plan {
+    --choose-bg: #f8f6ff;
+    --choose-fg: #1a1a1e;
+    --choose-muted: #706a84;
+    --choose-border: rgba(0, 0, 0, 0.08);
+    --choose-card: #ffffff;
+    --choose-secondary: #292440;
+    --choose-primary: #635bdb;
+    --choose-primary-hover: #5149c2;
+    --choose-mint: #e2f4ed;
+    --choose-lavender: #e9e4fb;
+    --choose-yellow: #fff2c8;
+    --choose-pink: #f9e4ea;
+    background:
+      radial-gradient(55% 35% at 100% 0%, rgba(190, 161, 255, 0.2), transparent 70%),
+      radial-gradient(55% 35% at 0% 100%, rgba(117, 220, 190, 0.18), transparent 70%),
+      var(--choose-bg);
+  }
+  body.choose-plan main {
+    max-width: 1120px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  body.choose-plan .theme-toggle {
+    color: var(--choose-muted);
+  }
+  body.choose-plan .theme-toggle:hover {
+    background: var(--choose-card);
+    color: var(--choose-fg);
+  }
+  body.choose-plan .mark {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 22px;
+  }
+  body.choose-plan .eyebrow {
+    margin: 0 0 8px;
+    color: var(--choose-primary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  body.choose-plan h1 {
+    max-width: 680px;
+    margin: 0 auto 10px;
+    color: var(--choose-fg);
+    font-size: clamp(38px, 6vw, 64px);
+    line-height: 1.02;
+    text-align: center;
+  }
+  body.choose-plan .lede {
+    max-width: 560px;
+    margin: 0 auto 12px;
+    color: var(--choose-muted);
+    font-size: 15px;
+    text-align: center;
+  }
+  body.choose-plan .who {
+    margin: 0 auto 32px;
+    color: var(--choose-muted);
+    text-align: center;
+  }
+  body.choose-plan .tab-bar {
+    margin-bottom: 16px;
+    border-color: var(--choose-border);
+    background: var(--choose-card);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+  body.choose-plan .tab-bar label {
+    color: var(--choose-muted);
+  }
+  body.choose-plan .tab-tabs label:hover,
+  body.choose-plan .tab-bar label:hover {
+    color: var(--choose-fg);
+  }
+  body.choose-plan .plan-tabs:has(#tab-one-time:checked) label[for="tab-one-time"],
+  body.choose-plan .plan-tabs:has(#tab-subs:checked) label[for="tab-subs"] {
+    background: var(--choose-secondary);
+    color: #ffffff;
+  }
+  body.choose-plan .plans {
+    gap: 16px;
+  }
+  body.choose-plan .plan {
+    padding: 24px;
+    border: 1px solid var(--choose-border);
+    border-radius: 24px;
+    background: var(--choose-card);
+    box-shadow: none;
+    transition: transform var(--motion) ease, box-shadow var(--motion) ease;
+  }
+  body.choose-plan .plan:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  }
+  body.choose-plan .plan-free { background: var(--choose-mint); }
+  body.choose-plan .plan-plus { background: var(--choose-lavender); }
+  body.choose-plan .plan-pro { background: var(--choose-pink); }
+  body.choose-plan .plan-weekly { background: var(--choose-card); }
+  body.choose-plan .plan-yearly { background: var(--choose-card); }
+  body.choose-plan .plan-featured {
+    border: 2px solid var(--choose-primary);
+    background: color-mix(in srgb, var(--choose-primary) 20%, var(--choose-card)) !important;
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--choose-primary) 16%, transparent);
+  }
+  body.choose-plan .plan-mark,
+  body.choose-plan .plan h2,
+  body.choose-plan .price {
+    color: var(--choose-fg);
+  }
+  body.choose-plan .plan-featured .plan-mark,
+  body.choose-plan .plan-featured h2 {
+    color: var(--choose-primary);
+  }
+  body.choose-plan .plan-copy,
+  body.choose-plan .price .cents,
+  body.choose-plan .features .out {
+    color: var(--choose-muted);
+  }
+  body.choose-plan .plan-badge {
+    background: var(--choose-secondary);
+    color: #ffffff;
+  }
+  body.choose-plan .plan:not(.plan-featured) button {
+    border-color: var(--choose-border);
+    background: var(--choose-secondary);
+    color: #ffffff;
+  }
+  body.choose-plan .plan:not(.plan-featured) button:hover {
+    background: color-mix(in srgb, var(--choose-secondary) 82%, #ffffff);
+  }
+  body.choose-plan .plan button {
+    background: var(--choose-secondary);
+    color: #ffffff;
+  }
+  body.choose-plan .plan-featured button {
+    background: var(--choose-primary);
+    color: #ffffff;
+  }
+  body.choose-plan .plan button:hover {
+    background: color-mix(in srgb, var(--choose-secondary) 82%, #ffffff);
+  }
+  body.choose-plan .plan-featured button:hover {
+    background: var(--choose-primary-hover);
+  }
+  body.choose-plan .footnote {
+    margin-top: 30px;
+    color: var(--choose-muted);
+  }
+  @media (max-width: 600px) {
+    body.choose-plan { padding: 56px 16px 48px; }
+    body.choose-plan .plans { gap: 14px; }
+    body.choose-plan .plan { padding: 24px 20px 20px; }
+  }
   ::selection {
     background: color-mix(in srgb, var(--accent) 28%, transparent);
   }
@@ -644,20 +842,20 @@ export function subscribePage(params: {
     const features = plan.features.map((feature) => `
           <li class="${feature.included ? '' : 'out'}">${feature.included ? CHECK : DASH}<span>${escapeHtml(feature.text)}</span></li>`).join('')
     const badge = plan.badge ? `<span class="plan-badge">${escapeHtml(plan.badge)}</span>` : ''
+    const actionLabel = plan.id === 'free' ? 'Get started free' : plan.action
     const action = plan.id === 'free'
       ? `<form method="GET" action="/auth/desktop">
           <input type="hidden" name="state" value="${state}">
-          <button type="submit">${escapeHtml(plan.action)}</button>
+          <button type="submit">${escapeHtml(actionLabel)}</button>
         </form>`
       : `<form method="POST" action="/auth/desktop/subscribe">
           <input type="hidden" name="code" value="${code}">
           <input type="hidden" name="state" value="${state}">
           <input type="hidden" name="plan" value="${plan.id}">
-          <button type="submit">${escapeHtml(plan.action)}</button>
+          <button type="submit">${escapeHtml(actionLabel)}</button>
         </form>`
-    return `<article class="plan${plan.featured ? ' plan-featured' : ''}">
+    return `<article class="plan plan-${plan.id}${plan.featured ? ' plan-featured' : ''}">
         ${badge}
-        <p class="plan-mark">${escapeHtml(plan.mark)}</p>
         <h2>${escapeHtml(plan.name)}</h2>
         ${price ? `<p class="price">${price}</p>` : ''}
         <p class="plan-copy">${escapeHtml(plan.description)}</p>
@@ -669,8 +867,9 @@ export function subscribePage(params: {
 
   const body = `  <main>
     ${brandMark()}
-    <h1>Choose a plan</h1>
-    <p class="lede">One-time packs or unlimited subscriptions. Same stealth, snap &amp; solve, and real-time answers.</p>
+    <p class="eyebrow">Plans &amp; access</p>
+    <h1>Choose your edge.</h1>
+    <p class="lede">Unlimited interview sessions on a subscription, or pay once for a session pack.</p>
     <p class="who">Billing for ${escapeHtml(params.email)}</p>
     ${params.error ? `<p class="error" role="alert">${escapeHtml(params.error)}</p>` : ''}
     <div class="plan-tabs">
@@ -691,7 +890,6 @@ export function subscribePage(params: {
         </div>
       </section>
     </div>
-    <p class="footnote">Checkout opens with Stripe. This window returns to Tudso when the plan is active.</p>
   </main>`
   return documentPage('Choose a Tudso plan', body, 'choose-plan')
 }

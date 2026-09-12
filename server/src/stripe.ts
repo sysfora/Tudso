@@ -350,11 +350,14 @@ async function syncOneTimePurchaseFromCheckout(session: Stripe.Checkout.Session)
 export async function syncSubscriptionFromStripe(stripeSubscription: Stripe.Subscription): Promise<void> {
   let userId: string | undefined = stripeSubscription.metadata?.userId
   if (!userId) {
-    const customer = typeof stripeSubscription.customer === 'string' ? stripeSubscription.customer : stripeSubscription.customer.id
-    const subs = await stripe.checkout.sessions.list({ customer, limit: 1 })
-    userId = subs.data[0]?.metadata?.userId
+    // B-5: Do not fall back to checkout session list — the most recent session
+    // for this customer may belong to a different user (e.g. if a customer ID is
+    // reused or the webhook fires before metadata is written). Log and bail out.
+    log.warn('syncSubscriptionFromStripe: no userId in subscription metadata, skipping sync', {
+      subscriptionId: stripeSubscription.id,
+    })
+    return
   }
-  if (!userId) return
   const mapped = planFromStripeSubscription(stripeSubscription)
   await upsertSubscription(userId, {
     stripeCustomerId: mapped.stripeCustomerId,

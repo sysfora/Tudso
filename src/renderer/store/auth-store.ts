@@ -96,10 +96,11 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       try {
         await get().hydrateSignedIn(session)
       } catch {
-        set({ loading: false, session: null, onboardingComplete: false })
+        // U-1: Reset loginStatus so the UI is never stuck on 'completing' after a startup failure
+        set({ loading: false, session: null, onboardingComplete: false, loginStatus: 'idle' })
       }
     } else {
-      set({ loading: false, onboardingComplete: false })
+      set({ loading: false, onboardingComplete: false, loginStatus: 'idle' })
     }
   },
 
