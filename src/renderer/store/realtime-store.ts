@@ -146,9 +146,11 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, ge
       return
     }
     if (!useAppStore.getState().runningSessionId) {
-      useAppStore.getState().newConversation()
-      set({ error: 'Start a session first.' })
-      return
+      const started = await useAppStore.getState().startDefaultSession()
+      if (!started || !useAppStore.getState().runningSessionId) {
+        set({ error: 'Could not start an interview session.' })
+        return
+      }
     }
     const token = getToken()
     if (!token) {

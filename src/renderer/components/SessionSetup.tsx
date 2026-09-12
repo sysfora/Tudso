@@ -1,227 +1,81 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import {
-  PROFILE_SETUP_STEPS,
-  ProfileSetupFields,
-  mergeSetupValuesFromProfile,
-  splitList,
-  type ProfileSetupValues,
-} from '@/components/ProfileSetup'
 import { pickResumeFile } from '@/lib/pick-resume'
 import { importPickedResume } from '@/lib/import-resume'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
-import { DEFAULT_PROFILE_PREFERENCES, snapshotLocalProfile } from '@/types/api'
-import { clampSessionMinutes, isUnlimitedPlan, isPaidStatus, sessionDurationOptions, sessionMinutesForPlan } from '@shared/plans'
-import { cn } from '@/lib/cn'
-import type { LocalProfile, ResumeImportResult } from '@shared/types'
+import { snapshotLocalProfile } from '@/types/api'
 
 export function SessionSetup() {
   const profile = useAuthStore((state) => state.profile)
   const startSession = useAppStore((state) => state.startSession)
   const cancelSessionSetup = useAppStore((state) => state.cancelSessionSetup)
-  const entitlement = useAuthStore((state) => state.entitlement)
-  const maxMinutes = sessionMinutesForPlan(entitlement?.plan)
-  const durationChoices = sessionDurationOptions(maxMinutes)
-  const [durationMinutes, setDurationMinutes] = useState(maxMinutes)
-  const [step, setStep] = useState(0)
-  const [values, setValues] = useState<ProfileSetupValues>({
-    preferredName: '',
-    profession: '',
-    role: '',
-    skills: '',
-    goals: '',
-    communicationStyle: DEFAULT_PROFILE_PREFERENCES.communicationStyle,
-    technicalLevel: DEFAULT_PROFILE_PREFERENCES.technicalLevel,
-  })
-  const [resumeFile, setResumeFile] = useState<{ fileName: string; mimeType: string; data: ArrayBuffer } | null>(null)
-  const [importedProfile, setImportedProfile] = useState<Partial<LocalProfile> | null>(null)
-  const [resumeImport, setResumeImport] = useState<ResumeImportResult | null>(null)
-  const [memoryFacts, setMemoryFacts] = useState<string[]>([])
   const [resumeName, setResumeName] = useState('')
-  const [resumeError, setResumeError] = useState('')
   const [resumeUploading, setResumeUploading] = useState(false)
-  const [saving, setSaving] = useState<'defaults' | 'custom' | null>(null)
+  const [resumeError, setResumeError] = useState('')
 
-  const last = step === PROFILE_SETUP_STEPS.length - 1
-  const busy = saving !== null || resumeUploading
-  const defaultLabel = profile?.preferredName
-    ? `Use default info (${profile.preferredName})`
-    : 'Use default info'
-  const remaining = entitlement?.interviewCredits
-  const unlimited = isUnlimitedPlan(entitlement?.plan) && isPaidStatus(entitlement?.status)
-  const sessionHint = unlimited
-    ? `${maxMinutes} min max per session`
-    : remaining
-      ? `${remaining} session${remaining === 1 ? '' : 's'} left · ${maxMinutes} min max`
-      : `${maxMinutes} min max per session`
-
-  const pickDuration = (minutes: number) => {
-    setDurationMinutes(clampSessionMinutes(minutes, entitlement?.plan))
-  }
-
-  const finish = async (usedDefaults: boolean, resume?: { fileName: string; mimeType: string; data: ArrayBuffer } | null) => {
-    if (busy) return
-    setSaving(usedDefaults ? 'defaults' : 'custom')
-    try {
-      const nextProfile = usedDefaults
-        ? snapshotLocalProfile(profile)
-        : snapshotLocalProfile({
-            ...DEFAULT_PROFILE_PREFERENCES,
-            ...importedProfile,
-            preferredName: values.preferredName.trim() || importedProfile?.preferredName || undefined,
-            profession: values.profession.trim() || importedProfile?.profession || undefined,
-            role: values.role.trim() || importedProfile?.role || undefined,
-            skills: splitList(values.skills, ','),
-            goals: splitList(values.goals, '\n'),
-            communicationStyle: values.communicationStyle,
-            technicalLevel: values.technicalLevel,
-            education: importedProfile?.education,
-            industry: importedProfile?.industry,
-            customContext: importedProfile?.customContext,
-          })
-      await startSession({
-        profile: nextProfile,
-        usedDefaults,
-        durationMinutes,
-        resumeFile: usedDefaults ? undefined : resume ?? undefined,
-        resumeImport: usedDefaults ? undefined : resumeImport ?? undefined,
-        memoryFacts: usedDefaults ? undefined : memoryFacts,
-      })
-    } finally {
-      setSaving(null)
-    }
-  }
-
-  const next = async () => {
-    if (busy) return
-    if (!last) {
-      setStep(step + 1)
-      return
-    }
-    await finish(false, resumeFile)
-  }
-
-  const pickResume = async () => {
-    if (busy) return
+  const uploadAndStart = async () => {
+    if (resumeUploading) return
     setResumeUploading(true)
     setResumeError('')
     try {
       const picked = await pickResumeFile()
       if (!picked) return
       const imported = await importPickedResume(picked)
-      setResumeFile(picked)
-      setResumeImport(imported)
-      setImportedProfile(imported.profile)
-      setMemoryFacts(imported.memories)
-      setValues((current) => mergeSetupValuesFromProfile(current, imported.profile))
-      const filled = imported.extractedChars > 40
-      setResumeName(
-        filled
-          ? `${picked.fileName} for this session. Skills, work history, and memory will be filled.`
-          : `${picked.fileName} for this session only.`,
-      )
-      if (!filled) {
-        setResumeError('Could not read enough text to fill this session. Try PDF, DOCX, or TXT.')
+      if (imported.extractedChars < 40 || !hasUsefulProfile(imported.profile)) {
+        setResumeError('Could not extract enough profile information. Try a clearer PDF, DOCX, or TXT resume.')
+        return
       }
+      setResumeName(picked.fileName)
+      const baseProfile = snapshotLocalProfile(profile)
+      await startSession({
+        profile: {
+          ...baseProfile,
+          ...imported.profile,
+          skills: imported.profile.skills ?? baseProfile.skills,
+          goals: imported.profile.goals ?? baseProfile.goals,
+        },
+        usedDefaults: false,
+        resumeFile: picked,
+        resumeImport: imported,
+        memoryFacts: imported.memories,
+      })
     } catch (error) {
-      setResumeError(error instanceof Error ? error.message : 'Could not read resume')
-      setResumeFile(null)
-      setImportedProfile(null)
-      setResumeImport(null)
-      setMemoryFacts([])
-      setResumeName('')
+      setResumeError(error instanceof Error ? error.message : 'Could not read your resume')
     } finally {
       setResumeUploading(false)
     }
   }
 
-  const onEnter = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter' || event.shiftKey || step === 1) return
-    event.preventDefault()
-    void next()
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-5">
-      <div className="w-full max-w-[340px]">
-        <p className="text-[12px] font-medium text-muted">This session only</p>
-        <h1 className="mt-1 text-[18px] font-semibold tracking-tight">Set up this session</h1>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-          Same details as onboarding. Session fields stay here; resume facts also go into memory so answers stay useful. {sessionHint}.
+      <div className="w-full max-w-[360px] text-center">
+        <p className="text-[12px] font-medium text-muted">New interview session</p>
+        <h1 className="mt-1 text-[20px] font-semibold tracking-tight">Upload your resume to start</h1>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted">
+          Tudso will extract everything it needs and continue directly into your session.
         </p>
-
-        <div className="mt-4">
-          <p className="text-[12px] font-medium text-muted">Session length</p>
-          {durationChoices.length === 1 ? (
-            <p className="mt-1.5 text-[13px] text-fg">{durationChoices[0]} minutes</p>
-          ) : (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {durationChoices.map((minutes) => (
-                <button
-                  key={minutes}
-                  type="button"
-                  className={cn(
-                    'h-8 rounded-md px-2.5 text-[12px] font-medium',
-                    durationMinutes === minutes ? 'bg-raised text-fg' : 'bg-surface-2 text-muted hover:text-fg',
-                  )}
-                  onClick={() => pickDuration(minutes)}
-                >
-                  {minutes} min
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <Button
-          variant="outline"
-          className="mt-4 w-full"
-          onClick={() => void finish(true)}
-          disabled={busy}
-          loading={saving === 'defaults'}
-        >
-          {defaultLabel}
+        <Button className="mt-5 w-full" onClick={() => void uploadAndStart()} disabled={resumeUploading} loading={resumeUploading}>
+          Upload resume and start session
         </Button>
-
-        <p className="mt-4 text-[12px] font-medium text-muted">
-          Step {step + 1} of {PROFILE_SETUP_STEPS.length}
-        </p>
-        <h2 className="mt-1 text-[15px] font-semibold tracking-tight">{PROFILE_SETUP_STEPS[step].title}</h2>
-        <p className="mt-1 text-[13px] leading-relaxed text-muted">{PROFILE_SETUP_STEPS[step].description}</p>
-
-        <ProfileSetupFields
-          step={step}
-          values={values}
-          onChange={(patch) => setValues((current) => ({ ...current, ...patch }))}
-          onEnter={onEnter}
-          onPickClick={() => void pickResume()}
-          resumeName={resumeName}
-          resumeError={resumeError}
-          resumeUploading={resumeUploading}
-        />
-
-        <div className="mt-4 flex gap-2">
-          {step > 0 ? (
-            <Button variant="outline" className="flex-1" onClick={() => setStep(step - 1)} disabled={busy}>
-              Back
-            </Button>
-          ) : (
-            <Button variant="outline" className="flex-1" onClick={cancelSessionSetup} disabled={busy}>
-              Cancel
-            </Button>
-          )}
-          {step === 1 ? (
-            <Button variant="outline" className="flex-1" onClick={() => setStep(step + 1)}>
-              {resumeName ? 'Continue' : 'Skip'}
-            </Button>
-          ) : (
-            <Button className="flex-1" onClick={() => void next()} loading={saving === 'custom'}>
-              {last ? 'Start session' : 'Next'}
-            </Button>
-          )}
-        </div>
+        {resumeName ? <p className="mt-2 text-[12px] text-muted">{resumeName}</p> : null}
+        {resumeError ? <p className="mt-3 text-[12px] text-danger">{resumeError}</p> : null}
+        <Button variant="outline" className="mt-3 w-full" onClick={cancelSessionSetup} disabled={resumeUploading}>
+          Cancel
+        </Button>
+        <p className="mt-4 text-[11px] text-muted">PDF, DOCX, or TXT</p>
       </div>
     </div>
+  )
+}
+
+function hasUsefulProfile(profile: { preferredName?: string; profession?: string; role?: string; skills?: string[]; goals?: string[]; customContext?: string }) {
+  return Boolean(
+    profile.preferredName ||
+      profile.profession ||
+      profile.role ||
+      profile.skills?.length ||
+      profile.goals?.length ||
+      profile.customContext,
   )
 }

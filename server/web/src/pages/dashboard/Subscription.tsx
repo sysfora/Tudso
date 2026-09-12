@@ -210,7 +210,7 @@ export default function SubscriptionPage() {
 
       <section id="plans">
         <PlanTabs value={activeTab} onChange={setTab} />
-        <div className={cn('mt-4 grid gap-4 md:items-stretch', activeTab === 'one_time' ? 'md:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4')}>
+        <div className={cn('mt-4 grid min-w-0 grid-cols-1 gap-4 md:items-stretch', activeTab === 'one_time' ? 'md:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4')}>
           {catalog.map((item) => (
             <DashPlanCard
               key={`${activeTab}-${item.id}`}
@@ -292,7 +292,7 @@ function DashPlanCard({
   return (
     <div
       className={cn(
-        'flex flex-col rounded-3xl border p-6 transition-all duration-300 ease-out hover:-translate-y-1',
+        'min-w-0 max-w-full flex flex-col rounded-3xl border p-6 transition-all duration-300 ease-out hover:-translate-y-1',
         current || item.featured ? 'border-accent bg-accent/20 shadow-lg shadow-accent/10 ring-1 ring-accent' : item.id === 'free' ? 'dashboard-tint-mint border-transparent' : item.id === 'plus' ? 'dashboard-tint-lavender border-transparent' : item.id === 'pro' ? 'dashboard-tint-pink border-transparent' : 'bg-card border-border hover:shadow-lg hover:shadow-secondary/10',
       )}
     >
@@ -316,12 +316,12 @@ function DashPlanCard({
           <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">/{planIntervalLabel(item.interval)}</span>
         </p>
       )}
-      <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">{item.description}</p>
+      <p className="mt-2 min-w-0 break-words text-[12px] leading-relaxed text-muted-foreground">{item.description}</p>
       <ul className="mt-3 mb-4 flex-1 space-y-1.5">
         {item.features.map((feature) => (
           <li key={feature.text} className="flex items-start gap-2 text-[12px] leading-relaxed">
             <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-            <span>{feature.text}</span>
+            <span className="min-w-0 break-words">{feature.text}</span>
           </li>
         ))}
       </ul>

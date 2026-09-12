@@ -78,6 +78,7 @@ interface AppActions {
   setShortcutsOpen: (open: boolean) => void
   checkForUpdates: () => Promise<void>
   newConversation: () => void
+  startDefaultSession: () => Promise<boolean>
   cancelSessionSetup: () => void
   startSession: (input: {
     profile: LocalProfile
@@ -427,6 +428,21 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       sessionSetupKey: get().sessionSetupKey + 1,
       settingsOpen: false,
     })
+  },
+
+  startDefaultSession: async () => {
+    if (get().runningSessionId) return true
+    if (!hasLiveAccess()) {
+      openPlans('Choose a one-time pack or a subscription to start a session.')
+      return false
+    }
+    const auth = useAuthStore.getState()
+    await get().startSession({
+      profile: snapshotLocalProfile(auth.profile),
+      usedDefaults: true,
+      durationMinutes: sessionMinutesForPlan(auth.entitlement?.plan),
+    })
+    return Boolean(get().runningSessionId)
   },
 
   cancelSessionSetup: () => {
