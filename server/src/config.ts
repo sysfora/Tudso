@@ -25,6 +25,7 @@ export const config = {
     env: optional('APP_ENV', 'development'),
     version: PACKAGE_VERSION,
     port: Number(optional('PORT', '3000')),
+    host: optional('HOST', '0.0.0.0'),
   },
   pocketbase: {
     url: required('POCKETBASE_URL'),
@@ -65,8 +66,8 @@ export const config = {
     releaseUploadToken: optional('RELEASE_UPLOAD_TOKEN', ''),
   },
   storage: {
-    localDir: optional('RESUME_STORAGE_DIR', 'data'),
-    releasesDir: 'data/releases',
+    localDir: optional('RESUME_STORAGE_DIR', join(dirname(fileURLToPath(import.meta.url)), '..', 'data')),
+    releasesDir: optional('RELEASES_STORAGE_DIR', join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'releases')),
   },
 } as const
 

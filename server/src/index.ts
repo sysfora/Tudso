@@ -113,9 +113,10 @@ app.use((error: unknown, req: express.Request, res: express.Response, next: expr
 
 attachRealtimeAudio(server)
 
-server.listen(config.app.port, () => {
+server.listen(config.app.port, config.app.host, () => {
   log.info(`${config.app.name} server listening`, {
     url: config.app.url,
+    host: config.app.host,
     port: config.app.port,
     env: config.app.env,
   })

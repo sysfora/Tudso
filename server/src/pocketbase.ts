@@ -19,8 +19,12 @@ export async function getAdminPb(): Promise<PocketBase> {
   if (!adminPb) {
     adminPb = new PocketBase(config.pocketbase.url)
     adminPb.autoCancellation(false)
-    // B-3: Use _superusers collection (admins.authWithPassword is deprecated in PocketBase v0.23+)
-    await adminPb.collection('_superusers').authWithPassword(config.pocketbase.adminEmail, config.pocketbase.adminPassword)
+    // Support both PocketBase v0.23+ (_superusers collection) and older versions (admins auth)
+    try {
+      await adminPb.collection('_superusers').authWithPassword(config.pocketbase.adminEmail, config.pocketbase.adminPassword)
+    } catch {
+      await adminPb.admins.authWithPassword(config.pocketbase.adminEmail, config.pocketbase.adminPassword)
+    }
   }
   return adminPb
 }
