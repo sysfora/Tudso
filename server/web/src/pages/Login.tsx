@@ -119,8 +119,8 @@ export default function Login() {
   return (
     <AppShell className="marketing-page marketing-auth flex min-h-screen flex-col">
       <ThemeToggle className="fixed right-4 top-4 z-20" />
-      <div className="mx-auto flex w-full max-w-6xl flex-1 items-center gap-12 px-5 py-10 sm:px-8 lg:gap-24">
-        <div className="hidden max-w-xl flex-1 md:block">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 items-center justify-center gap-12 px-5 py-10 sm:px-8 lg:gap-24">
+        <div className="hidden max-w-xl flex-none md:block">
           <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
             <BrandMark className="h-8 w-8" alt="Tudso" />
             Tudso
@@ -133,7 +133,7 @@ export default function Login() {
             Real-time, private support for live interviews. Your copilot stays invisible while you stay focused.
           </p>
         </div>
-        <main className="mx-auto w-full max-w-[420px] rounded-3xl border border-border bg-card p-6 shadow-xl shadow-secondary/20 sm:p-8">
+        <main className="w-full max-w-[420px] rounded-3xl border border-border bg-card p-6 shadow-xl shadow-secondary/20 sm:p-8">
           <Link to="/" className="mb-7 inline-flex md:hidden">
             <BrandMark className="h-12 w-12" alt="Tudso" />
           </Link>

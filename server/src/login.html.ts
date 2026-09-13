@@ -312,11 +312,23 @@ const STYLES = `
     color: var(--quiet);
   }
   body.choose-plan {
+    display: block;
+    height: auto;
+    min-height: 100%;
+    min-width: 0;
     align-items: flex-start;
-    padding: 48px 24px 64px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 48px 24px 160px;
+  }
+  html:has(body.choose-plan) {
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
   }
   body.choose-plan main {
     max-width: 980px;
+    margin: 0 auto;
   }
   .who {
     margin: -12px 0 28px;
@@ -363,17 +375,18 @@ const STYLES = `
   .plan-tabs:has(#tab-subs:checked) .panel-subs { display: block; }
   .plans {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
     align-items: stretch;
   }
   .plans.plans-subs {
-    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .plan {
     display: flex;
     flex-direction: column;
     position: relative;
+    min-width: 0;
     min-height: 100%;
     padding: 28px 24px 24px;
     border: 1px solid var(--border);
@@ -432,6 +445,7 @@ const STYLES = `
   }
   .plan-copy {
     margin: 10px 0 0;
+    overflow-wrap: anywhere;
     color: var(--muted);
     font-size: 13px;
     line-height: 1.5;
@@ -449,9 +463,11 @@ const STYLES = `
     grid-template-columns: 16px 1fr;
     gap: 8px;
     align-items: start;
+    min-width: 0;
     font-size: 13px;
     line-height: 1.4;
   }
+  .features li span { min-width: 0; overflow-wrap: anywhere; }
   .features .out { color: var(--quiet); }
   .tick, .dash {
     width: 16px;
@@ -484,6 +500,12 @@ const STYLES = `
     --choose-yellow: #443a24;
     --choose-pink: #432d36;
     align-items: flex-start;
+    display: block;
+    height: auto;
+    min-height: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: 88px 20px 72px;
     background:
       radial-gradient(55% 35% at 100% 0%, rgba(117, 95, 238, 0.18), transparent 70%),
@@ -511,7 +533,7 @@ const STYLES = `
   }
   body.choose-plan main {
     max-width: 1120px;
-    padding: 0;
+    padding: 0 0 120px;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -580,6 +602,7 @@ const STYLES = `
     gap: 16px;
   }
   body.choose-plan .plan {
+    min-width: 0;
     padding: 24px;
     border: 1px solid var(--choose-border);
     border-radius: 24px;
@@ -646,7 +669,7 @@ const STYLES = `
     color: var(--choose-muted);
   }
   @media (max-width: 600px) {
-    body.choose-plan { padding: 56px 16px 48px; }
+    body.choose-plan { padding: 56px 16px 128px; }
     body.choose-plan .plans { gap: 14px; }
     body.choose-plan .plan { padding: 24px 20px 20px; }
   }

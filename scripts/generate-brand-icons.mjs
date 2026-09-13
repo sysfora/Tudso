@@ -23,6 +23,26 @@ async function pngBuffer(size, { flatten = false } = {}) {
   return { width: size, height: size, data }
 }
 
+async function macPngBuffer(size) {
+  const inner = Math.round(size * 0.82)
+  const padding = Math.floor((size - inner) / 2)
+  const data = await sharp(source)
+    .resize(inner, inner, {
+      fit: 'contain',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .extend({
+      top: padding,
+      bottom: size - inner - padding,
+      left: padding,
+      right: size - inner - padding,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toBuffer()
+  return { width: size, height: size, data }
+}
+
 async function png(size, name, { flatten = false } = {}) {
   const buffer = await pngBuffer(size, { flatten })
   writeFileSync(join(outDir, name), buffer.data)
@@ -91,11 +111,11 @@ const appIco = encodeIco(
 )
 writeFileSync(join(root, 'public', 'icon.ico'), appIco)
 
-const macIconSizes = [16, 32, 128, 256, 512, 1024]
-const macIconTypes = ['icp4', 'icp5', 'ic07', 'ic08', 'ic09', 'ic10']
+const macIconSizes = [16, 32, 48, 128, 256, 512, 1024]
+const macIconTypes = ['icp4', 'icp5', 'icp6', 'ic07', 'ic08', 'ic09', 'ic10']
 const macIconImages = await Promise.all(macIconSizes.map(async (size, index) => ({
   type: macIconTypes[index],
-  data: (await pngBuffer(size)).data,
+  data: (await macPngBuffer(size)).data,
 })))
 writeFileSync(join(root, 'resources', 'icon.icns'), encodeIcns(macIconImages))
 
