@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CHANNELS } from '../shared/channels'
 import { DEFAULT_BOUNDS, WINDOW_SIZES } from '../shared/defaults'
-import type { ThemeMode, WindowBounds, WindowMode } from '../shared/types'
+import type { ThemeMode, WindowBounds, WindowMode, WindowResizeEdge } from '../shared/types'
 import { appIconPath, applyWindowIcon, refreshWindowIcon } from './icon'
 import {
   applyOverlayWindowStyle,
@@ -32,6 +32,7 @@ let collapsed = false
 let expandedHeight = DEFAULT_BOUNDS.height
 let skipTaskbar = false
 let floatingEnabled = false
+let resizeSession: { edge: WindowResizeEdge; x: number; y: number; bounds: WindowBounds } | null = null
 
 export function getMainWindow() {
   return win
@@ -51,13 +52,20 @@ export function createMainWindow(store: AppStore) {
   const saved = store.getBounds()
   const width = settings.rememberSize && saved ? saved.width : DEFAULT_BOUNDS.width
   const height = settings.rememberSize && saved ? saved.height : DEFAULT_BOUNDS.height
-  const restored = settings.rememberPosition && saved ? clampToDisplay(saved) : null
+  const display = screen.getPrimaryDisplay()
+  const workArea = display.workArea
+  const centered = {
+    x: Math.round(workArea.x + (workArea.width - width) / 2),
+    y: Math.round(workArea.y + (workArea.height - height) / 2),
+    width,
+    height,
+  }
 
   win = new BrowserWindow({
     width,
     height,
-    x: restored?.x,
-    y: restored?.y,
+    x: centered.x,
+    y: centered.y,
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     show: false,
@@ -86,7 +94,7 @@ export function createMainWindow(store: AppStore) {
 
   setWindowChromeRestorer(() => applyFloatingChrome())
 
-  if (!restored) win.center()
+  win.setBounds(centered, false)
   applyWindowIcon(win)
   applyFloatingChrome()
   applyWindowChrome(settings.theme, settings.transparency)
@@ -171,8 +179,10 @@ export function createMainWindow(store: AppStore) {
     if (settings.startMinimized) return
     const current = getMainWindow()
     if (!current || current.isDestroyed()) return
-    if (floatingEnabled) showMainWindow()
-    else current.show()
+    if (!current.isVisible()) {
+      if (floatingEnabled) showMainWindow()
+      else current.show()
+    }
   })
 
   const rendererUrl = process.env.ELECTRON_RENDERER_URL
@@ -380,6 +390,51 @@ export function setWindowMode(mode: WindowMode) {
   const y = Math.round(bounds.y + (bounds.height - size.height) / 2)
   const next = clampToDisplay({ x, y, width: size.width, height: size.height }, display.workArea)
   setWindowBoundsNoActivate(win, next)
+}
+
+export function beginWindowResize(edge: WindowResizeEdge, x: number, y: number) {
+  if (!win || win.isDestroyed() || collapsed) return
+  resizeSession = { edge, x, y, bounds: win.getBounds() }
+}
+
+export function resizeWindow(x: number, y: number) {
+  if (!win || win.isDestroyed() || !resizeSession) return
+  const { edge, bounds: start } = resizeSession
+  const rightEdge = start.x + start.width
+  const bottomEdge = start.y + start.height
+
+  let nextX = start.x
+  let nextY = start.y
+  let nextWidth = start.width
+  let nextHeight = start.height
+
+  if (edge.includes('e')) {
+    nextWidth = Math.max(MIN_WIDTH, x - start.x)
+  }
+
+  if (edge.includes('w')) {
+    nextWidth = Math.max(MIN_WIDTH, rightEdge - x)
+    nextX = rightEdge - nextWidth
+  }
+
+  if (edge.includes('s')) {
+    nextHeight = Math.max(MIN_HEIGHT, y - start.y)
+  }
+
+  if (edge.includes('n')) {
+    nextHeight = Math.max(MIN_HEIGHT, bottomEdge - y)
+    nextY = bottomEdge - nextHeight
+  }
+
+  const display = screen.getDisplayMatching(start)
+  const workArea = display.workArea
+  const clamped = clampToDisplay({ x: nextX, y: nextY, width: nextWidth, height: nextHeight }, workArea)
+
+  setWindowBoundsNoActivate(win, clamped)
+}
+
+export function endWindowResize() {
+  resizeSession = null
 }
 
 export function getWindowBounds(): WindowBounds | null {

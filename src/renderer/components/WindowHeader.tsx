@@ -45,9 +45,11 @@ export function WindowHeader() {
           <IconButton label="Expand" shortcut={shortcutHint(shortcuts.toggleCollapsed)} onClick={() => desktop.window.minimize()}>
             <Maximize2 className="h-4 w-4" />
           </IconButton>
-          <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.window.close()}>
-            <X className="h-4 w-4" />
-          </IconButton>
+          {!runningSessionId ? (
+            <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.app.quit()}>
+              <X className="h-4 w-4" />
+            </IconButton>
+          ) : null}
         </div>
       </header>
     )
@@ -98,9 +100,11 @@ export function WindowHeader() {
         >
           <Minus className="h-4 w-4" />
         </IconButton>
-        <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.window.close()}>
-          <X className="h-4 w-4" />
-        </IconButton>
+        {!runningSessionId ? (
+          <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.app.quit()}>
+            <X className="h-4 w-4" />
+          </IconButton>
+        ) : null}
       </div>
     </header>
   )

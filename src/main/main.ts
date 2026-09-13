@@ -96,6 +96,10 @@ app.whenReady().then(async () => {
   registerIpc(store, credentials)
   installApplicationMenu()
 
+  if (!store.getSettings().startMinimized) {
+    showMainWindow()
+  }
+
   const startupUrl = queuedAuthUrl ?? findProtocolUrl(process.argv)
   queuedAuthUrl = undefined
   if (startupUrl) await handleDeepLink(startupUrl)

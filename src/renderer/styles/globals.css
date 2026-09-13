@@ -215,6 +215,14 @@ body,
   app-region: no-drag;
 }
 
+.window-resize-handle {
+  position: absolute;
+  z-index: 50;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  user-select: none;
+}
+
 .app-frame {
   height: 100%;
   width: 100%;

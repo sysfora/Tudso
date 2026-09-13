@@ -12,6 +12,7 @@ import type {
   PickedResume,
   Settings,
   ShortcutId,
+  WindowResizeEdge,
   AppMenuPopup,
 } from '../shared/types'
 import { clearSession, getSession, openLogin, pollForAuthCompletion, setSession, startLogin } from './auth'
@@ -36,11 +37,14 @@ import { popupAppMenu } from './app-menu'
 import { moveToPreset, nudgeWindow } from './window-position'
 import {
   applyWindowChrome,
+  beginWindowResize,
+  endWindowResize,
   getMainWindow,
   getWindowBounds,
   hideMainWindow,
   minimizeMainWindow,
   moveMainWindow,
+  resizeWindow,
   restoreTaskbarPresence,
   sendToRenderer,
   setAlwaysOnTop,
@@ -80,6 +84,15 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
 
   ipcMain.handle(CHANNELS.windowSetMode, (_event, mode) => {
     setWindowMode(mode)
+  })
+  ipcMain.on(CHANNELS.windowResizeStart, (_event, edge: WindowResizeEdge, x: number, y: number) => {
+    beginWindowResize(edge, x, y)
+  })
+  ipcMain.on(CHANNELS.windowResizeMove, (_event, x: number, y: number) => {
+    resizeWindow(x, y)
+  })
+  ipcMain.on(CHANNELS.windowResizeEnd, () => {
+    endWindowResize()
   })
 
   ipcMain.handle(CHANNELS.windowGetBounds, () => getWindowBounds())

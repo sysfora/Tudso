@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/app-store'
 
 export function GuestWindowChrome() {
   const windowCollapsed = useAppStore((state) => state.windowCollapsed)
+  const runningSessionId = useAppStore((state) => state.runningSessionId)
   const minimizeToTray = useAppStore((state) => state.settings.minimizeToTray)
 
   return (
@@ -23,9 +24,11 @@ export function GuestWindowChrome() {
         >
           {windowCollapsed ? <Maximize2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
         </IconButton>
-        <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.window.close()}>
-          <X className="h-4 w-4" />
-        </IconButton>
+        {!runningSessionId ? (
+          <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.app.quit()}>
+            <X className="h-4 w-4" />
+          </IconButton>
+        ) : null}
       </div>
     </header>
   )

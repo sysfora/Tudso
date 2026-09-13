@@ -1,5 +1,6 @@
 export type ThemeMode = 'dark' | 'light' | 'system'
 export type WindowMode = 'compact' | 'normal' | 'expanded'
+export type WindowResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 export type ResponseLength = 'short' | 'medium' | 'long'
 export type MessageRole = 'user' | 'assistant' | 'system'
 export type SettingsSection =

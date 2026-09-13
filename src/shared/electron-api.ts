@@ -21,6 +21,7 @@ import type {
   StreamError,
   WindowBounds,
   WindowMode,
+  WindowResizeEdge,
   AppMenuPopup,
 } from './types'
 
@@ -40,6 +41,9 @@ export interface ElectronAPI {
     hide: () => void
     setAlwaysOnTop: (value: boolean) => Promise<boolean>
     setMode: (mode: WindowMode) => Promise<void>
+    resizeStart: (edge: WindowResizeEdge, x: number, y: number) => void
+    resizeMove: (x: number, y: number) => void
+    resizeEnd: () => void
     getBounds: () => Promise<WindowBounds | null>
     moveTo: (position: { x: number; y: number }) => Promise<void>
     positionTo: (preset: number) => Promise<void>
