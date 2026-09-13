@@ -228,6 +228,15 @@ const STYLES = `
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+  a.secondary-link {
+    display: block;
+    margin-top: 14px;
+    color: var(--accent);
+    font-size: 13px;
+    text-align: center;
+    text-decoration: none;
+  }
+  a.secondary-link:hover { text-decoration: underline; }
   button:disabled { opacity: 0.4; cursor: default; }
   button.is-loading, a.primary.is-loading { opacity: 1; }
   button.is-loading > :not(.spinner),
@@ -826,6 +835,7 @@ export function authCompletePage(callbackUrl: string, copy?: { title?: string; l
     <h1>${escapeHtml(title)}</h1>
     <p class="lede">${escapeHtml(lede)}</p>
     <a class="primary" href="${safeUrl}">Open Tudso</a>
+    <a class="secondary-link" href="/dashboard">Continue in browser</a>
   </main>`
   return documentPage('Returning to Tudso', body)
 }
@@ -867,7 +877,8 @@ export function subscribePage(params: {
     const badge = plan.badge ? `<span class="plan-badge">${escapeHtml(plan.badge)}</span>` : ''
     const actionLabel = plan.id === 'free' ? 'Get started free' : plan.action
     const action = plan.id === 'free'
-      ? `<form method="GET" action="/auth/desktop">
+      ? `<form method="POST" action="/auth/desktop/free">
+          <input type="hidden" name="code" value="${code}">
           <input type="hidden" name="state" value="${state}">
           <button type="submit">${escapeHtml(actionLabel)}</button>
         </form>`

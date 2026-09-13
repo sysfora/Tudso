@@ -37,7 +37,7 @@ export function Composer() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const realtimeTranscript = useRealtimeStore((state) => state.transcript)
   const realtimeMode = useRealtimeStore((state) => state.mode)
-  const { listening, error: voiceError, toggle: toggleVoice } = useVoiceInput()
+  const { listening, toggle: toggleVoice } = useVoiceInput()
   const [attaching, setAttaching] = useState(false)
   const canSend = Boolean(composer.trim() || attachments.length) && !generatingId
   const paid = hasProductAccess(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
@@ -225,15 +225,12 @@ export function Composer() {
           {realtimeTranscript || (realtimeSpeaking ? 'Hearing…' : 'Listening…')}
         </p>
       ) : null}
-      <p className="mt-1.5 px-1 text-[11px] text-muted">
-        Enter to send · {formatAccelerator(shortcuts.toggleModel, desktop.platform)} {resolveChatModel(settings.model) === 'gpt-4.1' ? 'Intelligent' : 'Fast'} · {formatAccelerator(shortcuts.askScreen, desktop.platform)} answer from screen · {formatAccelerator(shortcuts.liveCopilotAudio, desktop.platform)} copilot
-        {listening ? ' · Voice input live' : null}
-        {voiceError ? ` · ${voiceError}` : null}
-        {realtimeListening
-          ? ` · Live copilot · ${realtimeMode === 'system' ? 'Computer Audio (Interviewer)' : 'Microphone (You)'} · ${realtimeSpeaking ? 'hearing speech' : generatingId ? 'answering, still listening' : realtimeTranscript ? 'waiting for a pause' : 'listening'}`
-          : null}
-        {realtimeError ? ` · ${realtimeError}` : null}
-      </p>
+      {realtimeListening ? (
+        <p className="mt-1.5 px-1 text-[11px] text-muted">
+          Live copilot · {realtimeMode === 'system' ? 'Computer Audio (Interviewer)' : 'Microphone (You)'} · {realtimeSpeaking ? 'hearing speech' : generatingId ? 'answering, still listening' : realtimeTranscript ? 'waiting for a pause' : 'listening'}
+          {realtimeError ? ` · ${realtimeError}` : null}
+        </p>
+      ) : null}
     </div>
   )
 }

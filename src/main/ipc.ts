@@ -14,7 +14,7 @@ import type {
   ShortcutId,
   AppMenuPopup,
 } from '../shared/types'
-import { clearSession, getSession, openLogin, setSession, startLogin } from './auth'
+import { clearSession, getSession, openLogin, pollForAuthCompletion, setSession, startLogin } from './auth'
 import { generateResponse } from './ai'
 import { getAudioSources, startAudioCapture, stopAudioCapture } from './audio-capture'
 import { captureActiveWindow, captureRegion, captureScreenWithoutApp } from './capture'
@@ -57,7 +57,9 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
 
   ipcMain.handle(CHANNELS.authStartLogin, async () => {
     const deviceId = await credentials.getOrCreateDeviceId()
-    return startLogin(deviceId, process.platform, app.getVersion())
+    const result = await startLogin(deviceId, process.platform, app.getVersion())
+    pollForAuthCompletion(result.state, credentials)
+    return result
   })
   ipcMain.handle(CHANNELS.authOpenLogin, async (_event, url: string) => openLogin(url))
   ipcMain.handle(CHANNELS.authSetSession, async (_event, session: AuthSession) => setSession(session, credentials))

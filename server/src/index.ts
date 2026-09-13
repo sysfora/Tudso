@@ -28,7 +28,7 @@ app.use(helmet({
       baseUri: ["'self'"],
       connectSrc: ["'self'", ...(frontendDev ? ['ws:', 'wss:'] : [])],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-      formAction: ["'self'", `${config.auth.callbackScheme}:`, 'https://accounts.google.com'],
+      formAction: ["'self'", `${config.auth.callbackScheme}:`, 'https://accounts.google.com', 'https://checkout.stripe.com'],
       frameAncestors: ["'none'"],
       imgSrc: ["'self'", 'data:', 'https://cdn.simpleicons.org'],
       objectSrc: ["'none'"],
@@ -42,7 +42,11 @@ app.use(helmet({
 app.use(cors({
   credentials: true,
   origin: (origin, callback) => {
-    if (!origin || origin === config.app.url.replace(/\/$/, '')) {
+    const allowedOrigins = new Set([
+      config.app.url.replace(/\/$/, ''),
+      ...(frontendDev ? ['http://localhost:5173', 'http://127.0.0.1:5173'] : []),
+    ])
+    if (!origin || allowedOrigins.has(origin)) {
       callback(null, true)
       return
     }

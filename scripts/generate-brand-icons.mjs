@@ -24,18 +24,9 @@ async function pngBuffer(size, { flatten = false } = {}) {
 }
 
 async function macPngBuffer(size) {
-  const inner = Math.round(size * 0.82)
-  const padding = Math.floor((size - inner) / 2)
   const data = await sharp(source)
-    .resize(inner, inner, {
+    .resize(size, size, {
       fit: 'contain',
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .extend({
-      top: padding,
-      bottom: size - inner - padding,
-      left: padding,
-      right: size - inner - padding,
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .png()

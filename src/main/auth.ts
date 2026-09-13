@@ -14,6 +14,7 @@ interface AuthState {
 }
 
 let activeAuth: AuthState | null = null
+let completionPoll: AbortController | null = null
 const SERVER_URL = config.serverUrl
 const SCHEME = 'tudso'
 
@@ -38,6 +39,34 @@ export async function openLogin(url: string): Promise<void> {
   await shell.openExternal(url)
 }
 
+export function pollForAuthCompletion(state: string, credentials: CredentialStore): void {
+  completionPoll?.abort()
+  const controller = new AbortController()
+  completionPoll = controller
+  const run = async () => {
+    const deadline = Date.now() + 10 * 60 * 1000
+    while (!controller.signal.aborted && Date.now() < deadline) {
+      try {
+        const response = await fetch(`${SERVER_URL}/auth/desktop/poll?state=${encodeURIComponent(state)}`, {
+          signal: controller.signal,
+        })
+        if (response.status === 410) return
+        if (response.ok) {
+          const result = (await response.json()) as { status?: string; code?: string; state?: string }
+          if (result.status === 'ready' && result.code && result.state) {
+            await handleAuthCallback(result.code, result.state, credentials)
+            return
+          }
+        }
+      } catch {
+        if (controller.signal.aborted) return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
+  }
+  void run()
+}
+
 export async function handleAuthCallback(code: string, state: string, credentials: CredentialStore): Promise<AuthSession | null> {
   const deviceId = activeAuth?.deviceId ?? `desktop-${Date.now()}`
   const platform = activeAuth?.platform ?? process.platform
@@ -57,6 +86,10 @@ export async function handleAuthCallback(code: string, state: string, credential
   const data = (await response.json()) as { token?: string; desktopToken?: string; userId: string; email: string }
   const token = data.token ?? data.desktopToken
   if (!token || !data.userId) return null
+  if (activeAuth?.state === state) {
+    completionPoll?.abort()
+    completionPoll = null
+  }
   const session: AuthSession = { token, userId: data.userId, email: data.email, deviceId }
   await credentials.setSession(session)
   activeAuth = null

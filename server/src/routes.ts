@@ -656,6 +656,42 @@ router.get('/auth/desktop/subscribe', async (req: Request, res: Response) => {
   await sendSubscribePage(res, pending, code, state)
 })
 
+router.post('/auth/desktop/free', express.urlencoded({ extended: true }), async (req: Request, res: Response) => {
+  const parsed = z.object({ code: z.string().min(1), state: z.string().min(1) }).safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).send(sessionExpiredPage())
+    return
+  }
+  const { code, state } = parsed.data
+  const pending = pendingAuth(code, state)
+  if (!pending) {
+    res.status(400).send(sessionExpiredPage())
+    return
+  }
+  touchPending(code)
+  const entitlement = await getEntitlementForUser(pending.userId)
+  if (entitled(entitlement)) {
+    res.setHeader('Content-Type', 'text/html')
+    res.send(authCompletePage(buildCallbackUrl(code, state), {
+      title: "You're ready",
+      lede: 'Your plan is active. Returning to the Tudso app.',
+    }))
+    return
+  }
+  await syncUserBilling(pending.userId, { plan: 'free', planStatus: 'unpaid', interviewCredits: 3 })
+  clearLiveEntitlementCache(pending.userId)
+  const updated = await getUserBilling(pending.userId)
+  if (updated?.plan !== 'free') {
+    await sendSubscribePage(res, pending, code, state, 'Could not activate the free plan. Please try again.')
+    return
+  }
+  res.setHeader('Content-Type', 'text/html')
+  res.send(authCompletePage(buildCallbackUrl(code, state), {
+    title: "You're ready",
+    lede: 'Your free plan is active. Returning to the Tudso app. You can close this tab after it opens.',
+  }))
+})
+
 router.post('/auth/desktop/subscribe', express.urlencoded({ extended: true }), async (req: Request, res: Response) => {
   const parsed = z.object({
     code: z.string().min(1),
@@ -778,6 +814,30 @@ router.post('/auth/desktop/start', (req: Request, res: Response) => {
   }).parse(req.body)
   const { state, url } = generateAuthState('desktop')
   res.json({ url, state, deviceId, platform, appVersion })
+})
+
+router.get('/auth/desktop/poll', async (req: Request, res: Response) => {
+  const parsed = z.object({ state: z.string().min(1) }).safeParse(req.query)
+  if (!parsed.success) {
+    res.status(410).json({ status: 'expired' })
+    return
+  }
+  const pendingEntry = [...pendingCodeTokens.entries()].find(([, pending]) => pending.state === parsed.data.state)
+  if (!pendingEntry) {
+    if (!verifyAuthState(parsed.data.state)) {
+      res.status(410).json({ status: 'expired' })
+      return
+    }
+    res.json({ status: 'pending' })
+    return
+  }
+  const [code, pending] = pendingEntry
+  const entitlement = await getEntitlementForUser(pending.userId)
+  if (!entitled(entitlement)) {
+    res.json({ status: 'pending' })
+    return
+  }
+  res.json({ status: 'ready', code, state: parsed.data.state })
 })
 
 async function startWebSession(res: Response, auth: { userId: string; email: string }) {
