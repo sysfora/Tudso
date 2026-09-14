@@ -204,6 +204,7 @@ export function toggleMainWindow() {
 export function showMainWindow() {
   if (!win || win.isDestroyed()) return
   if (win.isMinimized()) win.restore()
+  setAlwaysOnTop(true)
   applyFloatingChrome()
   if (floatingEnabled && usesNativeOverlay()) {
     showWithoutActivating(win)
@@ -300,11 +301,21 @@ export function restoreOverlayAfterCapture() {
   restoreTaskbarPresence()
 }
 
-let capturePark: { protect: boolean } | null = null
+let capturePark: { protect: boolean; visible: boolean; minimized: boolean } | null = null
 
 export function excludeWindowFromCapture(keepExcluded: boolean) {
   if (!win || win.isDestroyed()) return false
-  capturePark = { protect: keepExcluded }
+  const wasVisible = win.isVisible()
+  const wasMinimized = win.isMinimized()
+  capturePark = { protect: keepExcluded, visible: wasVisible, minimized: wasMinimized }
+
+  if (process.platform === 'linux') {
+    if (wasVisible && !wasMinimized) {
+      win.hide()
+    }
+    return true
+  }
+
   try {
     win.setContentProtection(true)
   } catch {
@@ -321,10 +332,21 @@ export function restoreWindowAfterCapture() {
   const parked = capturePark
   capturePark = null
   if (parked) {
-    try {
-      win.setContentProtection(parked.protect)
-    } catch {
-      undefined
+    if (process.platform === 'linux') {
+      if (parked.visible) {
+        if (parked.minimized) win.minimize()
+        else {
+          if (win.isMinimized()) win.restore()
+          win.show()
+          win.focus()
+        }
+      }
+    } else {
+      try {
+        win.setContentProtection(parked.protect)
+      } catch {
+        undefined
+      }
     }
   }
   restoreOverlayAfterCapture()
@@ -357,9 +379,14 @@ export function setSkipTaskbar(skip: boolean) {
   win.setSkipTaskbar(skip)
 }
 
-export function setAlwaysOnTop(_value?: boolean) {
-  applyFloatingChrome()
-  return true
+export function setAlwaysOnTop(value = true) {
+  if (!win || win.isDestroyed()) return false
+  try {
+    win.setAlwaysOnTop(Boolean(value))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function setHideFromCapture(value: boolean) {

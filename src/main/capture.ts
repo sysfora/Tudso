@@ -13,6 +13,7 @@ function delay(ms: number) {
 
 let captureAccessRequest: Promise<void> | null = null
 let captureAccessState: 'unknown' | 'granted' | 'denied' = 'unknown'
+let screenCapturePermissionState: 'unknown' | 'granted' | 'denied' = 'unknown'
 
 function captureThumbnailSize() {
   const point = screen.getCursorScreenPoint()
@@ -57,21 +58,47 @@ export async function ensureCaptureAccess() {
   await captureAccessRequest
 }
 
+async function ensureScreenCapturePermission(): Promise<boolean> {
+  if (process.platform !== 'linux') return true
+  if (screenCapturePermissionState === 'granted') return true
+  if (screenCapturePermissionState === 'denied') return false
+
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 1, height: 1 },
+    })
+    screenCapturePermissionState = sources.length > 0 ? 'granted' : 'denied'
+    return screenCapturePermissionState === 'granted'
+  } catch {
+    screenCapturePermissionState = 'denied'
+    return false
+  }
+}
+
 async function captureScreenRaw(): Promise<string | null> {
   try {
     await ensureCaptureAccess()
+    if (process.platform === 'linux' && !(await ensureScreenCapturePermission())) {
+      restoreOverlayAfterCapture()
+      return null
+    }
     const { display, width, height } = captureThumbnailSize()
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: { width, height },
     })
-    if (sources.length > 0) captureAccessState = 'granted'
+    if (sources.length > 0) {
+      captureAccessState = 'granted'
+      screenCapturePermissionState = 'granted'
+    }
     restoreOverlayAfterCapture()
     const source =
       sources.find((item) => item.display_id && item.display_id === String(display.id)) ?? sources[0]
     if (!source) return null
     return source.thumbnail.toDataURL()
   } catch {
+    screenCapturePermissionState = 'denied'
     restoreOverlayAfterCapture()
     return null
   }
