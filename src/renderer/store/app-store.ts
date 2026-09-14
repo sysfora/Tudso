@@ -595,7 +595,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
     const fromScreen = options?.fromScreen === true
     const fromRealtime = options?.fromRealtime === true
     const audioText = options?.audioText?.trim() ?? ''
-    const audioSource = options?.audioSource === 'system' ? 'Computer Audio (Interviewer)' : 'Microphone (You)'
+    const audioSource = 'Computer Audio (Interviewer)'
     const content = (text ?? (fromRealtime ? '' : state.composer)).trim()
     if (!fromScreen && !fromRealtime && !content && state.attachments.length === 0) return
     if (fromRealtime && !isActionableTranscript(audioText)) return

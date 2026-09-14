@@ -3,7 +3,6 @@ import { config } from '@/config'
 import { getInterviewSessionToken, getToken } from '@/lib/api'
 import { desktop } from '@/lib/desktop'
 import {
-  captureMicrophone,
   captureSystemAudio,
   mergeSpokenText,
   primeAudioContext,
@@ -16,7 +15,7 @@ import { useAuthStore } from '@/store/auth-store'
 import { hasProductAccess } from '@shared/plans'
 import { cleanTranscript, isActionableTranscript } from '@shared/transcript'
 
-export type AudioMode = 'mic' | 'system'
+export type AudioMode = 'system'
 
 interface RealtimeState {
   listening: boolean
@@ -195,7 +194,7 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, ge
         set({ error: event.reason || 'Realtime connection closed', listening: false, speaking: false })
       }
 
-      mediaStream = mode === 'system' ? await startSystemStream() : await captureMicrophone()
+      mediaStream = await startSystemStream()
       void desktop.window.restoreTaskbar()
       if (intentionalStop || !get().listening || socket?.readyState !== WebSocket.OPEN) {
         stopMediaStream(mediaStream)
@@ -227,7 +226,7 @@ export const useRealtimeStore = create<RealtimeState & RealtimeActions>((set, ge
           silenceMs: 400,
           minSpeechMs: 220,
           confirmMs: 140,
-          minRms: mode === 'system' ? 0.012 : 0.014,
+          minRms: 0.012,
         })
       } catch {
         stopVoice = null

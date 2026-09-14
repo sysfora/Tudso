@@ -399,38 +399,33 @@ export function beginWindowResize(edge: WindowResizeEdge, x: number, y: number) 
 
 export function resizeWindow(x: number, y: number) {
   if (!win || win.isDestroyed() || !resizeSession) return
-  const { edge, bounds: start } = resizeSession
-  const rightEdge = start.x + start.width
-  const bottomEdge = start.y + start.height
+  const { edge, x: startX, y: startY, bounds: start } = resizeSession
+  const dx = x - startX
+  const dy = y - startY
+  const next = { ...start }
 
-  let nextX = start.x
-  let nextY = start.y
-  let nextWidth = start.width
-  let nextHeight = start.height
-
-  if (edge.includes('e')) {
-    nextWidth = Math.max(MIN_WIDTH, x - start.x)
-  }
-
+  if (edge.includes('e')) next.width = start.width + dx
   if (edge.includes('w')) {
-    nextWidth = Math.max(MIN_WIDTH, rightEdge - x)
-    nextX = rightEdge - nextWidth
+    next.x = start.x + dx
+    next.width = start.width - dx
   }
-
-  if (edge.includes('s')) {
-    nextHeight = Math.max(MIN_HEIGHT, y - start.y)
-  }
-
+  if (edge.includes('s')) next.height = start.height + dy
   if (edge.includes('n')) {
-    nextHeight = Math.max(MIN_HEIGHT, bottomEdge - y)
-    nextY = bottomEdge - nextHeight
+    next.y = start.y + dy
+    next.height = start.height - dy
+  }
+
+  if (next.width < MIN_WIDTH) {
+    if (edge.includes('w')) next.x = start.x + (start.width - MIN_WIDTH)
+    next.width = MIN_WIDTH
+  }
+  if (next.height < MIN_HEIGHT) {
+    if (edge.includes('n')) next.y = start.y + (start.height - MIN_HEIGHT)
+    next.height = MIN_HEIGHT
   }
 
   const display = screen.getDisplayMatching(start)
-  const workArea = display.workArea
-  const clamped = clampToDisplay({ x: nextX, y: nextY, width: nextWidth, height: nextHeight }, workArea)
-
-  setWindowBoundsNoActivate(win, clamped)
+  setWindowBoundsNoActivate(win, clampToDisplay(next, display.workArea))
 }
 
 export function endWindowResize() {
