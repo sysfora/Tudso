@@ -1,12 +1,8 @@
-import { ArrowUp, AudioLines, Radio, ScanSearch, Square } from 'lucide-react'
+import { ArrowUp, Radio, ScanSearch, Square } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { formatAccelerator } from '@shared/accelerator'
 import { hasProductAccess } from '@shared/plans'
 import { Button } from '@/components/ui/button'
-import { IconButton } from '@/components/ui/icon-button'
-import { desktop } from '@/lib/desktop'
 import { cn } from '@/lib/cn'
-import { LiveControl } from '@/components/LiveControl'
 import { useAppStore } from '@/store/app-store'
 import { useAuthStore } from '@/store/auth-store'
 import { useRealtimeStore } from '@/store/realtime-store'
@@ -18,7 +14,6 @@ export function Composer() {
   const askFromScreen = useAppStore((state) => state.askFromScreen)
   const generatingId = useAppStore((state) => state.generatingId)
   const stopGeneration = useAppStore((state) => state.stopGeneration)
-  const shortcuts = useAppStore((state) => state.shortcuts)
   const entitlement = useAuthStore((state) => state.entitlement)
   const realtimeListening = useRealtimeStore((state) => state.listening)
   const realtimeSpeaking = useRealtimeStore((state) => state.speaking)
@@ -62,21 +57,10 @@ export function Composer() {
         />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between px-2 pb-2">
           <div className="pointer-events-auto flex items-center">
-            <IconButton
-              label={screenAllowed ? 'Answer from screen' : 'Upgrade to answer from screen'}
-              shortcut={formatAccelerator(shortcuts.askScreen, desktop.platform)}
-              disabled={Boolean(generatingId) || realtimeListening}
-              onClick={() => void askFromScreen()}
-            >
-              <ScanSearch className="h-4 w-4" />
-            </IconButton>
-            <LiveControl
-              active={realtimeListening}
-              idleLabel={audioAllowed ? 'Live copilot' : 'Upgrade for live copilot'}
-              liveLabel="Stop live copilot"
-              idleIcon={<Radio className="h-4 w-4" />}
-              liveIcon={<AudioLines className="h-4 w-4" />}
-              shortcut={formatAccelerator(shortcuts.liveCopilotAudio, desktop.platform)}
+            <Button
+              variant={realtimeListening ? 'default' : 'outline'}
+              className="h-8 px-3 text-[12px]"
+              disabled={Boolean(generatingId) || !audioAllowed}
               onClick={() => {
                 if (!audioAllowed && !realtimeListening) {
                   useRealtimeStore.setState({
@@ -86,29 +70,45 @@ export function Composer() {
                 }
                 void toggleRealtime()
               }}
-            />
+              title={audioAllowed ? 'Live copilot' : 'Upgrade for live copilot'}
+            >
+              <Radio className="h-3.5 w-3.5" />
+              {realtimeListening ? 'Stop live copilot' : 'Live copilot'}
+            </Button>
           </div>
-          {generatingId ? (
+          <div className="pointer-events-auto flex items-center gap-2">
             <Button
-              size="icon"
               variant="outline"
-              className="pointer-events-auto h-8 w-8"
-              onClick={stopGeneration}
-              aria-label="Stop generation"
+              className="h-8 px-3 text-[12px]"
+              disabled={Boolean(generatingId) || !screenAllowed}
+              onClick={() => void askFromScreen()}
+              title={screenAllowed ? 'Answer from screen' : 'Upgrade to answer from screen'}
             >
-              <Square className="h-3 w-3" />
+              <ScanSearch className="h-3.5 w-3.5" />
+              Answer from screen
             </Button>
-          ) : (
-            <Button
-              size="icon"
-              className={cn('pointer-events-auto h-8 w-8', !canSend && 'opacity-40')}
-              disabled={!canSend}
-              onClick={() => void sendMessage()}
-              aria-label="Send message"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </Button>
-          )}
+            {generatingId ? (
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8"
+                onClick={stopGeneration}
+                aria-label="Stop generation"
+              >
+                <Square className="h-3 w-3" />
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                className={cn('h-8 w-8', !canSend && 'opacity-40')}
+                disabled={!canSend}
+                onClick={() => void sendMessage()}
+                aria-label="Send message"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
       {(realtimeListening || realtimeTranscript) ? (

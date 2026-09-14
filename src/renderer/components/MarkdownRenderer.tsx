@@ -1,6 +1,7 @@
 import { Children, isValidElement, type ReactNode } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
 import { CodeBlock, nodeText } from '@/components/CodeBlock'
 import { desktop } from '@/lib/desktop'
@@ -50,7 +51,7 @@ const components: Components = {
 export function MarkdownRenderer({ content }: { content: string }) {
   return (
     <div className="markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]} components={components}>
         {content}
       </ReactMarkdown>
     </div>

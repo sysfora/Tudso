@@ -11,6 +11,9 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+let captureAccessRequest: Promise<void> | null = null
+let captureAccessState: 'unknown' | 'granted' | 'denied' = 'unknown'
+
 function captureThumbnailSize() {
   const point = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint(point)
@@ -24,12 +27,34 @@ function captureThumbnailSize() {
 
 export async function ensureCaptureAccess() {
   if (!isMac) return
-  try {
-    const mic = systemPreferences.getMediaAccessStatus('microphone')
-    if (mic !== 'granted') await systemPreferences.askForMediaAccess('microphone')
-  } catch {
-    undefined
+  if (captureAccessState === 'granted' || captureAccessState === 'denied') return
+  if (captureAccessRequest) {
+    await captureAccessRequest
+    return
   }
+
+  captureAccessRequest = (async () => {
+    try {
+      const mic = systemPreferences.getMediaAccessStatus('microphone')
+      if (mic === 'granted') {
+        captureAccessState = 'granted'
+        return
+      }
+      if (mic === 'denied') {
+        captureAccessState = 'denied'
+        return
+      }
+      await systemPreferences.askForMediaAccess('microphone')
+      const next = systemPreferences.getMediaAccessStatus('microphone')
+      captureAccessState = next === 'granted' ? 'granted' : 'denied'
+    } catch {
+      captureAccessState = 'denied'
+    } finally {
+      captureAccessRequest = null
+    }
+  })()
+
+  await captureAccessRequest
 }
 
 async function captureScreenRaw(): Promise<string | null> {
@@ -40,6 +65,7 @@ async function captureScreenRaw(): Promise<string | null> {
       types: ['screen'],
       thumbnailSize: { width, height },
     })
+    if (sources.length > 0) captureAccessState = 'granted'
     restoreOverlayAfterCapture()
     const source =
       sources.find((item) => item.display_id && item.display_id === String(display.id)) ?? sources[0]
@@ -76,6 +102,7 @@ export async function captureActiveWindow(): Promise<string | null> {
         types: ['window'],
         thumbnailSize: { width, height },
       })
+      if (sources.length > 0) captureAccessState = 'granted'
       restoreOverlayAfterCapture()
       const source = sources[0]
       if (!source) return null

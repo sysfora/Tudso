@@ -66,6 +66,7 @@ export interface LocalProfile {
   role?: string
   industry?: string
   education?: string
+  preferredLanguage?: string
   skills: string[]
   goals: string[]
   communicationStyle?: 'concise' | 'balanced' | 'detailed'
@@ -275,6 +276,8 @@ export interface SessionContext {
   promptResume?: SessionPromptResume
   promptMemories?: string[]
   usedDefaults: boolean
+  companyName?: string
+  position?: string
 }
 
 export interface Conversation {

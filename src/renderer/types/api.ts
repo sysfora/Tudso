@@ -10,6 +10,7 @@ export interface UserProfile {
   role?: string
   industry?: string
   education?: string
+  preferredLanguage?: string
   skills: string[]
   goals: string[]
   communicationStyle?: 'concise' | 'balanced' | 'detailed'
@@ -36,6 +37,7 @@ export function toUserProfile(userId: string, profile: {
   role?: string
   industry?: string
   education?: string
+  preferredLanguage?: string
   skills?: string[]
   goals?: string[]
   communicationStyle?: UserProfile['communicationStyle']
@@ -54,6 +56,7 @@ export function toUserProfile(userId: string, profile: {
     role: profile.role,
     industry: profile.industry,
     education: profile.education,
+    preferredLanguage: profile.preferredLanguage,
     skills: profile.skills ?? [],
     goals: profile.goals ?? [],
     communicationStyle: profile.communicationStyle,
@@ -73,6 +76,7 @@ type PromptProfileSource = Pick<
   | 'role'
   | 'industry'
   | 'education'
+  | 'preferredLanguage'
   | 'skills'
   | 'goals'
   | 'communicationStyle'
@@ -91,6 +95,7 @@ export function snapshotLocalProfile(profile?: PromptProfileSource | null): Loca
     role: profile?.role,
     industry: profile?.industry,
     education: profile?.education,
+    preferredLanguage: profile?.preferredLanguage,
     skills: [...(profile?.skills ?? [])],
     goals: [...(profile?.goals ?? [])],
     communicationStyle: profile?.communicationStyle ?? DEFAULT_PROFILE_PREFERENCES.communicationStyle,
@@ -112,6 +117,7 @@ export function toPromptProfile(profile?: PromptProfileSource | null) {
     role: snapshot.role,
     industry: snapshot.industry,
     education: snapshot.education,
+    preferredLanguage: snapshot.preferredLanguage,
     skills: snapshot.skills,
     goals: snapshot.goals,
     communicationStyle: snapshot.communicationStyle,

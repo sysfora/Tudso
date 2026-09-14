@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import OpenAI from 'openai'
 import { config } from './config.js'
 import { logError } from './log.js'
@@ -24,10 +25,21 @@ START WITH THE ANSWER
 - No wrapping phrases: "here is", "the answer is", "as requested", "hope this helps".
 - Do not end with follow-ups like "let me know if you need more".
 
+MARKDOWN OUTPUT
+- Return every answer in markdown, not plain text.
+- Keep it brief by default: usually 1 short paragraph, 2-4 bullets, or 1 compact numbered list.
+- Lead with the answer itself, then add only the minimum structure needed for quick reading.
+- Use bold, italics, headings, and short callouts to guide attention, but never create long-form explanations.
+- Prefer compact inline emphasis like **Key:**, **Answer:**, **Warning:**, or **Tip:** instead of long narratives.
+- For visual emphasis, use inline HTML color spans sparingly when they help scanning, for example <span style="color:#2563eb"><strong>Key:</strong></span>, <span style="color:#b45309"><strong>Warning:</strong></span>, and <span style="color:#047857"><strong>Good:</strong></span>.
+- Use emoji sparingly for quick visual cues: ✅ success, ⚠️ caution, 💡 tip, 🧠 insight.
+- If the answer includes code, keep the code block and add one short markdown note after it only when necessary.
+
 CONCISE BY DEFAULT
 - Prefer the shortest complete answer they can use as-is.
-- One sentence or a tight list when that is enough. Add length only if the question requires it.
-- If profile preferences ask for steps, examples, or definitions, apply them inside the answer itself, not as a meta explanation of how you will answer.
+- One sentence or a tight list is ideal. Do not add background, rationale, or coaching text unless the user explicitly asks for it.
+- If profile preferences ask for steps, examples, or definitions, apply them inside the answer itself but keep each part compact and useful.
+- Never produce long multi-paragraph answers for simple questions.
 
 CODE AND WRITTEN WORK
 - If they need code, output only the code to copy or write, in a fenced block with the language tag.
@@ -78,6 +90,16 @@ export function applyTurnContext(base: string, extras?: { screen?: boolean; audi
   return parts.join('\n\n')
 }
 
+const SYSTEM_PROMPT_FILE = (() => {
+  try {
+    const filePath = new URL('../System-Prompt.md', import.meta.url)
+    const text = readFileSync(filePath, 'utf8')
+    return text.replace(/^---\n[\s\S]*?\n---\n?/, '').trim()
+  } catch {
+    return ''
+  }
+})()
+
 export function buildSystemPrompt(options: {
   profile?: UserProfile
   resume?: ParsedResume
@@ -96,6 +118,7 @@ export function buildSystemPrompt(options: {
     if (p.role) profileParts.push(`Role: ${p.role}`)
     if (p.industry) profileParts.push(`Industry: ${p.industry}`)
     if (p.education) profileParts.push(`Education: ${p.education}`)
+    if (p.preferredLanguage) profileParts.push(`Answer in ${p.preferredLanguage}`)
     if (p.skills?.length) profileParts.push(`Skills: ${p.skills.join(', ')}`)
     if (p.goals?.length) profileParts.push(`Goals: ${p.goals.join(', ')}`)
     if (p.communicationStyle) profileParts.push(`Communication style: ${p.communicationStyle}`)
@@ -151,6 +174,8 @@ export function buildSystemPrompt(options: {
   if (options.contextEntries?.length) {
     parts.push(`MEMORY\nKnown facts about the user:\n${options.contextEntries.map((e) => `- ${e}`).join('\n')}\nUse these facts only when relevant. Never mention that they are memories.`)
   }
+
+  if (SYSTEM_PROMPT_FILE) parts.push(SYSTEM_PROMPT_FILE)
 
   return parts.join('\n\n')
 }

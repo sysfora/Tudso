@@ -28,6 +28,21 @@ describe('ai system prompt', () => {
     expect(prompt).toContain('detailed')
   })
 
+  it('includes the preferred answer language when provided', () => {
+    const prompt = buildSystemPrompt({
+      profile: {
+        id: 'p1',
+        user: 'u1',
+        preferredLanguage: 'Spanish',
+        skills: [],
+        goals: [],
+        created: '2024-01-01',
+        updated: '2024-01-01',
+      } as import('./types.js').UserProfile,
+    })
+    expect(prompt).toContain('Answer in Spanish')
+  })
+
   it('includes screen context instructions when enabled', () => {
     const prompt = buildSystemPrompt({ screenContext: true })
     expect(prompt).toContain('SCREEN')
@@ -39,6 +54,18 @@ describe('ai system prompt', () => {
     const prompt = buildSystemPrompt({ contextEntries: ['I prefer TypeScript', 'I work remotely'] })
     expect(prompt).toContain('I prefer TypeScript')
     expect(prompt).toContain('I work remotely')
+  })
+
+  it('includes the repository system prompt file content', () => {
+    const prompt = buildSystemPrompt({})
+    expect(prompt).toContain('The reader has ADHD')
+    expect(prompt).toContain('Lead with the next action')
+  })
+
+  it('instructs the model to use rich markdown formatting for answers', () => {
+    const prompt = buildSystemPrompt({})
+    expect(prompt).toContain('Return every answer in markdown')
+    expect(prompt).toContain('<span style="color:#2563eb"><strong>Key:</strong></span>')
   })
 
   it('includes resume content when provided', () => {

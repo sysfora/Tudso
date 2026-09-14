@@ -75,6 +75,11 @@ export function hasProductAccess(plan?: string | null, status?: string | null, c
   return (credits ?? 0) > 0
 }
 
+export function remainingSessionsDisplay(plan?: string | null, status?: string | null, credits?: number): string {
+  if (isUnlimitedPlan(plan) && isPaidStatus(status)) return '∞'
+  return String(Math.max(0, credits ?? 0))
+}
+
 export function canHideFromCapture(plan?: string | null, status?: string | null, credits?: number): boolean {
   return hasProductAccess(plan, status, credits)
 }

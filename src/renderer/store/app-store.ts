@@ -87,6 +87,8 @@ interface AppActions {
     resumeFile?: { fileName: string; mimeType: string; data: ArrayBuffer }
     resumeImport?: ResumeImportResult
     memoryFacts?: string[]
+    companyName?: string
+    position?: string
   }) => Promise<void>
   selectConversation: (id: string) => void
   continueSession: (id?: string) => Promise<void>
@@ -195,6 +197,14 @@ function applyInterviewCredits(credits?: number) {
 function openPlans(message: string) {
   desktop.app.notify('Interview sessions', message)
   useAppStore.getState().setSettingsOpen(true, 'subscription')
+}
+
+function mergeApplicationContext(customContext: string | undefined, companyName?: string, position?: string): string | undefined {
+  const cleanCustom = customContext?.trim()
+  const applyLabel = [position?.trim(), companyName?.trim()].filter(Boolean).join(' at ')
+  const nextParts = [cleanCustom].filter((value): value is string => Boolean(value))
+  if (applyLabel) nextParts.push(`Application context: ${applyLabel}`)
+  return nextParts.length ? nextParts.join('\n\n') : undefined
 }
 
 async function consumeSessionCredit(durationMinutes?: number): Promise<boolean> {
@@ -456,19 +466,39 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       return
     }
     const conversation = createLocalConversation()
-    const context: SessionContext = {
-      profile: snapshotLocalProfile(input.profile),
-      usedDefaults: input.usedDefaults,
-    }
     const userId = useAuthStore.getState().session?.userId
     let imported = input.resumeImport ?? null
     try {
       if (input.resumeFile) {
-        context.resume = await desktop.sessions.saveResume(conversation.id, input.resumeFile, imported ?? undefined)
         imported ??= await desktop.resume.parse(input.resumeFile)
       } else if (input.usedDefaults && userId) {
+        imported ??= await desktop.resume.parseUser(userId)
+      }
+    } catch {
+      imported = null
+    }
+
+    const defaultCompany = imported?.parsed.experience.find((item) => item.company)?.company?.trim() ?? undefined
+    const defaultPosition = imported?.parsed.experience.find((item) => item.role)?.role?.trim() ?? undefined
+    const companyName = (input.companyName ?? '').trim() || defaultCompany
+    const position = (input.position ?? '').trim() || defaultPosition
+    const profile = snapshotLocalProfile(input.profile)
+
+    const context: SessionContext = {
+      profile: {
+        ...profile,
+        customContext: mergeApplicationContext(profile.customContext, companyName, position),
+      },
+      usedDefaults: input.usedDefaults,
+      companyName,
+      position,
+    }
+
+    try {
+      if (input.resumeFile) {
+        context.resume = await desktop.sessions.saveResume(conversation.id, input.resumeFile, imported ?? undefined)
+      } else if (input.usedDefaults && userId) {
         context.resume = (await desktop.sessions.copyDefaultResume(userId, conversation.id)) ?? undefined
-        imported ??= context.resume ? await desktop.resume.parseUser(userId) : null
       }
     } catch {
       desktop.app.notify('Resume', 'Could not save a resume for this session.')
@@ -497,6 +527,9 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       runningSessionId: next.id,
       sessionStartedAt: timing.startedAt,
       sessionEndsAt: timing.endsAt,
+    })
+    void import('@/store/realtime-store').then(({ useRealtimeStore }) => {
+      void useRealtimeStore.getState().start('system')
     })
   },
 

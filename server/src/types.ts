@@ -8,6 +8,7 @@ export interface UserProfile {
   role?: string
   industry?: string
   education?: string
+  preferredLanguage?: string
   skills: string[]
   goals: string[]
   communicationStyle?: 'concise' | 'balanced' | 'detailed'

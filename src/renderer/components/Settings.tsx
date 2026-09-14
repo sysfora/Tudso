@@ -17,6 +17,7 @@ import { MAX_MEMORIES, MAX_MEMORY_CHARS, resolveProfilePreferences } from '@/typ
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
+import { LanguageSelector } from '@/components/LanguageSelector'
 import { desktop } from '@/lib/desktop'
 import { pickResumeFile } from '@/lib/pick-resume'
 import { importPickedResume } from '@/lib/import-resume'
@@ -432,6 +433,7 @@ function ProfileSection() {
   const [role, setRole] = useState(profile?.role ?? '')
   const [industry, setIndustry] = useState(profile?.industry ?? '')
   const [education, setEducation] = useState(profile?.education ?? '')
+  const [preferredLanguage, setPreferredLanguage] = useState(profile?.preferredLanguage ?? 'English')
   const [skills, setSkills] = useState(profile?.skills?.join(', ') ?? '')
   const [goals, setGoals] = useState(profile?.goals?.join('\n') ?? '')
   const [communicationStyle, setCommunicationStyle] = useState(prefs.communicationStyle)
@@ -460,6 +462,7 @@ function ProfileSection() {
     role: role.trim(),
     industry: industry.trim(),
     education: education.trim(),
+    preferredLanguage: preferredLanguage.trim() || 'English',
     skills: parseCommaList(skills),
     goals: parseLines(goals),
     communicationStyle,
@@ -601,6 +604,15 @@ function ProfileSection() {
               placeholder="B.S. Computer Science"
               className="bg-field hover:bg-lift focus-visible:bg-lift"
               aria-label="Education"
+            />
+          </ProfileField>
+          <ProfileField title="Preferred answer language" description="Tudso will answer in this language by default.">
+            <LanguageSelector
+              value={preferredLanguage}
+              onChange={(next) => {
+                setPreferredLanguage(next)
+                save({ preferredLanguage: next.trim() || 'English' })
+              }}
             />
           </ProfileField>
         </div>

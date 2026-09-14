@@ -287,9 +287,29 @@ article {
   margin: 1.1em 0 0.4em;
 }
 
+.markdown strong {
+  color: var(--accent-strong);
+}
+
+.markdown em {
+  color: color-mix(in srgb, var(--accent) 75%, #ffffff 25%);
+}
+
 .markdown h1 { font-size: 1.2em; }
 .markdown h2 { font-size: 1.08em; }
 .markdown h3 { font-size: 1em; }
+
+.markdown p strong,
+.markdown li strong,
+.markdown h1 strong,
+.markdown h2 strong,
+.markdown h3 strong {
+  color: var(--accent-strong);
+}
+
+.markdown [style*="color:"] {
+  filter: saturate(1.15);
+}
 
 .markdown ul,
 .markdown ol {

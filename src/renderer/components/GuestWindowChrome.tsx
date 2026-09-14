@@ -1,4 +1,4 @@
-import { Maximize2, Minus, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { IconButton } from '@/components/ui/icon-button'
 import { desktop } from '@/lib/desktop'
 import { useAppStore } from '@/store/app-store'
@@ -22,7 +22,7 @@ export function GuestWindowChrome() {
           label={windowCollapsed ? 'Expand' : minimizeToTray ? 'Minimize to tray' : 'Minimize'}
           onClick={() => desktop.window.minimize()}
         >
-          {windowCollapsed ? <Maximize2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+          {windowCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </IconButton>
         {!runningSessionId ? (
           <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.app.quit()}>

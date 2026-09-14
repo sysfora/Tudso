@@ -47,9 +47,10 @@ export function ConversationSidebar() {
   return (
     <aside
       className={cn(
-        'flex w-[220px] shrink-0 flex-col border-r border-border bg-surface',
+        'flex w-[220px] shrink-0 flex-col border-r border-border bg-transparent',
         compact && 'w-[196px]',
       )}
+      style={{ backgroundColor: 'transparent' }}
       aria-label="Sessions"
     >
       <div className="p-2">
@@ -64,8 +65,8 @@ export function ConversationSidebar() {
           New Session
         </Button>
       </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <nav className="px-2 pb-3">
+      <ScrollArea className="min-h-0 flex-1 bg-transparent">
+        <nav className="bg-transparent px-2 pb-3">
           {grouped.length === 0 ? (
             <p className="px-2 py-6 text-center text-xs text-muted">No sessions yet</p>
           ) : (
@@ -156,7 +157,7 @@ function SessionRow({
             className={cn(
               'group relative rounded-md transition-colors duration-150',
               locked && 'opacity-40',
-              active ? 'bg-raised text-fg' : 'text-muted hover:bg-lift hover:text-fg',
+              active ? 'bg-[color:color-mix(in_srgb,var(--surface)_70%,transparent)] text-fg' : 'text-muted hover:bg-[color:color-mix(in_srgb,var(--surface)_35%,transparent)] hover:text-fg',
               locked && 'hover:bg-transparent hover:text-muted',
             )}
           >
@@ -173,7 +174,7 @@ function SessionRow({
                   value={draft}
                   maxLength={MAX_SESSION_TITLE}
                   aria-label="Session name"
-                  className="h-6 min-w-0 flex-1 rounded-sm bg-surface-2 px-1 text-[13px] text-fg outline-none"
+                  className="h-6 min-w-0 flex-1 rounded-sm bg-[color:color-mix(in_srgb,var(--surface)_70%,transparent)] px-1 text-[13px] text-fg outline-none"
                   onChange={(event) => setDraft(event.target.value)}
                   onBlur={commitRename}
                   onKeyDown={(event) => {

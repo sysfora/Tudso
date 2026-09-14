@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { LanguageSelector } from '@/components/LanguageSelector'
 import { useAuthStore } from '@/store/auth-store'
 import { desktop } from '@/lib/desktop'
 import { pickResumeFile } from '@/lib/pick-resume'
@@ -12,6 +13,7 @@ export function OnboardingFlow() {
   const [resumeName, setResumeName] = useState('')
   const [resumeUploading, setResumeUploading] = useState(false)
   const [resumeError, setResumeError] = useState('')
+  const [preferredLanguage, setPreferredLanguage] = useState('English')
 
   useEffect(() => {
     const userId = session?.userId
@@ -35,7 +37,12 @@ export function OnboardingFlow() {
         return
       }
       const saved = await desktop.profile.saveResume(userId, picked, imported)
-      applyLocalUser(saved)
+      const nextProfile = {
+        ...saved.profile,
+        preferredLanguage: preferredLanguage.trim() || 'English',
+      }
+      const updated = await desktop.profile.set(userId, { preferredLanguage: nextProfile.preferredLanguage })
+      applyLocalUser(updated)
       await completeOnboarding()
     } catch (error) {
       setResumeError(error instanceof Error ? error.message : 'Could not read your resume')
@@ -52,6 +59,14 @@ export function OnboardingFlow() {
         <p className="mt-2 text-[13px] leading-relaxed text-muted">
           Tudso will extract your background, skills, experience, goals, and answer preferences automatically. Nothing else is required.
         </p>
+
+        <div className="mt-4 text-left">
+          <label className="mb-1.5 block text-[12px] font-medium text-muted">
+            Preferred answer language
+          </label>
+          <LanguageSelector value={preferredLanguage} onChange={setPreferredLanguage} />
+        </div>
+
         <Button className="mt-5 w-full" onClick={() => void uploadResume()} disabled={resumeUploading} loading={resumeUploading}>
           {resumeName ? 'Replace resume and continue' : 'Upload resume and continue'}
         </Button>

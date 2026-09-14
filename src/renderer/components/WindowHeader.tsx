@@ -1,4 +1,4 @@
-import { Maximize2, Minus, PanelLeft, Plus, Settings, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, PanelLeft, Plus, Settings, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
 import { APP_NAME } from '@shared/defaults'
 import { IconButton } from '@/components/ui/icon-button'
@@ -43,7 +43,7 @@ export function WindowHeader() {
         <div className="flex h-full items-center gap-0.5">
           <TitleBarMenu />
           <IconButton label="Expand" shortcut={shortcutHint(shortcuts.toggleCollapsed)} onClick={() => desktop.window.minimize()}>
-            <Maximize2 className="h-4 w-4" />
+            <ChevronDown className="h-4 w-4" />
           </IconButton>
           {!runningSessionId ? (
             <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.app.quit()}>
@@ -98,7 +98,7 @@ export function WindowHeader() {
           shortcut={settings.minimizeToTray ? undefined : shortcutHint(shortcuts.toggleCollapsed)}
           onClick={() => desktop.window.minimize()}
         >
-          <Minus className="h-4 w-4" />
+          <ChevronUp className="h-4 w-4" />
         </IconButton>
         {!runningSessionId ? (
           <IconButton label="Close" className="hover:bg-danger/20 hover:text-danger" onClick={() => desktop.app.quit()}>
