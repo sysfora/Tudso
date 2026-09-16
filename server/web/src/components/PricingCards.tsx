@@ -62,7 +62,7 @@ export function PricingPlanCard({
         landingStyle ? 'h-full rounded-3xl border p-6 bg-card' : 'relative flex flex-col rounded-3xl border p-6 shadow-sm transition-shadow hover:shadow-lg sm:p-8',
         landingStyle
           ? featured ? 'border-primary/40 shadow-lg shadow-primary/10' : 'border-border'
-          : featured ? 'border-2 border-primary bg-brand-mint/30 shadow-lg shadow-primary/10' : item.id === 'free' ? 'border-transparent bg-brand-mint/35' : item.id === 'plus' ? 'border-transparent bg-brand-lavender/50' : item.id === 'pro' ? 'border-transparent bg-brand-pink/45' : 'border-border bg-card',
+          : featured ? 'border-2 border-primary bg-card shadow-lg shadow-primary/10' : 'border-border bg-card',
       )}
     >
       {cardBadge && !landingStyle ? (

@@ -147,6 +147,8 @@ export const PLAN_CATALOG: PlanCatalogItem[] = [
     mark: '**',
     description: 'Pay once. Eight 60-minute interview sessions.',
     action: 'Get Plus',
+    featured: true,
+    badge: 'Most popular',
     fallbackAmount: 11800,
     interval: 'one_time',
     sessions: 8,

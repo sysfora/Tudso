@@ -617,20 +617,16 @@ const STYLES = `
     border-radius: 24px;
     background: var(--choose-card);
     box-shadow: none;
-    transition: transform var(--motion) ease, box-shadow var(--motion) ease;
+    transition: box-shadow var(--motion) ease;
   }
   body.choose-plan .plan:hover {
-    transform: translateY(-4px);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
   }
-  body.choose-plan .plan-free { background: var(--choose-mint); }
-  body.choose-plan .plan-plus { background: var(--choose-lavender); }
-  body.choose-plan .plan-pro { background: var(--choose-pink); }
   body.choose-plan .plan-weekly { background: var(--choose-card); }
   body.choose-plan .plan-yearly { background: var(--choose-card); }
   body.choose-plan .plan-featured {
     border: 2px solid var(--choose-primary);
-    background: color-mix(in srgb, var(--choose-primary) 20%, var(--choose-card)) !important;
+    background: var(--choose-card) !important;
     box-shadow: 0 12px 28px color-mix(in srgb, var(--choose-primary) 16%, transparent);
   }
   body.choose-plan .plan-mark,

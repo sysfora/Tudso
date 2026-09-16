@@ -22,7 +22,7 @@ export function SessionSetup() {
   const [resumeError, setResumeError] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [positionTitle, setPositionTitle] = useState('')
-  const [step, setStep] = useState<SetupStep>('resume')
+  const [step, setStep] = useState<SetupStep>('details')
   const [pendingResumeFile, setPendingResumeFile] = useState<{ fileName: string; mimeType: string; data: ArrayBuffer } | null>(null)
   const [pendingResumeImport, setPendingResumeImport] = useState<any | null>(null)
   const timeLimitMinutes = sessionMinutesForPlan(entitlement?.plan)
@@ -48,13 +48,7 @@ export function SessionSetup() {
     setPendingResumeImport(imported)
     setResumeName(picked.fileName)
     setResumeError('')
-    setStep('details')
-  }
-
-  const chooseCurrentResume = async () => {
-    if (resumeUploading) return
-    setResumeError('')
-    setStep('details')
+    setStep('resume')
   }
 
   const uploadResume = async () => {
@@ -116,40 +110,7 @@ export function SessionSetup() {
       <div className="w-full max-w-[420px] text-center">
         <p className="text-[12px] font-medium text-muted">New interview session</p>
 
-        {step === 'resume' ? (
-          <>
-            <h1 className="mt-1 text-[20px] font-semibold tracking-tight">
-              {hasCurrentResume ? 'Use your current resume to start' : 'Upload your resume to start'}
-            </h1>
-            <p className="mt-2 text-[13px] leading-relaxed text-muted">
-              {hasCurrentResume
-                ? 'Your saved resume is ready to use for this session.'
-                : 'Tudso will extract everything it needs and continue directly into your session.'}
-            </p>
-
-            {hasCurrentResume ? (
-              <>
-                <Button className="mt-5 w-full" onClick={() => void chooseCurrentResume()} disabled={resumeUploading}>
-                  Continue with current resume
-                </Button>
-                <Button variant="outline" className="mt-3 w-full" onClick={() => void uploadResume()} disabled={resumeUploading}>
-                  Upload a different resume
-                </Button>
-              </>
-            ) : (
-              <Button className="mt-5 w-full" onClick={() => void uploadResume()} disabled={resumeUploading} loading={resumeUploading}>
-                Upload resume
-              </Button>
-            )}
-
-            {resumeName ? <p className="mt-2 text-[12px] text-muted">{resumeName}</p> : null}
-            {resumeError ? <p className="mt-3 text-[12px] text-danger">{resumeError}</p> : null}
-            <Button variant="outline" className="mt-3 w-full" onClick={cancelSessionSetup} disabled={resumeUploading}>
-              Cancel
-            </Button>
-            <p className="mt-4 text-[11px] text-muted">PDF, DOCX, or TXT</p>
-          </>
-        ) : (
+        {step === 'details' ? (
           <>
             <h1 className="mt-1 text-[20px] font-semibold tracking-tight">Session details</h1>
             <p className="mt-2 text-[13px] leading-relaxed text-muted">
@@ -202,13 +163,51 @@ export function SessionSetup() {
             {resumeError ? <p className="mt-3 text-[12px] text-danger">{resumeError}</p> : null}
 
             <div className="mt-5 space-y-3">
-              <Button className="w-full" onClick={() => void startFromDetails()} disabled={resumeUploading} loading={resumeUploading}>
-                Start session
+              <Button className="w-full" onClick={() => setStep('resume')} disabled={resumeUploading}>
+                Continue to resume
               </Button>
-              <Button variant="outline" className="w-full" onClick={() => setStep('resume')} disabled={resumeUploading}>
-                Back to resume
+              <Button variant="outline" className="w-full" onClick={cancelSessionSetup} disabled={resumeUploading}>
+                Cancel
               </Button>
             </div>
+          </>
+        ) : (
+          <>
+            <h1 className="mt-1 text-[20px] font-semibold tracking-tight">
+              {hasCurrentResume ? 'Use your current resume to start' : 'Upload your resume to start'}
+            </h1>
+            <p className="mt-2 text-[13px] leading-relaxed text-muted">
+              {hasCurrentResume
+                ? 'Your saved resume is ready to use for this session.'
+                : 'Tudso will extract everything it needs before starting your session.'}
+            </p>
+
+            {hasCurrentResume ? (
+              <>
+                <Button className="mt-5 w-full" onClick={() => void startFromDetails()} disabled={resumeUploading} loading={resumeUploading}>
+                  Continue with current resume
+                </Button>
+                <Button variant="outline" className="mt-3 w-full" onClick={() => void uploadResume()} disabled={resumeUploading} loading={resumeUploading}>
+                  Upload a different resume
+                </Button>
+              </>
+            ) : (
+              <Button className="mt-5 w-full" onClick={() => void uploadResume()} disabled={resumeUploading} loading={resumeUploading}>
+                Upload resume
+              </Button>
+            )}
+
+            {resumeName ? <p className="mt-2 text-[12px] text-muted">{resumeName}</p> : null}
+            {pendingResumeImport ? (
+              <Button className="mt-3 w-full" onClick={() => void startFromDetails()} disabled={resumeUploading} loading={resumeUploading}>
+                Start session
+              </Button>
+            ) : null}
+            {resumeError ? <p className="mt-3 text-[12px] text-danger">{resumeError}</p> : null}
+            <Button variant="outline" className="mt-3 w-full" onClick={() => setStep('details')} disabled={resumeUploading}>
+              Back to details
+            </Button>
+            <p className="mt-4 text-[11px] text-muted">PDF, DOCX, or TXT</p>
           </>
         )}
       </div>
