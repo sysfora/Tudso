@@ -80,10 +80,7 @@ function MacGatekeeperHelp() {
   return (
     <div className="mx-auto mt-6 max-w-xl rounded-2xl bg-background/70 p-4 text-left text-sm text-foreground/80 sm:mt-8">
       <p className="font-medium text-foreground">
-        Open the disk image and double-click Install Tudso. That copies the app, clears Gatekeeper, and launches it.
-      </p>
-      <p className="mt-2">
-        Do not open the Tudso icon in the disk image. If Install Tudso is blocked, right-click it and choose Open.
+        After copying Tudso to your App folder, type the following command in your terminal.
       </p>
       <p className="mt-2">Terminal fallback:</p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
