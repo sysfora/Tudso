@@ -82,7 +82,6 @@ function MacGatekeeperHelp() {
       <p className="font-medium text-foreground">
         After copying Tudso to your App folder, type the following command in your terminal.
       </p>
-      <p className="mt-2">Terminal fallback:</p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
         <code className="block flex-1 overflow-x-auto rounded-xl bg-background px-3 py-2 text-xs">
           {GATEKEEPER_CMD}
