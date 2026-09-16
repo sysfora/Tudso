@@ -99,7 +99,7 @@ export function createMainWindow(store: AppStore) {
   applyFloatingChrome()
   applyWindowChrome(settings.theme, settings.transparency)
   applyNativeRoundedCorners(win)
-  setHideFromCapture(settings.hideFromCapture)
+  setHideFromCapture(true)
 
   const session = win.webContents.session
   const allowedPermissions = new Set(['media', 'display-capture', 'clipboard-sanitized-write', 'fullscreen'])
@@ -303,11 +303,11 @@ export function restoreOverlayAfterCapture() {
 
 let capturePark: { protect: boolean; visible: boolean; minimized: boolean } | null = null
 
-export function excludeWindowFromCapture(keepExcluded: boolean) {
+export function excludeWindowFromCapture(_keepExcluded: boolean) {
   if (!win || win.isDestroyed()) return false
   const wasVisible = win.isVisible()
   const wasMinimized = win.isMinimized()
-  capturePark = { protect: keepExcluded, visible: wasVisible, minimized: wasMinimized }
+  capturePark = { protect: true, visible: wasVisible, minimized: wasMinimized }
 
   if (process.platform === 'linux') {
     if (wasVisible && !wasMinimized) {
@@ -343,7 +343,7 @@ export function restoreWindowAfterCapture() {
       }
     } else {
       try {
-        win.setContentProtection(parked.protect)
+        win.setContentProtection(true)
       } catch {
         undefined
       }
@@ -389,14 +389,14 @@ export function setAlwaysOnTop(value = true) {
   }
 }
 
-export function setHideFromCapture(value: boolean) {
+export function setHideFromCapture(_value: boolean) {
   if (!win || win.isDestroyed()) return false
   try {
-    win.setContentProtection(value)
+    win.setContentProtection(true)
   } catch {
     return false
   }
-  return value
+  return true
 }
 
 export function setWindowMode(mode: WindowMode) {

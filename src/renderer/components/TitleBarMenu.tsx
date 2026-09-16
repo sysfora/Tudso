@@ -1,6 +1,5 @@
 import { MoreHorizontal } from 'lucide-react'
 import type { MouseEvent } from 'react'
-import { canHideFromCapture } from '@shared/plans'
 import { IconButton } from '@/components/ui/icon-button'
 import { TitleBarMenuFallback } from '@/components/TitleBarMenuFallback'
 import { desktop, isElectron } from '@/lib/desktop'
@@ -13,8 +12,6 @@ export function TitleBarMenu() {
   const windowWidth = useAppStore((state) => state.windowWidth)
   const mode = windowModeFromWidth(windowWidth)
   const email = useAuthStore((state) => state.session?.email)
-  const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
 
   if (!isElectron) return <TitleBarMenuFallback />
 
@@ -24,7 +21,6 @@ export function TitleBarMenu() {
       x: Math.round(rect.left),
       y: Math.round(rect.bottom + 4),
       email,
-      hideAllowed,
       sessionLive: Boolean(runningSessionId),
       hasConversation: Boolean(activeId),
       windowMode: mode,

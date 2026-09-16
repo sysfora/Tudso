@@ -5,7 +5,6 @@ import {
   FileCode,
   Keyboard,
   LogOut,
-  MonitorOff,
   MoreHorizontal,
   Play,
   Square,
@@ -13,11 +12,9 @@ import {
 } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
 import { SHORTCUT_LABELS } from '@shared/defaults'
-import { canHideFromCapture } from '@shared/plans'
 import type { ShortcutId, WindowMode } from '@shared/types'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -40,7 +37,6 @@ const SIZES: { id: WindowMode; label: string; name: string; shortcut: ShortcutId
 ]
 
 export function TitleBarMenuFallback() {
-  const settings = useAppStore((state) => state.settings)
   const shortcuts = useAppStore((state) => state.shortcuts)
   const runningSessionId = useAppStore((state) => state.runningSessionId)
   const activeId = useAppStore((state) => state.activeId)
@@ -49,8 +45,6 @@ export function TitleBarMenuFallback() {
   const windowWidth = useAppStore((state) => state.windowWidth)
   const mode = windowModeFromWidth(windowWidth)
   const email = useAuthStore((state) => state.session?.email)
-  const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
   const hint = (value: string) => formatAccelerator(value, desktop.platform)
 
   return (
@@ -80,25 +74,6 @@ export function TitleBarMenuFallback() {
           </>
         ) : null}
 
-        {hideAllowed ? (
-          <>
-            <DropdownMenuLabel>Interview</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              className="justify-between gap-3"
-              checked={settings.hideFromCapture}
-              onCheckedChange={(checked) => {
-                void useAppStore.getState().setSettings({ hideFromCapture: Boolean(checked) })
-              }}
-            >
-              <span className="flex items-center gap-2">
-                <MonitorOff className="h-3.5 w-3.5 text-muted" />
-                Hide from share
-              </span>
-              <span className="text-[11px] text-muted">{hint(shortcuts.toggleHideFromCapture)}</span>
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
         <DropdownMenuLabel>Session</DropdownMenuLabel>
         {runningSessionId ? (
           <DropdownMenuItem

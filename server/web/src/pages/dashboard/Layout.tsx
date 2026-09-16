@@ -106,10 +106,10 @@ export default function DashboardLayout() {
               </ul>
             </div>
           ))}
-          <ThemeSwitch className="mt-1" />
         </nav>
 
         <div className="border-t border-border p-2">
+          <ThemeSwitch className="mb-2 w-full" />
           <div className="flex items-center gap-2 px-1 py-0.5">
             <Avatar name={session.name} email={session.email} src={session.avatarUrl} />
             <div className="min-w-0">

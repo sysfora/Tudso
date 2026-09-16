@@ -15,7 +15,6 @@ export const SHORTCUT_COMMANDS: Partial<Record<ShortcutId, AppCommand>> = {
   focusComposer: 'focus-composer',
   openSettings: 'open-settings',
   togglePrivacy: 'toggle-privacy',
-  toggleHideFromCapture: 'toggle-hide-from-capture',
   openCommandPalette: 'open-command-palette',
   toggleModel: 'toggle-model',
   windowCompact: 'window-compact',

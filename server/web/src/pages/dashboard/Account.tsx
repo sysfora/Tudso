@@ -400,7 +400,7 @@ export default function Account() {
 
       <section>
         <h2 className="mb-3 text-2xl tracking-tight">Delete account</h2>
-        <div className="dashboard-surface dashboard-tint-pink">
+        <div className="dashboard-surface dashboard-danger">
           <div className="flex items-start gap-2.5">
             <Trash2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
             <p className="text-[12px] leading-relaxed text-muted-foreground">

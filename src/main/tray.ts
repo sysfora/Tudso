@@ -1,7 +1,6 @@
 import { Menu, Tray } from 'electron'
 import { APP_NAME } from '../shared/defaults'
 import { CHANNELS } from '../shared/channels'
-import type { Settings } from '../shared/types'
 import { loadTrayIcon } from './icon'
 import { sendToRenderer, showMainWindow, toggleMainWindow } from './windows'
 
@@ -15,9 +14,6 @@ export function destroyTray() {
 }
 
 export function createTray(
-  getSettings: () => Settings,
-  getHideFromCaptureAllowed: () => boolean,
-  onHideFromCapture: (value: boolean) => void,
   onQuit: () => void,
 ) {
   if (tray) return { refresh: () => refreshMenu?.() }
@@ -29,8 +25,6 @@ export function createTray(
   tray.on('double-click', () => showMainWindow())
 
   refreshMenu = () => {
-    const settings = getSettings()
-    const hideAllowed = getHideFromCaptureAllowed()
     tray?.setContextMenu(
       Menu.buildFromTemplate([
         { label: `Show ${APP_NAME}`, click: () => showMainWindow() },
@@ -63,14 +57,6 @@ export function createTray(
             sendToRenderer(CHANNELS.appCommand, 'open-subscription')
           },
         },
-        ...(hideAllowed
-          ? [{
-              label: 'Hide from screen share',
-              type: 'checkbox' as const,
-              checked: settings.hideFromCapture,
-              click: (item: Electron.MenuItem) => onHideFromCapture(item.checked),
-            }]
-          : []),
         { type: 'separator' },
         { label: 'Quit', click: onQuit },
       ]),

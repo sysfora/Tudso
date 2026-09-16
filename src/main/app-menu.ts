@@ -61,26 +61,12 @@ export function installApplicationMenu() {
 export function popupAppMenu(win: BrowserWindow, store: AppStore, opts: AppMenuPopup) {
   if (win.isDestroyed()) return
   const shortcuts = store.getShortcuts()
-  const settings = store.getSettings()
   const accel = (id: ShortcutId) => accelerator(shortcuts, id)
 
   const template: MenuItemConstructorOptions[] = []
 
   if (opts.email) {
     template.push({ label: opts.email, click: () => run('open-account') }, { type: 'separator' })
-  }
-
-  if (opts.hideAllowed) {
-    template.push(
-      {
-        label: 'Hide from share',
-        type: 'checkbox',
-        checked: settings.hideFromCapture,
-        accelerator: accel('toggleHideFromCapture'),
-        click: () => run('toggle-hide-from-capture'),
-      },
-      { type: 'separator' },
-    )
   }
 
   template.push(

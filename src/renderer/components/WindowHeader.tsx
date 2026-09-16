@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronUp, PanelLeft, Plus, Settings, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
+import { APP_NAME } from '@shared/defaults'
 import { IconButton } from '@/components/ui/icon-button'
+import { Logo } from '@/components/Logo'
 import { SessionNav } from '@/components/SessionNav'
 import { TitleBarMenu } from '@/components/TitleBarMenu'
 import { desktop } from '@/lib/desktop'
@@ -24,6 +26,10 @@ export function WindowHeader() {
     return (
       <header className="z-20 flex h-full min-h-0 flex-1 items-center gap-2 bg-transparent px-2.5">
         <div className="drag-region flex h-full min-w-0 flex-1 items-center gap-2">
+          <div className="no-drag flex shrink-0 items-center gap-2 text-[12px] font-semibold tracking-tight text-fg/90">
+            <Logo className="h-4 w-4 text-accent" />
+            <span>{APP_NAME}</span>
+          </div>
           <div className="flex h-full min-w-0 flex-1 items-center justify-center px-1">
             <SessionNav />
           </div>
@@ -57,6 +63,10 @@ export function WindowHeader() {
       ) : null}
 
       <div className="drag-region flex min-h-0 min-w-0 flex-1 items-center gap-2">
+        <div className="no-drag flex shrink-0 items-center gap-2 text-[12px] font-semibold tracking-tight text-fg/90">
+          <Logo className="h-4 w-4 text-accent" />
+          <span>{APP_NAME}</span>
+        </div>
         <div className="flex min-w-0 flex-1 justify-center px-2">
           <SessionNav />
         </div>

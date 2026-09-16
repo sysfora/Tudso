@@ -44,7 +44,6 @@ const api: ElectronAPI = {
     restoreTaskbar: () => ipcRenderer.invoke(CHANNELS.windowRestoreTaskbar),
     setSignedInReady: (ready: boolean) => ipcRenderer.invoke(CHANNELS.windowSetSignedInReady, ready),
     popupAppMenu: (opts) => ipcRenderer.invoke(CHANNELS.windowPopupAppMenu, opts),
-    setHideFromCaptureAllowed: (allowed: boolean) => ipcRenderer.invoke(CHANNELS.planVisibility, allowed),
     onCollapsed: (callback) => subscribe(CHANNELS.windowCollapsed, callback),
     onOverlayKey: (callback) => subscribe(CHANNELS.overlayKey, callback),
     onOverlayPointer: (callback) => subscribe(CHANNELS.overlayPointer, callback),

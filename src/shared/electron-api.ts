@@ -51,7 +51,6 @@ export interface ElectronAPI {
     restoreTaskbar: () => Promise<void>
     setSignedInReady: (ready: boolean) => Promise<void>
     popupAppMenu: (opts: AppMenuPopup) => Promise<void>
-    setHideFromCaptureAllowed: (allowed: boolean) => Promise<void>
     onCollapsed: (callback: (collapsed: boolean) => void) => () => void
     onOverlayKey: (callback: (event: OverlayKeyEvent) => void) => () => void
     onOverlayPointer: (callback: (event: OverlayPointerEvent) => void) => () => void

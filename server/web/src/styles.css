@@ -280,15 +280,22 @@ html[data-theme='dark'] {
   border-radius: 1.25rem;
 }
 
-.dashboard-tint-mint { background: var(--dash-mint); }
-.dashboard-tint-lavender { background: var(--dash-lavender); }
-.dashboard-tint-yellow { background: var(--dash-yellow); }
-.dashboard-tint-pink { background: var(--dash-pink); }
+.dashboard-tint-mint,
+.dashboard-tint-lavender,
+.dashboard-tint-yellow,
+.dashboard-tint-pink {
+  background: var(--app-surface);
+}
 
 .dashboard-page .dashboard-surface {
   border: 1px solid color-mix(in srgb, var(--app-fg) 8%, transparent);
   border-radius: 1.5rem;
   padding: 1.5rem;
+}
+
+.dashboard-danger {
+  background: color-mix(in srgb, var(--app-danger) 12%, var(--app-surface));
+  border-color: color-mix(in srgb, var(--app-danger) 28%, transparent);
 }
 
 @keyframes dashboard-card-in {

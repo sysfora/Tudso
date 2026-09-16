@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Search, X } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
 import { FONT_SIZE_MAX, FONT_SIZE_MIN, DEFAULT_SETTINGS } from '@shared/defaults'
-import { canHideFromCapture } from '@shared/plans'
 import type { Settings, SettingsSection } from '@shared/types'
 import { ShortcutManager } from '@/components/ShortcutManager'
 import { Subscription } from '@/components/Subscription'
@@ -260,8 +259,6 @@ function GeneralSection() {
   const updateAvailable = useAppStore((state) => state.updateAvailable)
   const latestVersion = useAppStore((state) => state.latestVersion)
   const updateDownloadUrl = useAppStore((state) => state.updateDownloadUrl)
-  const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
   const [resetting, setResetting] = useState(false)
 
   return (
@@ -290,11 +287,6 @@ function GeneralSection() {
       <Row title="Remember window size">
         <Switch checked={settings.rememberSize} onCheckedChange={(value) => void setSettings({ rememberSize: value })} />
       </Row>
-      {hideAllowed ? (
-        <Row title="Hide from screen share" description="Stay invisible in screenshots, recordings, and shared screens.">
-          <Switch checked={settings.hideFromCapture} onCheckedChange={(value) => void setSettings({ hideFromCapture: value })} />
-        </Row>
-      ) : null}
       <Row title="Show in taskbar" description="Use a normal focusable window with a taskbar button. Turn off to stay a floating overlay.">
         <Switch checked={settings.showInTaskbar} onCheckedChange={(value) => void setSettings({ showInTaskbar: value })} />
       </Row>
@@ -1127,8 +1119,6 @@ function PrivacySection() {
   const setSettings = useAppStore((state) => state.setSettings)
   const clearConversations = useAppStore((state) => state.clearConversations)
   const deleteLocalData = useAppStore((state) => state.deleteLocalData)
-  const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
   const [status, setStatus] = useState<string | null>(null)
   const hint = (value: string) => formatAccelerator(value, desktop.platform)
 
@@ -1137,15 +1127,6 @@ function PrivacySection() {
       <section className="[&:not(:has([data-setting]))]:hidden">
         <h3 className="mb-2 text-[12px] font-medium tracking-wide text-muted uppercase">On screen</h3>
         <div className="divide-y divide-border overflow-hidden rounded-md bg-surface-2">
-          {hideAllowed ? (
-            <PrivacyToggle
-              title="Hide from screen share"
-              description="Stay invisible in screenshots, recordings, and shared screens."
-              hint={hint(shortcuts.toggleHideFromCapture)}
-              checked={settings.hideFromCapture}
-              onCheckedChange={(value) => void setSettings({ hideFromCapture: value })}
-            />
-          ) : null}
           <PrivacyToggle
             title="Privacy mode"
             description="Hide message text if someone can see your display."

@@ -1,9 +1,7 @@
 import { FONT_SIZE_MAX, FONT_SIZE_MIN, chatModelLabel, toggleChatModel } from '@shared/defaults'
-import { canHideFromCapture } from '@shared/plans'
 import type { AppCommand } from '@shared/types'
 import { desktop } from '@/lib/desktop'
 import { useAppStore } from '@/store/app-store'
-import { useAuthStore } from '@/store/auth-store'
 import { useRealtimeStore } from '@/store/realtime-store'
 
 export function focusComposer() {
@@ -139,16 +137,6 @@ export function runAppCommand(command: AppCommand) {
     case 'toggle-privacy':
       void store.setSettings({ privacyMode: !store.settings.privacyMode })
       return
-    case 'toggle-hide-from-capture': {
-      const entitlement = useAuthStore.getState().entitlement
-      if (!canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)) {
-        store.setSettingsOpen(true, 'subscription')
-        desktop.app.notify('Subscription', 'Hide from screen share needs an active plan.')
-        return
-      }
-      void store.setSettings({ hideFromCapture: !store.settings.hideFromCapture })
-      return
-    }
     case 'toggle-model': {
       const next = toggleChatModel(store.settings.model)
       void store.setSettings({ model: next })

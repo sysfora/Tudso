@@ -344,7 +344,7 @@ function SpecializedGrid() {
           <p className="text-xs uppercase tracking-widest text-primary font-semibold mb-3">
              FEATURES
           </p>
-          <h2 className="font-display text-4xl sm:text-5xl md:text-6xl text-secondary tracking-tight">
+          <h2 className="font-display text-4xl sm:text-5xl md:text-6xl text-foreground tracking-tight">
              Built to be&nbsp;<em className="italic">100% undetectable</em>
           </h2>
         </div>
@@ -609,7 +609,7 @@ function Pricing() {
           <h2 className="font-display text-4xl sm:text-5xl md:text-6xl text-secondary tracking-tight">
             Simple, <em className="italic">honest plans</em>
           </h2>
-          <div className="mt-7 inline-flex items-center rounded-full border border-secondary/15 bg-card p-1">
+          <div className="mt-7 inline-flex items-center rounded-full border border-border bg-card p-1">
             {[
               { label: "Subscriptions", value: "subscriptions" as const },
               { label: "One-Time", value: "onetime" as const },
@@ -620,8 +620,8 @@ function Pricing() {
                 aria-pressed={tab === t.value}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                   tab === t.value
-                    ? "bg-secondary text-white"
-                    : "text-muted-foreground hover:text-secondary"
+                    ? "bg-secondary text-secondary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {t.label}
@@ -631,7 +631,7 @@ function Pricing() {
         </div>
 
         <div
-          className={`grid gap-4 sm:gap-5 items-start ${
+            className={`grid gap-4 sm:gap-5 items-stretch ${
             tab === "subscriptions"
               ? "sm:grid-cols-2 lg:grid-cols-4"
               : "sm:grid-cols-2 lg:grid-cols-3"
@@ -640,27 +640,27 @@ function Pricing() {
           {plans.map((p) => (
             <div
               key={p.name}
-              className={`rounded-3xl border p-6 bg-card ${
+              className={`h-full rounded-3xl border p-6 bg-card ${
                 p.highlight
                   ? "border-primary/40 shadow-lg shadow-primary/10"
-                  : "border-secondary/10"
+                  : "border-border"
               }`}
             >
-              <h3 className="font-display text-2xl text-secondary">{p.name}</h3>
-              <p className="font-display text-2xl sm:text-3xl text-secondary mt-3">{p.price}</p>
+              <h3 className="font-display text-2xl text-foreground">{p.name}</h3>
+              <p className="font-display text-2xl sm:text-3xl text-foreground mt-3">{p.price}</p>
               <a
                 href="#top"
                 className={`mt-5 inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-medium transition ${
                   p.highlight
                     ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                    : "bg-secondary text-white hover:bg-secondary/80"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
                 }`}
               >
                 {p.cta}
               </a>
               <ul className="mt-6 space-y-2.5">
                 {p.features.map((f) => (
-                  <li key={f} className="flex gap-2 text-sm text-secondary/90">
+                  <li key={f} className="flex gap-2 text-sm text-foreground/90">
                     <Check className="w-4 h-4 shrink-0 text-primary mt-0.5" />
                     {f}
                   </li>

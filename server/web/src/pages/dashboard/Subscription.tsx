@@ -3,19 +3,19 @@ import { useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
   Ban,
-  Check,
   CheckCircle2,
   CreditCard,
   Wallet,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PricingPlanCard, PricingPlanTabs } from '@/components/PricingCards'
 import {
   api,
   type BillingOverview,
   type Entitlement,
   type Subscription,
 } from '@/lib/api'
-import { ONE_TIME_PLAN_CATALOG, SUBSCRIPTION_PLAN_CATALOG, isCheckoutPlan, isOneTimePlan, isPaidPlan, isRecurringPlan, planDisplayName, planIntervalLabel, splitPrice, type PaidPlan, type PlanCatalogItem } from '@/lib/plans'
+import { ONE_TIME_PLAN_CATALOG, SUBSCRIPTION_PLAN_CATALOG, isCheckoutPlan, isOneTimePlan, isPaidPlan, isRecurringPlan, planDisplayName, planIntervalLabel, type PaidPlan } from '@/lib/plans'
 import { cn } from '@/lib/utils'
 import { SkeletonBar } from '@/components/app/Loader'
 
@@ -56,7 +56,6 @@ export default function SubscriptionPage() {
   const catalog = activeTab === 'one_time' ? ONE_TIME_PLAN_CATALOG : SUBSCRIPTION_PLAN_CATALOG
   const currentItem = [...ONE_TIME_PLAN_CATALOG, ...SUBSCRIPTION_PLAN_CATALOG].find((item) => item.id === plan)
   const amount = (plan && isCheckoutPlan(plan) ? prices[plan]?.amount : null) ?? currentItem?.fallbackAmount ?? 0
-  const { dollars, cents } = splitPrice(amount)
   const period = billing?.currentPeriodEnd ? formatDate(billing.currentPeriodEnd) : (entitlement?.expiresAt ? formatDate(entitlement.expiresAt) : '')
   const canceling = Boolean(paid && billing?.cancelAtPeriodEnd)
   const hasCustomer = Boolean(billing?.stripeCustomerId)
@@ -160,8 +159,8 @@ export default function SubscriptionPage() {
           {paid && amount ? (
             <p className="flex items-start leading-none">
               <span className="text-lg font-medium">$</span>
-              <span className="font-display text-4xl tracking-tight tabular-nums">{dollars}</span>
-              <span className="mt-1 text-[12px] text-muted-foreground">.{cents}{currentItem ? <span className="ml-1 font-normal">/{planIntervalLabel(currentItem.interval)}</span> : null}</span>
+              <span className="font-display text-4xl tracking-tight tabular-nums">{Math.floor(amount / 100)}</span>
+              <span className="mt-1 text-[12px] text-muted-foreground">.{String(amount % 100).padStart(2, '0')}{currentItem ? <span className="ml-1 font-normal">/{planIntervalLabel(currentItem.interval)}</span> : null}</span>
             </p>
           ) : null}
         </div>
@@ -209,18 +208,20 @@ export default function SubscriptionPage() {
       ) : null}
 
       <section id="plans">
-        <PlanTabs value={activeTab} onChange={setTab} />
-        <div className={cn('mt-4 grid min-w-0 grid-cols-1 gap-4 md:items-stretch', activeTab === 'one_time' ? 'md:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4')}>
+        <PricingPlanTabs landingStyle value={activeTab === 'one_time' ? 'one_time' : 'subscription'} onChange={setTab} />
+        <div className={cn('mt-4 grid min-w-0 items-stretch gap-4 sm:gap-5', activeTab === 'one_time' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4')}>
           {catalog.map((item) => (
-            <DashPlanCard
+            <PricingPlanCard
               key={`${activeTab}-${item.id}`}
-              data-plan-card
               item={item}
-              current={item.id === 'free' ? (plan ?? 'free') === 'free' : paid && plan === item.id}
               amount={item.id === 'free' ? 0 : (isCheckoutPlan(item.id) ? prices[item.id]?.amount : null) ?? item.fallbackAmount}
-              busy={busy}
-              onChoose={item.id === 'free' ? undefined : choosePlan}
-              onChooseFree={item.id === 'free' && plan === 'none' ? chooseFreePlan : undefined}
+              badge={item.id === plan ? 'Current' : null}
+              actionLabel={item.id === plan ? 'Current plan' : item.action}
+              buttonVariant={item.featured ? 'default' : 'outline'}
+              landingStyle
+              disabled={Boolean(busy) || item.id === plan}
+              loading={busy === `plan-${item.id}`}
+              onAction={() => item.id === 'free' ? chooseFreePlan() : choosePlan(item.id)}
             />
           ))}
         </div>
@@ -228,126 +229,6 @@ export default function SubscriptionPage() {
 
       {error ? <p className="text-[12px] text-danger">{error}</p> : null}
       {!error && status ? <p className="text-[12px] text-muted-foreground">{status}</p> : null}
-    </div>
-  )
-}
-
-function PlanTabs({
-  value,
-  onChange,
-}: {
-  value: PlanTab
-  onChange: (value: PlanTab) => void
-}) {
-  return (
-    <div role="tablist" aria-label="Plan type" className="mx-auto flex w-fit rounded-full border border-border bg-card p-1">
-      <TabButton selected={value === 'subscription'} onClick={() => onChange('subscription')}>Subscriptions</TabButton>
-      <TabButton selected={value === 'one_time'} onClick={() => onChange('one_time')}>One-Time</TabButton>
-    </div>
-  )
-}
-
-function TabButton({
-  selected,
-  onClick,
-  children,
-}: {
-  selected: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={selected}
-      className={cn(
-        'h-9 rounded-full px-4 text-[12px] font-medium transition-all duration-300 ease-out',
-        selected ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary/10 hover:text-fg',
-      )}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  )
-}
-
-function DashPlanCard({
-  item,
-  current,
-  amount,
-  busy,
-  onChoose,
-  onChooseFree,
-}: {
-  item: PlanCatalogItem
-  current: boolean
-  amount: number
-  busy: string | null
-  onChoose?: (id: PaidPlan) => void
-  onChooseFree?: () => void
-}) {
-  const price = splitPrice(amount)
-  const checkoutId = item.id !== 'free' && isCheckoutPlan(item.id) ? item.id : null
-  return (
-    <div
-      className={cn(
-        'min-w-0 max-w-full flex flex-col rounded-3xl border p-6 transition-all duration-300 ease-out hover:-translate-y-1',
-        current || item.featured ? 'border-accent bg-accent/20 shadow-lg shadow-accent/10 ring-1 ring-accent' : item.id === 'free' ? 'dashboard-tint-mint border-transparent' : item.id === 'plus' ? 'dashboard-tint-lavender border-transparent' : item.id === 'pro' ? 'dashboard-tint-pink border-transparent' : 'bg-card border-border hover:shadow-lg hover:shadow-secondary/10',
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-display text-2xl">{item.name}</p>
-        {current ? (
-          <span className="rounded-md bg-raised px-1.5 py-0.5 text-[10px] font-medium text-ok">Current</span>
-        ) : item.badge ? (
-          <span className="rounded-md bg-accent-fill px-1.5 py-0.5 text-[10px] font-medium text-accent-fill-fg">
-            {item.badge}
-          </span>
-        ) : null}
-      </div>
-      {amount <= 0 ? (
-        <p className="mt-4 font-display text-3xl tracking-tight">Free</p>
-      ) : (
-        <p className="mt-3 flex items-baseline leading-none">
-          <span className="text-[15px] font-medium">$</span>
-          <span className="font-display text-4xl tracking-tight tabular-nums">{price.dollars}</span>
-          <span className="text-[13px] text-muted-foreground">.{price.cents}</span>
-          <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">/{planIntervalLabel(item.interval)}</span>
-        </p>
-      )}
-      <p className="mt-2 min-w-0 break-words text-[12px] leading-relaxed text-muted-foreground">{item.description}</p>
-      <ul className="mt-3 mb-4 flex-1 space-y-1.5">
-        {item.features.map((feature) => (
-          <li key={feature.text} className="flex items-start gap-2 text-[12px] leading-relaxed">
-            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-            <span className="min-w-0 break-words">{feature.text}</span>
-          </li>
-        ))}
-      </ul>
-      {item.id === 'free' && onChooseFree ? (
-        <Button
-          className="w-full"
-          size="compact"
-          variant="fill"
-          disabled={Boolean(busy)}
-          loading={busy === 'plan-free'}
-          onClick={onChooseFree}
-        >
-          Get started free
-        </Button>
-      ) : checkoutId && onChoose ? (
-        <Button
-          className="w-full"
-          size="compact"
-          variant={current ? 'soft' : item.featured ? 'fill' : 'soft'}
-          disabled={Boolean(busy) || current}
-          loading={busy === `plan-${item.id}`}
-          onClick={() => onChoose(checkoutId)}
-        >
-          {current ? 'Current plan' : item.action}
-        </Button>
-      ) : null}
     </div>
   )
 }

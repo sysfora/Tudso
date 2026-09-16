@@ -19,7 +19,7 @@ export function GuestWindowChrome() {
       }
     >
       <div className="drag-region flex h-full min-w-0 flex-1 items-center gap-2 px-1">
-        <div className="flex items-center gap-2 text-[12px] font-semibold tracking-tight text-fg/90">
+        <div className="no-drag flex items-center gap-2 text-[12px] font-semibold tracking-tight text-fg/90">
           <Logo className="h-4 w-4 text-accent" />
           <span>{APP_NAME}</span>
         </div>

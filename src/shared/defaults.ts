@@ -7,8 +7,8 @@ export const APP_ID = 'com.sysfora.tudso'
 export const DEFAULT_BOUNDS: WindowBounds = {
   x: 0,
   y: 0,
-  width: 520,
-  height: 680,
+  width: 600,
+  height: 760,
 }
 
 export const FONT_SIZE_MIN = 12
@@ -16,7 +16,7 @@ export const FONT_SIZE_MAX = 18
 
 export const WINDOW_SIZES = {
   compact: { width: 420, height: 560 },
-  normal: { width: 520, height: 680 },
+  normal: { width: 600, height: 760 },
   expanded: { width: 1100, height: 760 },
 } as const
 
@@ -70,7 +70,6 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = {
   focusComposer: 'Control+Alt+K',
   openSettings: 'Control+Alt+,',
   togglePrivacy: 'Control+Alt+P',
-  toggleHideFromCapture: 'Control+Alt+H',
   openCommandPalette: 'Control+Alt+/',
   toggleModel: 'Control+Alt+I',
   windowCompact: 'Control+Alt+Shift+1',
@@ -112,7 +111,6 @@ export const SHORTCUT_LABELS: Record<keyof ShortcutMap, string> = {
   focusComposer: 'Focus prompt',
   openSettings: 'Open settings',
   togglePrivacy: 'Privacy mode',
-  toggleHideFromCapture: 'Hide from screen share',
   openCommandPalette: 'Command palette',
   toggleModel: 'Switch model',
   windowCompact: 'Compact window',
@@ -154,7 +152,6 @@ export const SHORTCUT_DESCRIPTIONS: Record<keyof ShortcutMap, string> = {
   focusComposer: 'Put the cursor in the prompt box.',
   openSettings: 'Open settings.',
   togglePrivacy: 'Hide message text on screen.',
-  toggleHideFromCapture: 'Show or hide Tudso in screenshots and screen shares.',
   openCommandPalette: 'Search commands.',
   toggleModel: 'Switch between Fast (GPT-4.1 nano) and Intelligent (GPT-4.1).',
   windowCompact: 'Resize to the compact window size.',
@@ -240,7 +237,7 @@ export const SHORTCUT_GROUPS: { title: string; ids: (keyof ShortcutMap)[] }[] = 
   },
   {
     title: 'App',
-    ids: ['openSettings', 'openCommandPalette', 'togglePrivacy', 'toggleHideFromCapture'],
+    ids: ['openSettings', 'openCommandPalette', 'togglePrivacy'],
   },
 ]
 

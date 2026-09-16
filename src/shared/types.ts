@@ -25,7 +25,6 @@ export interface AppMenuPopup {
   x: number
   y: number
   email?: string
-  hideAllowed: boolean
   sessionLive: boolean
   hasConversation: boolean
   windowMode: WindowMode
@@ -220,7 +219,6 @@ export interface ShortcutMap {
   focusComposer: string
   openSettings: string
   togglePrivacy: string
-  toggleHideFromCapture: string
   openCommandPalette: string
   toggleModel: string
   windowCompact: string
@@ -326,7 +324,6 @@ export type AppCommand =
   | 'open-shortcuts'
   | 'continue-session'
   | 'toggle-privacy'
-  | 'toggle-hide-from-capture'
   | 'toggle-collapsed'
   | 'open-command-palette'
   | 'toggle-model'

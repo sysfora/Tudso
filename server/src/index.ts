@@ -30,7 +30,7 @@ app.use(helmet({
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       formAction: ["'self'", `${config.auth.callbackScheme}:`, 'https://accounts.google.com', 'https://checkout.stripe.com'],
       frameAncestors: ["'none'"],
-      imgSrc: ["'self'", 'data:', 'https://cdn.simpleicons.org'],
+      imgSrc: ["'self'", 'data:', 'https://cdn.simpleicons.org', 'https://cdn.jsdelivr.net'],
       objectSrc: ["'none'"],
       scriptSrc: frontendDev ? ["'self'", "'unsafe-inline'"] : ["'self'"],
       scriptSrcAttr: ["'none'"],

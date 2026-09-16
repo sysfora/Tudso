@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import express, { type Request, type Response, type Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
-import { authenticateWithEmailPassword, buildCallbackUrl, confirmEmailChange, confirmEmailVerification, confirmPasswordReset, createAccount, createAppSession, exchangeOAuthCallback, generateAuthState, getOAuthUrl, requestEmailVerification, requestPasswordReset, resolveAccessToken, verifyAuthState } from './auth.js'
+import { authenticateWithEmailPassword, buildCallbackUrl, clearAuthState, confirmEmailChange, confirmEmailVerification, confirmPasswordReset, createAccount, createAppSession, exchangeOAuthCallback, generateAuthState, getOAuthUrl, requestEmailVerification, requestPasswordReset, resolveAccessToken, verifyAuthState } from './auth.js'
 import { chat, transcription, vision, buildChatMessages, buildSystemPrompt, applyTurnContext, resolveChatModel, resolveVisionModel, extractMemoryFacts, extractResumeStructured } from './ai.js'
 import { beginPlainStream, endPlainStream, writePlainStream } from './stream.js'
 import { config } from './config.js'
@@ -788,6 +788,7 @@ router.post('/auth/desktop/callback', async (req: Request, res: Response) => {
   }
   const result = await createAppSession(pending.userId, pending.email, deviceId, platform, appVersion)
   pendingCodeTokens.delete(code)
+  clearAuthState(state)
   res.json({
     token: result.desktopToken,
     desktopToken: result.desktopToken,
@@ -956,6 +957,7 @@ router.get('/auth/web/oauth/callback', async (req: Request, res: Response) => {
     return
   }
   const session = await startWebSession(res, auth)
+  clearAuthState(authState)
   res.redirect(session.plan === 'none' ? '/dashboard/subscription' : '/dashboard')
 })
 

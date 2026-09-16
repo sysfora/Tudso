@@ -100,13 +100,6 @@ function createMock(): ElectronAPI {
       restoreTaskbar: async () => undefined,
       setSignedInReady: async () => undefined,
       popupAppMenu: async () => undefined,
-      setHideFromCaptureAllowed: async (allowed) => {
-        if (!allowed && memory.settings.hideFromCapture) {
-          memory.settings = { ...memory.settings, hideFromCapture: false }
-          localStorage.setItem('tudso.settings', JSON.stringify(memory.settings))
-          listeners.settings.forEach((fn) => fn(memory.settings))
-        }
-      },
       onCollapsed: () => () => undefined,
       onOverlayKey: () => () => undefined,
       onOverlayPointer: () => () => undefined,

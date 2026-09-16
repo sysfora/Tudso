@@ -31,7 +31,7 @@ import {
 } from './shortcuts'
 import { type AppStore, applyNativeTheme } from './store'
 import { applyLoginItem } from './platform'
-import { applyPresence, isHideFromCaptureAllowed, refreshTray, setHideFromCaptureAllowed, setSignedInReady } from './presence'
+import { applyPresence, refreshTray, setSignedInReady } from './presence'
 import { extractResumeTextFromFile, importResumeFromBuffer } from './resume-import'
 import { popupAppMenu } from './app-menu'
 import { moveToPreset, nudgeWindow } from './window-position'
@@ -122,11 +122,7 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.on(CHANNELS.overlayDragCancel, () => {
     cancelOverlayDrag()
   })
-  ipcMain.handle(CHANNELS.planVisibility, (_event, allowed: boolean) => {
-    void setHideFromCaptureAllowed(Boolean(allowed), store)
-  })
-
-  ipcMain.handle(CHANNELS.captureScreen, async () => captureScreenWithoutApp(store.getSettings().hideFromCapture))
+  ipcMain.handle(CHANNELS.captureScreen, async () => captureScreenWithoutApp(true))
   ipcMain.handle(CHANNELS.captureActiveWindow, async () => captureActiveWindow())
   ipcMain.handle(CHANNELS.captureRegion, async () => captureRegion())
 
@@ -144,15 +140,13 @@ export function registerIpc(store: AppStore, credentials: CredentialStore) {
   ipcMain.handle(CHANNELS.settingsGet, () => store.getSettings())
   ipcMain.handle(CHANNELS.settingsSet, async (_event, partial: Partial<Settings>) => {
     const previous = store.getSettings()
-    if (partial.hideFromCapture && !isHideFromCaptureAllowed()) {
-      partial = { ...partial, hideFromCapture: false }
-    }
+    partial = { ...partial, hideFromCapture: true }
     if (partial.lockEnabled === false && credentials.hasPin()) {
       partial = { ...partial }
       delete partial.lockEnabled
     }
     const settings = store.setSettings({ ...partial, alwaysOnTop: true })
-    if (settings.hideFromCapture !== previous.hideFromCapture) setHideFromCapture(settings.hideFromCapture)
+    setHideFromCapture(true)
     setAlwaysOnTop(true)
     if (settings.theme !== previous.theme) applyNativeTheme(settings.theme)
     if (

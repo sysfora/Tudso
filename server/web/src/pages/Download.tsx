@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Apple, AppWindow, Check, Copy, Download as DownloadIcon, ExternalLink, Monitor, ShieldCheck } from 'lucide-react'
+import { Check, Copy, Download as DownloadIcon, ExternalLink } from 'lucide-react'
 import heroImg from '@/assets/hero-desktop.jpg'
 import { MarketingShell } from '@/components/MarketingShell'
 import { Button } from '@/components/ui/button'
@@ -28,7 +28,7 @@ const CARDS: Array<{
   title: string
   hint: string
   bg: string
-  icon: typeof Monitor
+  icon: string
 }> = [
   {
     id: 'windows',
@@ -36,7 +36,7 @@ const CARDS: Array<{
     title: 'Windows',
     hint: 'Installer for Windows 10 and 11',
     bg: 'bg-brand-mint',
-    icon: AppWindow,
+    icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/windows8/windows8-original.svg',
   },
   {
     id: 'mac',
@@ -44,7 +44,7 @@ const CARDS: Array<{
     title: 'macOS',
     hint: 'Apple Silicon and Intel',
     bg: 'bg-brand-lavender',
-    icon: Apple,
+    icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/apple/apple-original.svg',
   },
   {
     id: 'linux',
@@ -52,7 +52,7 @@ const CARDS: Array<{
     title: 'Linux',
     hint: 'AppImage for most distributions',
     bg: 'bg-brand-yellow',
-    icon: Monitor,
+    icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/linux/linux-original.svg',
   },
 ]
 
@@ -64,7 +64,7 @@ function formatSize(bytes: number) {
 
 const GATEKEEPER_CMD = 'xattr -cr /Applications/Tudso.app && open /Applications/Tudso.app'
 
-function MacGatekeeperHelp({ compact = false }: { compact?: boolean }) {
+function MacGatekeeperHelp() {
   const [copied, setCopied] = useState(false)
 
   async function copyCommand() {
@@ -78,7 +78,7 @@ function MacGatekeeperHelp({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <div className={compact ? 'mt-4 text-sm text-foreground/80' : 'mx-auto mt-6 max-w-xl rounded-2xl bg-background/70 p-4 text-left text-sm text-foreground/80 sm:mt-8'}>
+    <div className="mx-auto mt-6 max-w-xl rounded-2xl bg-background/70 p-4 text-left text-sm text-foreground/80 sm:mt-8">
       <p className="font-medium text-foreground">
         Open the disk image and double-click Install Tudso. That copies the app, clears Gatekeeper, and launches it.
       </p>
@@ -141,33 +141,33 @@ export default function Download() {
   return (
     <MarketingShell>
       <section className="mx-auto max-w-6xl px-4 pt-24 sm:px-5 sm:pt-28">
-        <div className="relative overflow-hidden rounded-[2rem] bg-secondary text-white shadow-2xl shadow-secondary/15">
+        <div className="relative overflow-hidden rounded-[2rem] bg-secondary text-secondary-foreground shadow-2xl shadow-secondary/15">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_10%,rgba(196,198,255,0.28),transparent_30%),radial-gradient(circle_at_20%_100%,rgba(226,244,237,0.16),transparent_35%)]" />
           <div className="relative grid items-center gap-10 p-6 sm:p-10 md:grid-cols-[1.05fr_.95fr] md:p-14">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75">
+              <div className="inline-flex items-center gap-2 rounded-full border border-secondary-foreground/15 bg-secondary-foreground/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary-foreground/75">
                 <span className="h-1.5 w-1.5 rounded-full bg-brand-mint" />
                 Desktop app
               </div>
               <h1 className="mt-6 max-w-xl text-4xl font-black leading-[0.98] sm:text-5xl md:text-7xl" style={displayFont}>
                 Your best answers, always within reach.
               </h1>
-              <p className="mt-5 max-w-lg text-sm leading-7 text-white/70 sm:text-base">
+              <p className="mt-5 max-w-lg text-sm leading-7 text-secondary-foreground/70 sm:text-base">
                 Keep Tudso ready for your next interview with a focused desktop copilot for Windows, macOS, and Linux.
               </p>
               {recommended ? (
                 <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                  <Button size="lg" className="bg-white text-secondary shadow-lg shadow-black/10 hover:bg-white/90" asChild>
+                  <Button size="lg" className="bg-white text-black shadow-lg shadow-black/10 hover:bg-white/90" asChild>
                     <a href={recommended.url}>
                       <DownloadIcon className="h-4 w-4" />
                       Download for {recommended.label}
                     </a>
                   </Button>
-                  {latest?.latestVersion ? <span className="text-xs text-white/55">v{latest.latestVersion}</span> : null}
+                  {latest?.latestVersion ? <span className="text-xs text-secondary-foreground/55">v{latest.latestVersion}</span> : null}
                 </div>
               ) : null}
               {latest?.source === 'github' ? (
-                <p className="mt-4 inline-flex items-center gap-2 text-xs text-white/55">
+                <p className="mt-4 inline-flex items-center gap-2 text-xs text-secondary-foreground/55">
                   <Check className="h-3.5 w-3.5 text-brand-mint" />
                   Latest release served directly from GitHub
                 </p>
@@ -177,8 +177,8 @@ export default function Download() {
             <div className="relative">
               <div className="absolute -inset-5 rounded-[2rem] border border-white/10" />
               <img src={heroImg} alt="Tudso interview copilot over a live interview" width={1920} height={1200} className="relative w-full rounded-[1.5rem] border border-white/10 shadow-2xl" />
-              <div className="absolute -bottom-4 left-4 rounded-xl border border-white/15 bg-secondary/90 px-3 py-2 text-xs text-white/75 shadow-xl backdrop-blur sm:left-6">
-                Private by design <span className="mx-1 text-white/30">·</span> Built for focus
+              <div className="absolute -bottom-4 left-4 rounded-xl border border-secondary-foreground/15 bg-secondary/90 px-3 py-2 text-xs text-secondary-foreground/75 shadow-xl backdrop-blur sm:left-6">
+                Private by design <span className="mx-1 text-secondary-foreground/30">·</span> Built for focus
               </div>
             </div>
           </div>
@@ -188,7 +188,7 @@ export default function Download() {
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-5 sm:py-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">Choose your setup</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">Choose your setup</p>
             <h2 className="mt-2 text-3xl font-black sm:text-4xl" style={displayFont}>Ready for every platform</h2>
           </div>
           {latest?.releaseNotesUrl ? (
@@ -203,14 +203,12 @@ export default function Download() {
           <div className="mt-10 grid gap-5 md:grid-cols-3">
             {CARDS.map((card) => {
               const files = (latest?.files ?? []).filter(card.match)
-              const Icon = card.icon
               return (
-                <div key={card.id} className={`group rounded-3xl ${card.bg} p-6 transition-transform duration-300 hover:-translate-y-1 sm:p-8`}>
+                <div key={card.id} className={`group rounded-3xl ${card.bg} p-6 sm:p-8`}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="grid h-12 w-12 place-items-center rounded-2xl bg-background/70">
-                    <Icon className="h-6 w-6" />
+                      <img src={card.icon} alt={`${card.title} logo`} className="h-6 w-6" />
                     </div>
-                    {files.length ? <span className="rounded-full bg-background/60 px-2.5 py-1 text-[11px] font-medium text-foreground/70">{files.length} build{files.length === 1 ? '' : 's'}</span> : null}
                   </div>
                   <h3 className="mt-5 text-xl font-black" style={displayFont}>{card.title}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">{card.hint}</p>
@@ -218,7 +216,7 @@ export default function Download() {
                     {latest === null && !error ? (
                       <p className="text-sm text-muted-foreground">Checking for the latest build…</p>
                     ) : files.length ? files.map((file) => (
-                      <Button key={file.fileName} asChild>
+                      <Button key={file.fileName} className="bg-white text-black hover:bg-white/90" asChild>
                         <a href={file.url}>
                           <DownloadIcon className="h-4 w-4" />
                           {file.label}
@@ -228,17 +226,12 @@ export default function Download() {
                     )) : (
                       <p className="rounded-xl bg-background/45 px-3 py-2 text-sm text-muted-foreground">No installer available for this platform yet.</p>
                     )}
-                    {card.id === 'mac' && platform !== 'mac' ? <MacGatekeeperHelp compact /> : null}
                   </div>
                 </div>
               )
             })}
           </div>
         )}
-        <p className="mt-8 flex items-center justify-center gap-1 text-center text-xs text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5 text-brand-mint" />
-          After you install, Tudso checks this site for a newer version.
-        </p>
       </section>
     </MarketingShell>
   )

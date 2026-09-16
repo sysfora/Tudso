@@ -9,19 +9,19 @@ export function MarketingShell({ children }: { children: ReactNode }) {
   return (
     <div className="marketing-page min-h-screen bg-background text-foreground" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
       <header className="fixed left-1/2 top-3 z-50 w-[min(1100px,calc(100%-1.5rem))] -translate-x-1/2">
-        <nav className="flex items-center justify-between gap-3 rounded-full bg-secondary/95 px-2.5 py-2 shadow-lg shadow-black/10 backdrop-blur">
-          <Link to="/" className="flex min-w-0 items-center gap-2 pl-2 text-white">
+        <nav className="flex items-center justify-between gap-3 rounded-full border border-white/5 bg-secondary/95 px-2.5 py-2 shadow-lg shadow-black/10 backdrop-blur">
+          <Link to="/" className="flex min-w-0 items-center gap-2 pl-2 text-secondary-foreground">
             <BrandMark className="h-7 w-7 rounded-md" />
             <span className="truncate font-semibold tracking-tight">Tudso</span>
           </Link>
           <div className="hidden items-center gap-6 md:flex">
-            <Link to="/" className="text-sm text-white/80 transition hover:text-white">Home</Link>
-            <Link to="/#features" className="text-sm text-white/80 transition hover:text-white">Features</Link>
-            <Link to="/#pricing" className="text-sm text-white/80 transition hover:text-white">Pricing</Link>
-            <Link to="/download" className="text-sm text-white transition">Download</Link>
+            <Link to="/" className="text-sm text-secondary-foreground/80 transition hover:text-secondary-foreground">Home</Link>
+            <Link to="/#features" className="text-sm text-secondary-foreground/80 transition hover:text-secondary-foreground">Features</Link>
+            <Link to="/#pricing" className="text-sm text-secondary-foreground/80 transition hover:text-secondary-foreground">Pricing</Link>
+            <Link to="/download" className="text-sm text-secondary-foreground transition">Download</Link>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="hidden text-white hover:bg-white/10 hover:text-white sm:inline-flex" asChild>
+            <Button variant="ghost" size="sm" className="hidden text-secondary-foreground hover:bg-secondary-foreground/10 hover:text-secondary-foreground sm:inline-flex" asChild>
               <Link to="/login"><LogIn className="h-4 w-4" /> Login</Link>
             </Button>
             <Button size="sm" className="rounded-full bg-white text-secondary hover:bg-white/90" asChild>
@@ -31,9 +31,9 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         </nav>
       </header>
       {children}
-      <footer className="bg-secondary px-4 py-12 text-white/60 sm:px-5 sm:py-16">
+      <footer className="bg-secondary px-4 py-12 text-secondary-foreground/60 sm:px-5 sm:py-16">
         <div className="mx-auto max-w-6xl">
-          <div className="text-2xl font-black text-white" style={displayFont}>Tudso</div>
+          <div className="text-2xl font-black text-secondary-foreground" style={displayFont}>Tudso</div>
           <nav className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <Link to="/download">Download</Link>
             <a href="/#features">Features</a>

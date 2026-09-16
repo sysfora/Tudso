@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { formatAccelerator } from '@shared/accelerator'
-import { canHideFromCapture } from '@shared/plans'
 import type { AppCommand, ShortcutId } from '@shared/types'
 import { Input } from '@/components/ui/input'
 import { runAppCommand } from '@/lib/commands'
 import { cn } from '@/lib/cn'
 import { desktop } from '@/lib/desktop'
 import { useAppStore } from '@/store/app-store'
-import { useAuthStore } from '@/store/auth-store'
 
 interface Command {
   id: AppCommand
@@ -63,7 +61,6 @@ const COMMANDS: Command[] = [
   { id: 'open-account', label: 'Account', section: 'App' },
   { id: 'open-subscription', label: 'Subscription', section: 'App' },
   { id: 'toggle-privacy', label: 'Privacy mode', shortcutId: 'togglePrivacy', section: 'App' },
-  { id: 'toggle-hide-from-capture', label: 'Hide from screen share', shortcutId: 'toggleHideFromCapture', section: 'App' },
   { id: 'toggle-collapsed', label: 'Collapse or expand', shortcutId: 'toggleCollapsed', section: 'Window' },
   { id: 'hide-window', label: 'Hide window', section: 'Window' },
   { id: 'window-compact', label: 'Compact window', shortcutId: 'windowCompact', section: 'Window' },
@@ -97,13 +94,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const listRef = useRef<HTMLUListElement>(null)
   const shortcuts = useAppStore((state) => state.shortcuts)
   const runningSessionId = useAppStore((state) => state.runningSessionId)
-  const entitlement = useAuthStore((state) => state.entitlement)
-  const hideAllowed = canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits)
 
   const filtered = useMemo(() => {
-    let available = hideAllowed
-      ? COMMANDS
-      : COMMANDS.filter((command) => command.id !== 'toggle-hide-from-capture')
+    let available = COMMANDS
     if (runningSessionId) {
       available = available.filter(
         (command) =>
@@ -124,7 +117,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         accelerator.toLowerCase().includes(lower)
       )
     })
-  }, [query, shortcuts, hideAllowed, runningSessionId])
+  }, [query, shortcuts, runningSessionId])
 
   const clamped = Math.min(selected, Math.max(0, filtered.length - 1))
 

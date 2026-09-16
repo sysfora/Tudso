@@ -80,10 +80,6 @@ export function remainingSessionsDisplay(plan?: string | null, status?: string |
   return String(Math.max(0, credits ?? 0))
 }
 
-export function canHideFromCapture(plan?: string | null, status?: string | null, credits?: number): boolean {
-  return hasProductAccess(plan, status, credits)
-}
-
 export function planDisplayName(plan?: string | null): string {
   if (plan === 'basic') return 'Basic'
   if (plan === 'plus') return 'Plus'

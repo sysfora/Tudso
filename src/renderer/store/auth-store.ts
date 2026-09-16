@@ -5,7 +5,7 @@ import type { AuthSession, LocalProfile, LocalUserData } from '@shared/types'
 import type { Entitlement, MemoryEntry, UserProfile } from '@/types/api'
 import { toUserProfile } from '@/types/api'
 import { MAX_MEMORIES, normalizeMemoryEntries } from '@shared/memory'
-import { canHideFromCapture, type PaidPlan } from '@shared/plans'
+import { type PaidPlan } from '@shared/plans'
 
 let entitlementStream: AbortController | null = null
 
@@ -22,7 +22,6 @@ function startEntitlementStream(onUpdate: (entitlement: Entitlement | null) => v
     while (!controller.signal.aborted) {
       try {
         await api.entitlements.subscribe((entitlement) => {
-          syncHideFromCapture(entitlement)
           onUpdate(entitlement)
         }, controller.signal)
       } catch {
@@ -32,10 +31,6 @@ function startEntitlementStream(onUpdate: (entitlement: Entitlement | null) => v
     }
   }
   void run()
-}
-
-function syncHideFromCapture(entitlement: Entitlement | null) {
-  void desktop.window.setHideFromCaptureAllowed(canHideFromCapture(entitlement?.plan, entitlement?.status, entitlement?.interviewCredits))
 }
 
 interface AuthState {
@@ -143,7 +138,6 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     await api.auth.logout().catch(() => undefined)
     await desktop.auth.clearSession()
     clearToken()
-    void desktop.window.setHideFromCaptureAllowed(false)
     set({ session: null, profile: null, entitlement: null, memories: [], memoriesLoaded: false, memoryEnabled: true, onboardingComplete: false, loginStatus: 'idle', loginError: null })
   },
 
@@ -215,10 +209,8 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   loadEntitlement: async () => {
     try {
       const entitlement = await api.entitlements.get()
-      syncHideFromCapture(entitlement)
       set({ entitlement })
     } catch {
-      syncHideFromCapture(null)
     }
   },
 

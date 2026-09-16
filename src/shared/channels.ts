@@ -39,7 +39,6 @@ export const CHANNELS = {
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   settingsChanged: 'settings:changed',
-  planVisibility: 'plan:visibility',
 
   shortcutsGet: 'shortcuts:get',
   shortcutsGetFailed: 'shortcuts:get-failed',
